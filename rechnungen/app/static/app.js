@@ -316,7 +316,7 @@ $("#rechnung").addEventListener("submit", e => {
       : await api("rechnungen", { method: "POST", body: data });
     state.editId = res.id;
     $("#btn-speichern").textContent = `Rechnung ${data.nummer} aktualisieren & PDF öffnen`;
-    toast(`Rechnung ${data.nummer} gespeichert` + (res.datei ? ` (${res.datei})` : ""));
+    toast(`Rechnung ${data.nummer} gespeichert` + (res.datei ? ` → ${res.datei.split("/").pop()}` : ""));
     return api(`rechnungen/${res.id}/pdf`);
   });
 });
