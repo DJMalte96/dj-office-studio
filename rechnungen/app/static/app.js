@@ -194,7 +194,8 @@ function hoursBetween(von, bis) {
   return min / 60;
 }
 
-/* Text und ggf. Preis einer Position aus dem gewählten Textbaustein + Uhrzeiten berechnen. */
+/* Text einer Position aus dem gewählten Textbaustein + Uhrzeiten erzeugen.
+   Der Preis wird bewusst nicht gesetzt – er wird pro Rechnung individuell eingetragen. */
 function applyTb(pos) {
   const tb = pos._tb;
   if (!tb) return;
@@ -205,14 +206,6 @@ function applyTb(pos) {
 
   const h = hoursBetween(von, bis);
   $(".stunden", pos).textContent = h ? `= ${String(h).replace(".", ",")} Std.` : "";
-  if (tb.grundpreis != null && h) {
-    // Jede angefangene Stunde über der Grundzeit wird berechnet.
-    const extra = Math.max(0, Math.ceil(h - (tb.grundstunden || 0) - 1e-9));
-    $(".preis", pos).value = tb.grundpreis + extra * (tb.stundensatz || 0);
-  } else if (tb.preis != null) {
-    $(".preis", pos).value = tb.preis;
-  }
-  updateTotal();
 }
 
 function addPosition(p = {}) {
@@ -399,17 +392,10 @@ const STAMM = {
   textbausteine: {
     titel: "Textbausteine", einzahl: "Textbaustein",
     hinweis: "Platzhalter {von} und {bis} im Text werden im Editor durch Uhrzeiten ersetzt. " +
-      "Mit Grundpreis/Grundstunden/Stundensatz wird der Preis automatisch berechnet " +
-      "(jede angefangene Stunde über der Grundzeit), sonst gilt der Festpreis.",
-    felder: [
-      ["titel", "Titel"], ["text", "Text", "textarea"], ["preis", "Festpreis (€)", "number"],
-      ["grundpreis", "Grundpreis (€)", "number"], ["grundstunden", "Grundstunden", "number"],
-      ["stundensatz", "Je weitere Stunde (€)", "number"],
-    ],
+      "Der Preis wird bei jeder Rechnung individuell eingetragen.",
+    felder: [["titel", "Titel"], ["text", "Text", "textarea"]],
     zeile: t => `${esc(t.titel)}<br><small>${esc(t.text)}</small>`,
-    info: t => t.grundpreis != null
-      ? `${fmtEuro(t.grundpreis)} / ${t.grundstunden} Std. + ${fmtEuro(t.stundensatz)}/Std.`
-      : (t.preis != null ? fmtEuro(t.preis) : ""),
+    info: () => "",
   },
   zahlungsbedingungen: {
     titel: "Zahlungsbedingungen", einzahl: "Zahlungsbedingung",
