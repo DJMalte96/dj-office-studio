@@ -1,3 +1,5 @@
+<img src="rechnungen/logo.png" alt="DJ Office Studio" width="250">
+
 # DJ Office Studio
 
 Eine Home-Assistant-App zum Schreiben von DJ-Rechnungen. Kunden auswählen, Anlass und Uhrzeiten eintragen, Preis festlegen – fertig ist das PDF im Layout der bisherigen Word-Vorlage.
@@ -97,6 +99,8 @@ Die Oberfläche läuft dann unter <http://localhost:8099>. Für die PDFs wird ei
 repository.yaml          Home-Assistant-Repository
 rechnungen/
   config.yaml            App-Definition (Name, Version, Optionen)
+  icon.png, logo.png     Symbol und Logo für den App-Store in Home Assistant
+  CHANGELOG.md           Änderungen je Version
   Dockerfile             Python 3.12 (Debian) + Carlito-Schrift
   app/
     main.py              Flask-App: REST-API und Auslieferung der Oberfläche

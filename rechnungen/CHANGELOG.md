@@ -2,6 +2,11 @@
 
 Alle Änderungen an DJ Office Studio. Neueste Version oben.
 
+## 0.4.3 – 2026-11-14
+
+### Neu
+- App-Symbol (`icon.png`) und Logo (`logo.png`) für die App-Übersicht in Home Assistant.
+
 ## 0.4.2 – 2026-11-14
 
 ### Geändert
