@@ -1,5 +1,6 @@
-ARG BUILD_FROM=python:3.12-slim-bookworm
-FROM ${BUILD_FROM}
+# Basis-Image fest vorgegeben: Der Supervisor übergibt sonst sein Alpine-Image
+# (ghcr.io/home-assistant/base) als BUILD_FROM, dort gibt es kein apt-get.
+FROM python:3.12-slim-bookworm
 
 # Carlito = metrisch kompatibel zu Calibri (Schrift der Vorlage)
 RUN apt-get update \
