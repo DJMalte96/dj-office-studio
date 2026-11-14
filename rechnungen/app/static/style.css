@@ -282,3 +282,9 @@ table.list th[data-sort]::after { content: attr(data-pfeil); margin-left: 5px; f
 .frist.rot { background: var(--danger-soft); color: var(--danger); }
 .frist.neutral { background: var(--input-bg); border: 1px solid var(--border); color: var(--muted); }
 .alles-bezahlt { margin-top: 10px; }
+
+/* ---------- Offen: Rechnungsname + Status, Archiv ---------- */
+.offen-liste td { vertical-align: middle; }
+.rname { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 3px; }
+.rname strong { font-size: 15px; font-variant-numeric: tabular-nums; }
+.h2-sub { font-size: 13px; font-weight: 500; color: var(--muted); margin-left: 6px; }

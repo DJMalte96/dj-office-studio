@@ -14,8 +14,8 @@ Eine Home-Assistant-App zum Schreiben von DJ-Rechnungen. Kunden auswählen, Anla
   - Auswählbare Zahlungsbedingungen (Überweisung 8/14 Tage, bar erhalten, …)
   - Fortlaufende Rechnungsnummer (dreistellig, Startwert einstellbar)
 - **PDF** im A4-Layout mit Absenderzeile, Adressfeld, Positionstabelle und Fußzeile (Bankverbindung, Steuernummer, Kleinunternehmer-Hinweis nach §19 UStG). Vorschau vor dem Speichern; beim Speichern wird eine Kopie im Ordner `/share/rechnungen` abgelegt.
-- **Rechnungsliste** mit Suche, Filter (offen/bezahlt), Sortierung nach Nummer, Datum, Betrag, Kunde oder Status, „bezahlt“-Schalter, Summe und offenem Betrag; Rechnungen lassen sich nachträglich bearbeiten.
-- **Offene Rechnungen** auf einen Blick: Summe offen, überfällig und in den nächsten 7 Tagen fällig; je Rechnung Fälligkeitsdatum und Restzeit („noch 5 Tage“, „3 Tage überfällig“). Das Zahlungsziel wird aus der Zahlungsbedingung gelesen (z. B. „innerhalb der nächsten 8 Tage“) und ab dem Rechnungsdatum gerechnet.
+- **Offene Rechnungen** auf einen Blick: Summe offen, überfällig und in den nächsten 7 Tagen fällig; je Rechnung der Rechnungsname (z. B. `Rechnung_037_311026`) mit Status bzw. Restzeit („noch 5 Tage“, „3 Tage überfällig“). Das Zahlungsziel wird aus der Zahlungsbedingung gelesen (z. B. „innerhalb der nächsten 8 Tage“) und ab dem Rechnungsdatum gerechnet.
+- **Archiv** für bezahlte Rechnungen: Wird eine Rechnung als bezahlt markiert, wandert sie ins Archiv – mit Suche und Sortierung nach Nummer, Datum, Betrag oder Kunde. Rechnungen lassen sich jederzeit bearbeiten oder wieder auf „offen“ setzen.
 - **Import alter Rechnungen**: Bisherige Rechnungs-PDFs hochladen – Empfänger, Positionen und Vorschläge für Anlässe werden erkannt und können übernommen werden, optional auch die Rechnungen selbst als Archiv.
 - **Stammdaten** für Kunden, Anlässe und Zahlungsbedingungen.
 - Helles und dunkles Design (folgt der Geräteeinstellung).
@@ -70,6 +70,10 @@ Solange Name oder IBAN fehlen, zeigt die App oben einen Hinweis.
 
 Beides ist in den normalen Home-Assistant-Backups enthalten.
 
+## Changelog
+
+Alle Änderungen je Version stehen in [rechnungen/CHANGELOG.md](rechnungen/CHANGELOG.md) – Home Assistant zeigt sie auch beim Update an.
+
 ## Lokale Entwicklung
 
 Voraussetzung: Python 3.9 oder neuer (im Container läuft 3.12).
@@ -104,6 +108,6 @@ rechnungen/
 
 ### Neue Version veröffentlichen
 
-`version` in `rechnungen/config.yaml` erhöhen, committen und pushen. Home Assistant bietet das Update dann unter **Apps → App-Store → ⋮ → Nach Updates suchen** an.
+`version` in `rechnungen/config.yaml` erhöhen, einen Eintrag in `rechnungen/CHANGELOG.md` ergänzen, committen und pushen. Home Assistant bietet das Update dann unter **Apps → App-Store → ⋮ → Nach Updates suchen** an.
 
 > Hinweis: Das Basis-Image ist im `Dockerfile` fest vorgegeben. Eine `build.yaml` wird vom Supervisor nicht beachtet – er würde sonst sein Alpine-Image verwenden, in dem `apt-get` fehlt.
