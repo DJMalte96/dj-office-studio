@@ -2,6 +2,11 @@
 
 Alle Änderungen an DJ Office Studio. Neueste Version oben.
 
+## 0.4.2 – 2026-11-14
+
+### Geändert
+- Offene Rechnungen: Die drei Kacheln (offen gesamt, überfällig, fällig in 7 Tagen) wurden durch **eine Summenzeile** ersetzt – Anzahl offener Rechnungen, Gesamtbetrag und die nächste Frist.
+
 ## 0.4.1 – 2026-11-14
 
 ### Geändert
