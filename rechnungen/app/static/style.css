@@ -221,3 +221,35 @@ input.bezahlt:focus { box-shadow: 0 0 0 4px var(--primary-soft); }
 }
 .toast.error { background: var(--danger); border-color: var(--danger); }
 @keyframes toast-in { from { opacity: 0; transform: translate(-50%, -8px); } to { opacity: 1; transform: translate(-50%, 0); } }
+
+/* ---------- Import alter Rechnungen ---------- */
+input[type="checkbox"] { width: auto; accent-color: var(--neon); cursor: pointer; transform: scale(1.15); }
+#tab-liste .between .row { align-items: center; gap: 10px; }
+#tab-liste .between .row .search { margin: 0; }
+#import { border-color: var(--neon); box-shadow: 0 0 0 1px var(--neon), var(--shadow); }
+.dropzone {
+  display: flex; flex-direction: column; align-items: center; gap: 4px; margin: 16px 0;
+  padding: 28px 16px; text-align: center; cursor: pointer; color: var(--muted);
+  border: 2px dashed var(--border); border-radius: var(--radius); background: var(--input-bg);
+  transition: border-color .15s, background .15s;
+}
+.dropzone strong { color: var(--text); font-size: 15px; }
+.dropzone:hover, .dropzone.over { border-color: var(--neon); background: var(--primary-soft); }
+.dropzone input { display: none; }
+.import-block { margin-top: 22px; }
+h3 { font-size: 14px; font-weight: 650; margin: 0 0 8px; display: flex; align-items: center; gap: 8px; }
+.badge { background: var(--chip-bg); color: var(--chip-fg); border-radius: 999px; padding: 1px 9px; font-size: 12px; }
+.tag { display: inline-block; font-size: 12px; font-weight: 500; padding: 2px 8px; border-radius: 999px; background: var(--input-bg); border: 1px solid var(--border); color: var(--muted); }
+.tag.neu { background: var(--primary-soft); border-color: transparent; color: var(--text); }
+td.chk { width: 32px; }
+.tb-vorschlag { display: flex; gap: 12px; align-items: flex-start; padding: 12px; margin-bottom: 8px; border: 1px solid var(--border); border-radius: 12px; background: var(--input-bg); }
+.tb-vorschlag > input { margin-top: 12px; }
+.tb-vorschlag .grow { flex: 1; display: grid; gap: 6px; }
+.tb-vorschlag .tb-titel { font-weight: 600; }
+.tb-vorschlag input:not([type]), .tb-vorschlag textarea { background: var(--card); }
+.tb-vorschlag .tag { margin-top: 10px; }
+label.inline { display: flex; align-items: center; gap: 8px; margin: 12px 0 0; color: var(--text); }
+.import-fehler { margin-top: 12px; padding: 12px 14px; border-radius: 12px; background: var(--danger-soft); font-size: 13px; }
+#import .actions { margin-top: 20px; }
+input.bezahlt { transform: none; accent-color: auto; }
+#btn-import { white-space: nowrap; }

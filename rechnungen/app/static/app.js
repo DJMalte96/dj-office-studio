@@ -467,6 +467,134 @@ async function renderStamm(table) {
   });
 }
 
+// ---------- Import alter Rechnungen ----------
+
+const imp = { daten: null };
+
+$("#btn-import").addEventListener("click", () => {
+  $("#import").classList.toggle("hidden");
+  window.scrollTo(0, 0);
+});
+$("#import-zu").addEventListener("click", () => $("#import").classList.add("hidden"));
+
+$("#import-dateien").addEventListener("change", e => analyseImport(e.target.files));
+const dz = $("#dropzone");
+dz.addEventListener("dragover", e => { e.preventDefault(); dz.classList.add("over"); });
+dz.addEventListener("dragleave", () => dz.classList.remove("over"));
+dz.addEventListener("drop", e => {
+  e.preventDefault();
+  dz.classList.remove("over");
+  analyseImport(e.dataTransfer.files);
+});
+
+async function analyseImport(files) {
+  files = [...files].filter(f => f.name.toLowerCase().endsWith(".pdf"));
+  if (!files.length) return toast("Bitte PDF-Dateien auswählen.", true);
+  const fd = new FormData();
+  files.forEach(f => fd.append("dateien", f));
+  $("#import-status").textContent = `${files.length} Datei(en) werden gelesen …`;
+  $("#import-ergebnis").innerHTML = "";
+  try {
+    const res = await fetch("api/import/analyse", { method: "POST", body: fd });
+    if (!res.ok) throw new Error(`Fehler ${res.status}`);
+    imp.daten = await res.json();
+    $("#import-status").textContent =
+      `${imp.daten.rechnungen.length} von ${files.length} Datei(en) erkannt.`;
+    renderImport();
+  } catch (e) {
+    $("#import-status").textContent = "";
+    toast("Import fehlgeschlagen: " + e.message, true);
+  } finally {
+    $("#import-dateien").value = "";
+  }
+}
+
+function renderImport() {
+  const d = imp.daten;
+  const adr = k => esc([k.zusatz, k.strasse, [k.plz, k.ort].filter(Boolean).join(" ")].filter(Boolean).join(", "));
+  const check = (grp, i, on) => `<input type="checkbox" data-grp="${grp}" data-i="${i}" ${on ? "checked" : ""}>`;
+
+  $("#import-ergebnis").innerHTML = `
+    ${d.fehler.length ? `<div class="import-fehler">
+      <strong>Nicht lesbar:</strong>
+      ${d.fehler.map(f => `<div>${esc(f.datei)} – ${esc(f.fehler)}</div>`).join("")}
+      <div class="hint">Gescannte PDFs (Bilder ohne Text) können nicht ausgelesen werden.</div>
+    </div>` : ""}
+
+    <div class="import-block">
+      <h3>Empfänger <span class="badge">${d.kunden.length}</span></h3>
+      <table class="list"><tbody>
+        ${d.kunden.map((k, i) => `<tr><td class="chk">${check("kunden", i, !k.vorhanden)}</td>
+          <td>${esc(k.name)}<br><small>${adr(k)}</small></td>
+          <td class="num">${k.vorhanden ? `<span class="tag">schon vorhanden</span>` : `<span class="tag neu">neu</span>`}</td></tr>`).join("")
+          || `<tr><td class="hint">Keine Empfänger erkannt.</td></tr>`}
+      </tbody></table>
+    </div>
+
+    <div class="import-block">
+      <h3>Vorschläge für Textbausteine <span class="badge">${d.textbausteine.length}</span></h3>
+      <p class="hint">Uhrzeiten wurden durch {von}/{bis} ersetzt. Titel und Text kannst du hier noch anpassen.</p>
+      ${d.textbausteine.map((t, i) => `<div class="tb-vorschlag">
+          ${check("textbausteine", i, true)}
+          <div class="grow">
+            <input class="tb-titel" data-i="${i}" value="${esc(t.titel)}">
+            <textarea class="tb-text" data-i="${i}" rows="2">${esc(t.text)}</textarea>
+          </div>
+          <span class="tag">${t.anzahl}×</span>
+        </div>`).join("") || `<p class="hint">Keine neuen Textbausteine – alle Positionen gibt es schon.</p>`}
+    </div>
+
+    <div class="import-block">
+      <h3>Rechnungen in die Liste übernehmen <span class="badge">${d.rechnungen.length}</span></h3>
+      <p class="hint">Optional: alte Rechnungen als Archiv in der Rechnungsliste anzeigen.
+        Bereits vorhandene Nummern werden übersprungen.</p>
+      <table class="list"><tbody>
+        ${d.rechnungen.map((r, i) => `<tr><td class="chk">${check("rechnungen", i, !r.nummer_vorhanden)}</td>
+          <td>${esc(r.nummer)}</td><td>${fmtDate(r.datum)}</td>
+          <td>${esc(r.kunde.name)}<br><small>${esc(r.datei)}</small></td>
+          <td class="num">${fmtEuro(r.gesamt)}${r.nummer_vorhanden ? `<br><span class="tag">Nr. vorhanden</span>` : ""}</td></tr>`).join("")}
+      </tbody></table>
+      <label class="inline"><input type="checkbox" id="import-bezahlt" checked> als bezahlt markieren</label>
+    </div>
+
+    <div class="actions">
+      <button type="button" class="secondary" id="import-abbrechen">Verwerfen</button>
+      <button type="button" id="import-ok">Ausgewählte übernehmen</button>
+    </div>`;
+
+  $("#import-abbrechen").addEventListener("click", () => {
+    imp.daten = null;
+    $("#import-ergebnis").innerHTML = "";
+    $("#import-status").textContent = "";
+  });
+  $("#import-ok").addEventListener("click", uebernehmeImport);
+}
+
+async function uebernehmeImport() {
+  const d = imp.daten;
+  const sel = grp => $$(`#import-ergebnis input[data-grp="${grp}"]:checked`).map(c => Number(c.dataset.i));
+  const body = {
+    kunden: sel("kunden").map(i => d.kunden[i]),
+    textbausteine: sel("textbausteine").map(i => ({
+      titel: $(`.tb-titel[data-i="${i}"]`).value,
+      text: $(`.tb-text[data-i="${i}"]`).value,
+    })),
+    rechnungen: sel("rechnungen").map(i => d.rechnungen[i]),
+    bezahlt: $("#import-bezahlt").checked,
+  };
+  try {
+    const r = await api("import/uebernehmen", { method: "POST", body });
+    toast(`Übernommen: ${r.kunden} Empfänger, ${r.textbausteine} Textbausteine, ${r.rechnungen} Rechnungen`);
+    imp.daten = null;
+    $("#import-ergebnis").innerHTML = "";
+    $("#import-status").textContent = "";
+    $("#import").classList.add("hidden");
+    await loadLookups();
+    await loadListe();
+    if (!state.editId) $("#r-nummer").value = (await api("rechnungen/naechste-nummer")).nummer;
+  } catch (e) { toast(e.message, true); }
+}
+
 // ---------- Start ----------
 
 (async () => {
