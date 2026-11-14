@@ -340,20 +340,23 @@ async function loadListe() {
   renderListe();
 }
 
-/* Sortierung: Feld + Richtung, wird im Browser gemerkt. */
+/* Archiv-Sortierung: Feld + Richtung, wird im Browser gemerkt. */
 const SORT_DEFAULT = { feld: "datum", richtung: "desc" };
-const ERSTE_RICHTUNG = { datum: "desc", nummer: "desc", gesamt: "desc", kunde: "asc", bezahlt: "asc" };
-let sortierung = (() => {
-  try { return JSON.parse(localStorage.getItem("liste-sort")) || SORT_DEFAULT; } catch (_) { return SORT_DEFAULT; }
-})();
+const ERSTE_RICHTUNG = { datum: "desc", nummer: "desc", gesamt: "desc", kunde: "asc" };
 
 const vergleich = {
   nummer: (a, b) => a.nummer.localeCompare(b.nummer, "de", { numeric: true }),
   datum: (a, b) => a.datum.localeCompare(b.datum),
   gesamt: (a, b) => a.gesamt - b.gesamt,
   kunde: (a, b) => (a.kunde.name || "").localeCompare(b.kunde.name || "", "de", { sensitivity: "base" }),
-  bezahlt: (a, b) => Number(a.bezahlt) - Number(b.bezahlt),
 };
+
+let sortierung = (() => {
+  try {
+    const s = JSON.parse(localStorage.getItem("liste-sort"));
+    return s && vergleich[s.feld] ? s : SORT_DEFAULT;
+  } catch (_) { return SORT_DEFAULT; }
+})();
 
 function sortiere(list) {
   const { feld, richtung } = sortierung;
@@ -379,13 +382,14 @@ $$("#tab-liste th[data-sort]").forEach(th => th.addEventListener("click", () => 
     : ERSTE_RICHTUNG[feld];
   setSortierung(feld, richtung);
 }));
-$("#liste-status").addEventListener("change", renderListe);
 
 // ---------- Offene Rechnungen & Zahlungsfristen ----------
 
 const TAG_MS = 24 * 60 * 60 * 1000;
 const isoToUtc = iso => { const [y, m, d] = iso.split("-").map(Number); return Date.UTC(y, m - 1, d); };
 const heuteUtc = () => { const n = new Date(); return Date.UTC(n.getFullYear(), n.getMonth(), n.getDate()); };
+const utcToDe = t => fmtDate(new Date(t).toISOString().slice(0, 10));
+const rechnungsName = r => r.name || `Rechnung_${r.nummer}`;
 
 /* Zahlungsziel aus der Zahlungsbedingung („… innerhalb der nächsten 8 Tage …“). */
 function zahlungsziel(r) {
@@ -403,7 +407,12 @@ function fristBadge(z) {
   return `<span class="frist gruen">noch ${z.rest} Tage</span>`;
 }
 
-const utcToDe = t => { const d = new Date(t); return fmtDate(d.toISOString().slice(0, 10)); };
+const aktionen = (...welche) => welche.map(a => ({
+  bezahlt: `<button class="small" data-act="bezahlt">✓ Bezahlt</button>`,
+  pdf: `<button class="small secondary" data-act="pdf">PDF</button>`,
+  edit: `<button class="small secondary" data-act="edit">Bearbeiten</button>`,
+  del: `<button class="small danger" data-act="del">Löschen</button>`,
+}[a])).join("");
 
 function renderOffen() {
   const offen = state.rechnungen.filter(r => !r.bezahlt).map(r => ({ ...r, ziel: zahlungsziel(r) }));
@@ -428,41 +437,26 @@ function renderOffen() {
       ${kachel("Überfällig", ueber, "rot")}
       ${kachel("Fällig in 7 Tagen", bald, "gelb")}
     </div>
-    ${offen.length ? `<table class="list offen-liste"><thead><tr>
-        <th>Nr.</th><th>Kunde</th><th class="num">Betrag</th><th>Rechnungsdatum</th><th>Fällig am</th><th>Frist</th><th></th>
-      </tr></thead><tbody>
+    ${offen.length ? `<table class="list offen-liste"><tbody>
       ${offen.map(r => `<tr data-id="${r.id}">
-        <td>${esc(r.nummer)}</td>
-        <td>${esc(r.kunde.name)}</td>
+        <td>
+          <div class="rname"><strong>${esc(rechnungsName(r))}</strong>${fristBadge(r.ziel)}</div>
+          <small>${esc(r.kunde.name)} · vom ${fmtDate(r.datum)}${r.ziel ? ` · fällig am ${utcToDe(r.ziel.faellig)}` : ""}</small>
+        </td>
         <td class="num">${fmtEuro(r.gesamt)}</td>
-        <td>${fmtDate(r.datum)}</td>
-        <td>${r.ziel ? utcToDe(r.ziel.faellig) : "–"}</td>
-        <td>${fristBadge(r.ziel)}</td>
-        <td class="btns"><button class="small secondary" data-act="bezahlt">✓ Bezahlt</button></td>
+        <td class="btns">${aktionen("bezahlt", "pdf", "edit", "del")}</td>
       </tr>`).join("")}
       </tbody></table>`
     : `<p class="hint alles-bezahlt">Keine offenen Rechnungen – alles bezahlt.</p>`}`;
 }
 
-$("#offen").addEventListener("click", async e => {
-  const btn = e.target.closest("button[data-act=bezahlt]");
-  if (!btn) return;
-  const id = Number(btn.closest("tr").dataset.id);
-  try {
-    await api(`rechnungen/${id}/bezahlt`, { method: "PATCH", body: { bezahlt: true } });
-    state.rechnungen.find(r => r.id === id).bezahlt = true;
-    renderListe();
-    toast("Als bezahlt markiert");
-  } catch (err) { toast(err.message, true); }
-});
+// ---------- Archiv (bezahlte Rechnungen) ----------
 
 function renderListe() {
   renderOffen();
   const q = $("#liste-suche").value.trim().toLowerCase();
-  const status = $("#liste-status").value;
-  const list = sortiere(state.rechnungen.filter(r =>
-    (!status || (status === "bezahlt") === r.bezahlt) &&
-    (!q || [r.nummer, r.kunde.name, r.kunde.ort, ...r.positionen.map(p => p.beschreibung)]
+  const list = sortiere(state.rechnungen.filter(r => r.bezahlt &&
+    (!q || [rechnungsName(r), r.nummer, r.kunde.name, r.kunde.ort, ...r.positionen.map(p => p.beschreibung)]
       .join(" ").toLowerCase().includes(q))));
 
   $("#liste-sort").value = `${sortierung.feld}:${sortierung.richtung}`;
@@ -473,46 +467,51 @@ function renderListe() {
   });
   $("#liste-body").innerHTML = list.map(r => `
     <tr data-id="${r.id}">
-      <td>${esc(r.nummer)}</td>
+      <td><strong>${esc(rechnungsName(r))}</strong></td>
       <td>${fmtDate(r.datum)}</td>
       <td>${esc(r.kunde.name)}<br><small>${esc(r.kunde.ort)}</small></td>
       <td class="num">${fmtEuro(r.gesamt)}</td>
-      <td><input type="checkbox" class="bezahlt" ${r.bezahlt ? "checked" : ""} style="width:auto"></td>
-      <td class="btns">
-        <button class="small secondary" data-act="pdf">PDF</button>
-        <button class="small secondary" data-act="edit">Bearbeiten</button>
-        <button class="small danger" data-act="del">Löschen</button>
-      </td>
-    </tr>`).join("") || `<tr><td colspan="6" class="hint">Keine Rechnungen gefunden.</td></tr>`;
-  const sum = list.reduce((s, r) => s + r.gesamt, 0);
-  const offen = list.filter(r => !r.bezahlt).reduce((s, r) => s + r.gesamt, 0);
+      <td><input type="checkbox" class="bezahlt" checked title="Haken entfernen = zurück zu den offenen Rechnungen"></td>
+      <td class="btns">${aktionen("pdf", "edit", "del")}</td>
+    </tr>`).join("") ||
+    `<tr><td colspan="6" class="hint">${q ? "Keine Treffer im Archiv." : "Noch keine bezahlten Rechnungen im Archiv."}</td></tr>`;
   $("#liste-summe").textContent = list.length
-    ? `${list.length} Rechnung(en) · Summe ${fmtEuro(sum)} · offen ${fmtEuro(offen)}` : "";
+    ? `${list.length} Rechnung${list.length === 1 ? "" : "en"} · Summe ${fmtEuro(list.reduce((s, r) => s + r.gesamt, 0))}` : "";
 }
 $("#liste-suche").addEventListener("input", renderListe);
 
+async function setBezahlt(id, bezahlt) {
+  const inv = state.rechnungen.find(r => r.id === id);
+  await api(`rechnungen/${id}/bezahlt`, { method: "PATCH", body: { bezahlt } });
+  inv.bezahlt = bezahlt;
+  renderListe();
+  toast(bezahlt ? `${rechnungsName(inv)} ist bezahlt → ins Archiv verschoben`
+                : `${rechnungsName(inv)} ist wieder offen`);
+}
+
+// Schalter im Archiv: Haken entfernen → zurück zu den offenen Rechnungen
 $("#liste-body").addEventListener("change", async e => {
   if (!e.target.classList.contains("bezahlt")) return;
-  const id = Number(e.target.closest("tr").dataset.id);
-  try {
-    await api(`rechnungen/${id}/bezahlt`, { method: "PATCH", body: { bezahlt: e.target.checked } });
-    state.rechnungen.find(r => r.id === id).bezahlt = e.target.checked;
-    renderListe();
-  } catch (err) { toast(err.message, true); e.target.checked = !e.target.checked; }
+  try { await setBezahlt(Number(e.target.closest("tr").dataset.id), e.target.checked); }
+  catch (err) { toast(err.message, true); e.target.checked = !e.target.checked; }
 });
 
-$("#liste-body").addEventListener("click", async e => {
-  const btn = e.target.closest("button[data-act]");
+// Buttons in „Offen“ und „Archiv“
+$("#tab-liste").addEventListener("click", async e => {
+  const btn = e.target.closest("tr[data-id] button[data-act]");
   if (!btn) return;
   const id = Number(btn.closest("tr").dataset.id);
   const inv = state.rechnungen.find(r => r.id === id);
-  if (btn.dataset.act === "pdf") window.open(`api/rechnungen/${id}/pdf`, "_blank");
-  if (btn.dataset.act === "edit") loadIntoForm(inv);
-  if (btn.dataset.act === "del" && confirm(`Rechnung ${inv.nummer} wirklich löschen?`)) {
-    await api("rechnungen/" + id, { method: "DELETE" });
-    if (state.editId === id) resetForm();
-    loadListe();
-  }
+  try {
+    if (btn.dataset.act === "bezahlt") await setBezahlt(id, true);
+    if (btn.dataset.act === "pdf") window.open(`api/rechnungen/${id}/pdf`, "_blank");
+    if (btn.dataset.act === "edit") loadIntoForm(inv);
+    if (btn.dataset.act === "del" && confirm(`${rechnungsName(inv)} wirklich löschen?`)) {
+      await api("rechnungen/" + id, { method: "DELETE" });
+      if (state.editId === id) resetForm();
+      await loadListe();
+    }
+  } catch (err) { toast(err.message, true); }
 });
 
 // ---------- Stammdaten-Tabs (Kunden, Textbausteine, Zahlungsbedingungen) ----------

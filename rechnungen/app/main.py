@@ -166,7 +166,8 @@ def _write_pdf_file(inv):
 
 @app.get("/api/rechnungen")
 def invoices_list():
-    return jsonify(db.list_invoices())
+    # "name" = Dateiname ohne Endung, z. B. "Rechnung_037_311026" – gleicher Name wie das PDF
+    return jsonify([inv | {"name": pdf_filename(inv).removesuffix(".pdf")} for inv in db.list_invoices()])
 
 
 @app.get("/api/rechnungen/naechste-nummer")
