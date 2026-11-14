@@ -1,27 +1,32 @@
 /* ---------- Design-Tokens ---------- */
 :root {
-  --bg: #f5f6fa;
+  --neon: #39ff14;
+  --bg: #f3f3f3;
   --card: #ffffff;
-  --text: #111827;
-  --muted: #6b7280;
-  --border: #e5e7eb;
-  --input-bg: #f9fafb;
-  --primary: #4f46e5;
-  --primary-d: #4338ca;
-  --primary-soft: rgba(79, 70, 229, .10);
-  --danger: #dc2626;
-  --danger-soft: rgba(220, 38, 38, .08);
-  --ok: #16a34a;
+  --text: #0a0a0a;
+  --muted: #5f5f5f;
+  --border: #e3e3e3;
+  --input-bg: #fafafa;
+  --primary: var(--neon);          /* Flächen (Buttons, Schalter, Fokus) */
+  --primary-d: #2ee00c;
+  --on-primary: #000000;           /* Text auf Neon-Flächen */
+  --ink: #000000;                  /* Akzent-Text: auf Weiß schwarz, auf Schwarz neon */
+  --primary-soft: rgba(57, 255, 20, .22);
+  --chip-bg: #000000; --chip-fg: var(--neon);
+  --danger: #e11d48;
+  --danger-soft: rgba(225, 29, 72, .08);
+  --ok: var(--neon);
   --radius: 14px;
-  --shadow: 0 1px 2px rgba(16, 24, 40, .04), 0 4px 16px rgba(16, 24, 40, .06);
-  --shadow-lg: 0 12px 32px rgba(16, 24, 40, .16);
+  --shadow: 0 1px 2px rgba(0, 0, 0, .04), 0 4px 16px rgba(0, 0, 0, .06);
+  --shadow-lg: 0 12px 32px rgba(0, 0, 0, .18);
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #0d0f14; --card: #161a22; --text: #e8eaef; --muted: #9098a6; --border: #262b36;
-    --input-bg: #11141b; --primary: #818cf8; --primary-d: #6366f1; --primary-soft: rgba(129, 140, 248, .14);
-    --danger-soft: rgba(220, 38, 38, .15);
-    --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 4px 16px rgba(0, 0, 0, .25);
+    --bg: #000000; --card: #0c0c0c; --text: #ffffff; --muted: #9a9a9a; --border: #242424;
+    --input-bg: #050505; --ink: var(--neon); --primary-soft: rgba(57, 255, 20, .13);
+    --chip-bg: var(--neon); --chip-fg: #000000;
+    --danger-soft: rgba(225, 29, 72, .15);
+    --shadow: 0 1px 2px rgba(0, 0, 0, .5), 0 4px 16px rgba(0, 0, 0, .4);
   }
 }
 
@@ -44,7 +49,7 @@ header {
 h1 { font-size: 19px; font-weight: 700; letter-spacing: -.02em; margin: 0; display: flex; align-items: center; gap: 10px; }
 h1::before {
   content: "€"; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 9px;
-  background: linear-gradient(135deg, var(--primary), #8b5cf6); color: #fff; font-size: 16px;
+  background: var(--chip-bg); color: var(--chip-fg); font-size: 16px; box-shadow: 0 0 14px rgba(57, 255, 20, .35);
 }
 h2 { font-size: 15px; font-weight: 650; letter-spacing: -.01em; margin: 0 0 16px; }
 
@@ -54,7 +59,7 @@ nav button {
   padding: 7px 14px; border-radius: 9px; white-space: nowrap; transition: background .15s, color .15s;
 }
 nav button:hover { background: var(--primary-soft); color: var(--text); }
-nav button.active { background: var(--card); color: var(--primary); box-shadow: var(--shadow); }
+nav button.active { background: var(--chip-bg); color: var(--chip-fg); box-shadow: var(--shadow); }
 
 main { max-width: 1120px; margin: 0 auto; padding: 24px 20px 120px; }
 .tab { display: none; animation: fade .2s ease; }
@@ -97,7 +102,7 @@ select {
 /* ---------- Buttons ---------- */
 button {
   font: inherit; font-weight: 550; cursor: pointer; border-radius: 10px; padding: 9px 16px;
-  border: 1px solid transparent; background: var(--primary); color: #fff;
+  border: 1px solid transparent; background: var(--primary); color: var(--on-primary);
   transition: background .15s, box-shadow .15s, transform .05s;
 }
 button:hover { background: var(--primary-d); }
@@ -110,7 +115,7 @@ button.icon:hover { color: var(--danger); background: var(--danger-soft); }
 button.small { padding: 5px 11px; font-size: 13px; border-radius: 8px; }
 button.danger { background: transparent; color: var(--danger); border-color: transparent; }
 button.danger:hover { background: var(--danger-soft); }
-#pos-add { width: 100%; border-style: dashed; color: var(--primary); background: transparent; padding: 11px; }
+#pos-add { width: 100%; border-style: dashed; color: var(--ink); background: transparent; padding: 11px; }
 #pos-add:hover { background: var(--primary-soft); border-color: var(--primary); }
 
 /* Aktionsleiste unten fixiert */
@@ -122,7 +127,7 @@ button.danger:hover { background: var(--danger-soft); }
   backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
   border: 1px solid var(--border); border-radius: 16px; box-shadow: var(--shadow-lg);
 }
-#btn-speichern { box-shadow: 0 4px 14px color-mix(in srgb, var(--primary) 35%, transparent); }
+#btn-speichern { font-weight: 700; box-shadow: 0 0 18px rgba(57, 255, 20, .45); }
 #btn-neu { margin-right: auto; }
 
 /* ---------- Autovervollständigung ---------- */
@@ -147,7 +152,7 @@ button.danger:hover { background: var(--danger-soft); }
 .pos::before {
   content: counter(pos); position: absolute; left: 14px; top: 14px;
   display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%;
-  background: var(--primary-soft); color: var(--primary); font-size: 13px; font-weight: 700;
+  background: var(--chip-bg); color: var(--chip-fg); font-size: 13px; font-weight: 700;
 }
 .pos input, .pos select, .pos textarea { background: var(--card); }
 .pos-head { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
@@ -155,7 +160,7 @@ button.danger:hover { background: var(--danger-soft); }
 .pos-head .del { margin-left: auto; }
 .calc { display: flex; gap: 8px; align-items: center; font-size: 13px; color: var(--muted); }
 .calc input { width: 110px; padding: 7px 10px; }
-.stunden { font-weight: 600; color: var(--primary); }
+.stunden { font-weight: 600; color: var(--ink); }
 .pos-foot { display: flex; gap: 12px; margin-top: 10px; flex-wrap: wrap; }
 .pos-foot label { margin: 0; flex: 0 1 200px; }
 .pos-foot .preis { font-weight: 600; }
@@ -211,8 +216,8 @@ input.bezahlt:focus { box-shadow: 0 0 0 4px var(--primary-soft); }
 @media (prefers-color-scheme: dark) { .banner { background: rgba(245, 158, 11, .1); color: #fcd34d; border-color: rgba(245, 158, 11, .3); } }
 .toast {
   position: fixed; top: 76px; left: 50%; transform: translateX(-50%); z-index: 50;
-  background: #111827; color: #fff; padding: 11px 18px; border-radius: 12px; font-weight: 500;
+  background: #000; color: #fff; border: 1px solid var(--neon); padding: 11px 18px; border-radius: 12px; font-weight: 500;
   box-shadow: var(--shadow-lg); animation: toast-in .25s ease;
 }
-.toast.error { background: var(--danger); }
+.toast.error { background: var(--danger); border-color: var(--danger); }
 @keyframes toast-in { from { opacity: 0; transform: translate(-50%, -8px); } to { opacity: 1; transform: translate(-50%, 0); } }
