@@ -381,7 +381,83 @@ $$("#tab-liste th[data-sort]").forEach(th => th.addEventListener("click", () => 
 }));
 $("#liste-status").addEventListener("change", renderListe);
 
+// ---------- Offene Rechnungen & Zahlungsfristen ----------
+
+const TAG_MS = 24 * 60 * 60 * 1000;
+const isoToUtc = iso => { const [y, m, d] = iso.split("-").map(Number); return Date.UTC(y, m - 1, d); };
+const heuteUtc = () => { const n = new Date(); return Date.UTC(n.getFullYear(), n.getMonth(), n.getDate()); };
+
+/* Zahlungsziel aus der Zahlungsbedingung („… innerhalb der nächsten 8 Tage …“). */
+function zahlungsziel(r) {
+  const m = /(\d+)\s*Tage?n?\b/i.exec(r.zahlungsbedingung || "");
+  if (!m || !r.datum) return null;
+  const faellig = isoToUtc(r.datum) + Number(m[1]) * TAG_MS;
+  return { faellig, rest: Math.round((faellig - heuteUtc()) / TAG_MS) };
+}
+
+function fristBadge(z) {
+  if (!z) return `<span class="frist neutral">ohne Frist</span>`;
+  if (z.rest < 0) return `<span class="frist rot">${-z.rest} ${-z.rest === 1 ? "Tag" : "Tage"} überfällig</span>`;
+  if (z.rest === 0) return `<span class="frist gelb">heute fällig</span>`;
+  if (z.rest <= 3) return `<span class="frist gelb">noch ${z.rest} ${z.rest === 1 ? "Tag" : "Tage"}</span>`;
+  return `<span class="frist gruen">noch ${z.rest} Tage</span>`;
+}
+
+const utcToDe = t => { const d = new Date(t); return fmtDate(d.toISOString().slice(0, 10)); };
+
+function renderOffen() {
+  const offen = state.rechnungen.filter(r => !r.bezahlt).map(r => ({ ...r, ziel: zahlungsziel(r) }));
+  // Überfällige zuerst, dann nach Fälligkeit, Rechnungen ohne Frist am Ende
+  offen.sort((a, b) => (a.ziel ? a.ziel.faellig : Infinity) - (b.ziel ? b.ziel.faellig : Infinity)
+    || a.datum.localeCompare(b.datum));
+
+  const summe = list => list.reduce((s, r) => s + r.gesamt, 0);
+  const ueber = offen.filter(r => r.ziel && r.ziel.rest < 0);
+  const bald = offen.filter(r => r.ziel && r.ziel.rest >= 0 && r.ziel.rest <= 7);
+  const kachel = (titel, list, cls = "") => `
+    <div class="kachel ${list.length ? cls : ""}">
+      <span>${titel}</span>
+      <strong>${fmtEuro(summe(list))}</strong>
+      <small>${list.length} Rechnung${list.length === 1 ? "" : "en"}</small>
+    </div>`;
+
+  $("#offen").innerHTML = `
+    <h2>Offene Rechnungen</h2>
+    <div class="kacheln">
+      ${kachel("Offen gesamt", offen)}
+      ${kachel("Überfällig", ueber, "rot")}
+      ${kachel("Fällig in 7 Tagen", bald, "gelb")}
+    </div>
+    ${offen.length ? `<table class="list offen-liste"><thead><tr>
+        <th>Nr.</th><th>Kunde</th><th class="num">Betrag</th><th>Rechnungsdatum</th><th>Fällig am</th><th>Frist</th><th></th>
+      </tr></thead><tbody>
+      ${offen.map(r => `<tr data-id="${r.id}">
+        <td>${esc(r.nummer)}</td>
+        <td>${esc(r.kunde.name)}</td>
+        <td class="num">${fmtEuro(r.gesamt)}</td>
+        <td>${fmtDate(r.datum)}</td>
+        <td>${r.ziel ? utcToDe(r.ziel.faellig) : "–"}</td>
+        <td>${fristBadge(r.ziel)}</td>
+        <td class="btns"><button class="small secondary" data-act="bezahlt">✓ Bezahlt</button></td>
+      </tr>`).join("")}
+      </tbody></table>`
+    : `<p class="hint alles-bezahlt">Keine offenen Rechnungen – alles bezahlt.</p>`}`;
+}
+
+$("#offen").addEventListener("click", async e => {
+  const btn = e.target.closest("button[data-act=bezahlt]");
+  if (!btn) return;
+  const id = Number(btn.closest("tr").dataset.id);
+  try {
+    await api(`rechnungen/${id}/bezahlt`, { method: "PATCH", body: { bezahlt: true } });
+    state.rechnungen.find(r => r.id === id).bezahlt = true;
+    renderListe();
+    toast("Als bezahlt markiert");
+  } catch (err) { toast(err.message, true); }
+});
+
 function renderListe() {
+  renderOffen();
   const q = $("#liste-suche").value.trim().toLowerCase();
   const status = $("#liste-status").value;
   const list = sortiere(state.rechnungen.filter(r =>
