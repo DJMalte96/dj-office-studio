@@ -22,8 +22,15 @@ TIMES = re.compile(r"(\d{1,2}[:.]\d{2})(\s*Uhr\s*(?:bis|-|–)\s*)(\d{1,2}[:.]\d
 
 
 def pdf_text(data):
+    """Text mit Layout-Erhalt: Word-PDFs liefern im Standardmodus einzelne Wörter pro Zeile."""
     reader = PdfReader(io.BytesIO(data))
-    return "\n".join(page.extract_text() or "" for page in reader.pages)
+    pages = []
+    for page in reader.pages:
+        try:
+            pages.append(page.extract_text(extraction_mode="layout") or "")
+        except Exception:
+            pages.append(page.extract_text() or "")
+    return "\n".join(pages)
 
 
 def _iso(m):
@@ -83,17 +90,27 @@ def parse_invoice(text):
     if h is None:
         h = next((i for i, l in enumerate(rest) if "in Rechnung" in l), -1)
     g = next((i for i, l in enumerate(rest) if i > h and re.match(r"^Gesamt\b", l, re.I)), len(rest))
-    block = "\n".join(rest[h + 1:g])
-    last = 0
-    for m in PRICE.finditer(block):
-        seg = block[last:m.start()]
-        last = m.end()
-        dates = list(DATE.finditer(seg))
-        lieferdatum = _iso(dates[-1]) if dates else ""
-        beschreibung = _norm(DATE.sub(" ", seg)).strip(" –-")
+    # Tabellenzeilen: Eine Zeile mit Preis beginnt eine neue Position (Datum + Preis stehen oben
+    # in der Zeile), Zeilen ohne Preis setzen die Beschreibung fort. Zeilen vor dem ersten Preis
+    # (Preis vertikal weiter unten) werden der ersten Position vorangestellt.
+    rows, pending = [], []
+    for line in rest[h + 1:g]:
+        pm, dm = PRICE.search(line), DATE.search(line)
+        cut = min((m.start() for m in (pm, dm) if m), default=len(line))
+        text = line[:cut]
+        if pm:
+            rows.append({"teile": pending + [text], "lieferdatum": _iso(dm) if dm else "",
+                         "preis": _price(pm)})
+            pending = []
+        elif rows:
+            rows[-1]["teile"].append(text)
+        else:
+            pending.append(text)
+    for row in rows:
+        beschreibung = _norm(" ".join(row["teile"])).strip(" –-")
         if beschreibung:
-            out["positionen"].append({"beschreibung": beschreibung, "lieferdatum": lieferdatum,
-                                      "preis": _price(m)})
+            out["positionen"].append({"beschreibung": beschreibung, "lieferdatum": row["lieferdatum"],
+                                      "preis": row["preis"]})
     out["gesamt"] = round(sum(p["preis"] for p in out["positionen"]), 2)
 
     # --- Zahlungsbedingung: nach "Gesamt"-Zeile bis "Vielen Dank"/"Mit freundlichen" ---
@@ -109,7 +126,9 @@ def parse_invoice(text):
 def textbaustein_vorschlag(beschreibung):
     """Uhrzeiten durch {von}/{bis} ersetzen und einen kurzen Titel ableiten."""
     text = TIMES.sub(lambda m: "{von}" + m.group(2) + "{bis}" + (m.group(4) or ""), beschreibung)
-    titel = re.split(r"\s*\(|\s*\{von\}", text)[0].strip(" –-")
+    titel = text.split("{von}")[0].strip(" –-")
+    if len(titel) > 40:
+        titel = titel.split("(")[0].strip(" –-")
     if len(titel) > 40:
         titel = titel[:40].rsplit(" ", 1)[0] + " …"
     return {"titel": titel or text[:40], "text": text}
