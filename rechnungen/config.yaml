@@ -1,5 +1,5 @@
 name: Rechnungen
-version: "0.2.1"
+version: "0.3.0"
 slug: rechnungen
 description: Rechnungen schreiben und als PDF erzeugen
 url: https://github.com/DJMalte96/ha-rechnungen

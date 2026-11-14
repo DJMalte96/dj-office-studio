@@ -18,6 +18,7 @@ PRICE = re.compile(
 DATE = re.compile(r"\b(\d{1,2})\.(\d{1,2})\.(\d{4}|\d{2})\b")
 PLZ_LINE = re.compile(r"^(\d{5})\s+(.+)$")
 NUMMER = re.compile(r"Rechnung\s*-?\s*Nr\.?\s*:?\s*([A-Za-z0-9][A-Za-z0-9\-/]*)", re.I)
+PRICE_PAREN = re.compile(r"\s*\([^)]*\d\s*€[^)]*\)")  # "(750€ für 6 Stunden, …)"
 TIMES = re.compile(r"(\d{1,2}[:.]\d{2})(\s*Uhr\s*(?:bis|-|–)\s*)(\d{1,2}[:.]\d{2})(\s*Uhr)?")
 
 
@@ -126,7 +127,14 @@ def parse_invoice(text):
 def textbaustein_vorschlag(beschreibung):
     """Uhrzeiten durch {von}/{bis} ersetzen und einen kurzen Titel ableiten."""
     text = TIMES.sub(lambda m: "{von}" + m.group(2) + "{bis}" + (m.group(4) or ""), beschreibung)
+    text = _norm(PRICE_PAREN.sub("", text))  # Preis wird individuell festgelegt → nicht in die Vorlage
     titel = text.split("{von}")[0].strip(" –-")
+    # Anlass-Name: "DJ – Tätigkeit Hochzeit (…)" → "Hochzeit", "DJ – Tätigkeit (Kofferjob)" → "Kofferjob"
+    anlass = re.sub(r"^DJ\s*[–-]\s*Tätigkeit\s*", "", titel, flags=re.I)
+    anlass = PRICE_PAREN.sub("", anlass)
+    anlass = anlass.strip(" ()–-")
+    if anlass:
+        titel = anlass
     if len(titel) > 40:
         titel = titel.split("(")[0].strip(" –-")
     if len(titel) > 40:
