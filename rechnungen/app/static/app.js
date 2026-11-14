@@ -419,26 +419,20 @@ function renderOffen() {
   offen.sort((a, b) => (a.ziel ? a.ziel.faellig : Infinity) - (b.ziel ? b.ziel.faellig : Infinity)
     || a.datum.localeCompare(b.datum));
 
-  const summe = list => list.reduce((s, r) => s + r.gesamt, 0);
-  const ueber = offen.filter(r => r.ziel && r.ziel.rest < 0);
-  const bald = offen.filter(r => r.ziel && r.ziel.rest >= 0 && r.ziel.rest <= 7);
-  const kachel = (titel, list, cls = "") => `
-    <div class="kachel ${list.length ? cls : ""}">
-      <span>${titel}</span>
-      <strong>${fmtEuro(summe(list))}</strong>
-      <small>${list.length} Rechnung${list.length === 1 ? "" : "en"}</small>
-    </div>`;
+  const summe = offen.reduce((s, r) => s + r.gesamt, 0);
+  const dringendste = offen[0];   // Liste ist nach Fälligkeit sortiert
 
   $("#offen").innerHTML = `
     <h2>Offene Rechnungen</h2>
-    <div class="kacheln">
-      ${kachel("Offen gesamt", offen)}
-      ${kachel("Überfällig", ueber, "rot")}
-      ${kachel("Fällig in 7 Tagen", bald, "gelb")}
-    </div>
     ${offen.length ? `<table class="list offen-liste">
       <thead><tr><th>Rechnung</th><th class="num">Betrag</th><th>Verbleibende Zeit</th><th class="haken-spalte">Bezahlt</th></tr></thead>
       <tbody>
+      <tr class="summen-zeile">
+        <td>${offen.length} offene Rechnung${offen.length === 1 ? "" : "en"}</td>
+        <td class="num">${fmtEuro(summe)}</td>
+        <td><span class="naechste">nächste Frist:</span> ${fristBadge(dringendste.ziel)}</td>
+        <td></td>
+      </tr>
       ${offen.map(r => `<tr data-id="${r.id}">
         <td><a href="#" class="rlink" title="Im Editor öffnen">${esc(rechnungsName(r))}</a></td>
         <td class="num">${fmtEuro(r.gesamt)}</td>
