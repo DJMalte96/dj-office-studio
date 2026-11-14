@@ -15,6 +15,7 @@ Eine Home-Assistant-App zum Schreiben von DJ-Rechnungen. Kunden auswählen, Anla
   - Fortlaufende Rechnungsnummer (dreistellig, Startwert einstellbar)
 - **PDF** im A4-Layout mit Absenderzeile, Adressfeld, Positionstabelle und Fußzeile (Bankverbindung, Steuernummer, Kleinunternehmer-Hinweis nach §19 UStG). Vorschau vor dem Speichern; beim Speichern wird eine Kopie im Ordner `/share/rechnungen` abgelegt.
 - **Rechnungsliste** mit Suche, Filter (offen/bezahlt), Sortierung nach Nummer, Datum, Betrag, Kunde oder Status, „bezahlt“-Schalter, Summe und offenem Betrag; Rechnungen lassen sich nachträglich bearbeiten.
+- **Offene Rechnungen** auf einen Blick: Summe offen, überfällig und in den nächsten 7 Tagen fällig; je Rechnung Fälligkeitsdatum und Restzeit („noch 5 Tage“, „3 Tage überfällig“). Das Zahlungsziel wird aus der Zahlungsbedingung gelesen (z. B. „innerhalb der nächsten 8 Tage“) und ab dem Rechnungsdatum gerechnet.
 - **Import alter Rechnungen**: Bisherige Rechnungs-PDFs hochladen – Empfänger, Positionen und Vorschläge für Anlässe werden erkannt und können übernommen werden, optional auch die Rechnungen selbst als Archiv.
 - **Stammdaten** für Kunden, Anlässe und Zahlungsbedingungen.
 - Helles und dunkles Design (folgt der Geräteeinstellung).

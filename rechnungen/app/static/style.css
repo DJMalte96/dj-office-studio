@@ -261,3 +261,24 @@ input.bezahlt { transform: none; accent-color: auto; }
 table.list th[data-sort] { cursor: pointer; user-select: none; white-space: nowrap; transition: color .15s; }
 table.list th[data-sort]:hover, table.list th.sortiert { color: var(--text); }
 table.list th[data-sort]::after { content: attr(data-pfeil); margin-left: 5px; font-size: 10px; color: var(--ink); }
+
+/* ---------- Offene Rechnungen ---------- */
+:root { --gelb: #d97706; --gelb-soft: rgba(245, 158, 11, .14); }
+@media (prefers-color-scheme: dark) { :root { --gelb: #fbbf24; --gelb-soft: rgba(245, 158, 11, .16); } }
+.kacheln { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 8px; }
+@media (max-width: 760px) { .kacheln { grid-template-columns: 1fr; } }
+.kachel { display: grid; gap: 2px; padding: 14px 16px; border-radius: 12px; background: var(--input-bg); border: 1px solid var(--border); }
+.kachel span { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+.kachel strong { font-size: 22px; font-weight: 700; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.kachel small { font-size: 12.5px; color: var(--muted); }
+.kachel.rot { background: var(--danger-soft); border-color: transparent; }
+.kachel.rot strong { color: var(--danger); }
+.kachel.gelb { background: var(--gelb-soft); border-color: transparent; }
+.kachel.gelb strong { color: var(--gelb); }
+.offen-liste { margin-top: 10px; }
+.frist { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 12.5px; font-weight: 600; white-space: nowrap; }
+.frist.gruen { background: var(--primary-soft); color: var(--text); }
+.frist.gelb { background: var(--gelb-soft); color: var(--gelb); }
+.frist.rot { background: var(--danger-soft); color: var(--danger); }
+.frist.neutral { background: var(--input-bg); border: 1px solid var(--border); color: var(--muted); }
+.alles-bezahlt { margin-top: 10px; }
