@@ -7,12 +7,14 @@ from datetime import date
 from flask import Flask, Response, abort, jsonify, request, send_from_directory
 
 import db
+import importer
 from pdf import build_invoice_pdf, pdf_filename
 
 OPTIONS_PATH = os.environ.get("OPTIONS_PATH", "/data/options.json")
 STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 
 app = Flask(__name__, static_folder=None)
+app.config["MAX_CONTENT_LENGTH"] = 100 * 1024 * 1024  # Upload alter Rechnungen
 
 
 def absender():
@@ -221,6 +223,86 @@ def invoices_preview():
     data = request.get_json()
     data["nummer"] = (data.get("nummer") or "").strip() or "VORSCHAU"
     return _pdf_response(_validate_invoice(data, check_number=False))
+
+
+# ---------- Import alter Rechnungen ----------
+
+def _norm_key(s):
+    return " ".join((s or "").lower().split())
+
+
+@app.post("/api/import/analyse")
+def import_analyse():
+    """PDFs auslesen und Vorschläge liefern – speichert noch nichts."""
+    rechnungen, fehler = [], []
+    for f in request.files.getlist("dateien"):
+        try:
+            inv = importer.parse_invoice(importer.pdf_text(f.read()))
+            if not inv["kunde"].get("name") or not inv["positionen"]:
+                raise ValueError("Empfänger oder Positionen nicht erkannt")
+            inv["datei"] = f.filename
+            inv["nummer_vorhanden"] = db.number_taken(inv["nummer"])
+            rechnungen.append(inv)
+        except ValueError as e:
+            fehler.append({"datei": f.filename, "fehler": str(e)})
+        except Exception:  # defekte/fremde PDFs sollen den Rest nicht aufhalten
+            app.logger.exception("Import von %s fehlgeschlagen", f.filename)
+            fehler.append({"datei": f.filename, "fehler": "PDF konnte nicht gelesen werden (defekt oder geschützt)"})
+
+    # Empfänger (einmalig je Name+Ort)
+    bekannte = {(_norm_key(k["name"]), _norm_key(k["ort"])) for k in db.list_items("kunden")}
+    kunden, seen = [], set()
+    for inv in sorted(rechnungen, key=lambda r: r["datum"], reverse=True):  # neueste Adresse gewinnt
+        k = inv["kunde"]
+        key = (_norm_key(k["name"]), _norm_key(k["ort"]))
+        if key not in seen:
+            seen.add(key)
+            kunden.append({**k, "vorhanden": key in bekannte})
+
+    # Textbaustein-Vorschläge (gleiche Texte zusammengefasst, vorhandene ausgelassen)
+    vorhandene_tb = {_norm_key(t["text"]) for t in db.list_items("textbausteine")}
+    vorschlaege = {}
+    for inv in rechnungen:
+        for p in inv["positionen"]:
+            v = importer.textbaustein_vorschlag(p["beschreibung"])
+            key = _norm_key(v["text"])
+            if key in vorhandene_tb:
+                continue
+            vorschlaege.setdefault(key, {**v, "anzahl": 0})["anzahl"] += 1
+    textbausteine = sorted(vorschlaege.values(), key=lambda v: -v["anzahl"])
+
+    rechnungen.sort(key=lambda r: r["nummer"])
+    return jsonify({"rechnungen": rechnungen, "kunden": kunden,
+                    "textbausteine": textbausteine, "fehler": fehler})
+
+
+@app.post("/api/import/uebernehmen")
+def import_uebernehmen():
+    data = request.get_json() or {}
+    n_kunden = n_tb = n_rech = 0
+    for k in data.get("kunden") or []:
+        if (k.get("name") or "").strip():
+            db.upsert_customer(k)
+            n_kunden += 1
+    for t in data.get("textbausteine") or []:
+        if (t.get("text") or "").strip():
+            db.save_item("textbausteine", {"titel": (t.get("titel") or t["text"][:40]).strip(),
+                                           "text": t["text"].strip()})
+            n_tb += 1
+    for inv in data.get("rechnungen") or []:
+        nummer = (inv.get("nummer") or "").strip()
+        if not nummer or db.number_taken(nummer) or not inv.get("positionen"):
+            continue
+        kunde = {k: (inv["kunde"].get(k) or "").strip() for k in db.TABLES["kunden"]}
+        db.save_invoice({
+            "nummer": nummer, "datum": inv.get("datum") or date.today().isoformat(),
+            "kunde": kunde, "kunde_id": db.upsert_customer(kunde),
+            "positionen": inv["positionen"], "zahlungsbedingung": inv.get("zahlungsbedingung") or "",
+            "gesamt": round(sum(float(p.get("preis") or 0) for p in inv["positionen"]), 2),
+            "bezahlt": bool(data.get("bezahlt")),
+        })
+        n_rech += 1
+    return jsonify({"kunden": n_kunden, "textbausteine": n_tb, "rechnungen": n_rech})
 
 
 if __name__ == "__main__":

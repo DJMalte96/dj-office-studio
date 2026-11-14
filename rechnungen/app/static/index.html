@@ -80,10 +80,28 @@
 
     <!-- ================= Rechnungsliste ================= -->
     <section id="tab-liste" class="tab">
+      <div id="import" class="card hidden">
+        <div class="row between">
+          <h2>Alte Rechnungen importieren</h2>
+          <button type="button" id="import-zu" class="icon" title="Schließen">✕</button>
+        </div>
+        <p class="hint">PDFs deiner bisherigen Rechnungen hochladen. Daraus werden Empfänger und
+          Vorschläge für Textbausteine erkannt – du entscheidest danach, was übernommen wird.</p>
+        <label class="dropzone" id="dropzone">
+          <input type="file" id="import-dateien" accept=".pdf,application/pdf" multiple>
+          <strong>PDFs hierher ziehen</strong> oder klicken zum Auswählen
+          <span class="hint" id="import-status"></span>
+        </label>
+        <div id="import-ergebnis"></div>
+      </div>
+
       <div class="card">
         <div class="row between">
           <h2>Alle Rechnungen</h2>
-          <input id="liste-suche" class="search" placeholder="Suchen …">
+          <div class="row">
+            <input id="liste-suche" class="search" placeholder="Suchen …">
+            <button type="button" id="btn-import" class="secondary">⇪ Alte Rechnungen importieren</button>
+          </div>
         </div>
         <table class="list">
           <thead><tr><th>Nr.</th><th>Datum</th><th>Kunde</th><th class="num">Betrag</th><th>Bezahlt</th><th></th></tr></thead>
