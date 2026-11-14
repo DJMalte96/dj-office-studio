@@ -1,4 +1,5 @@
 """Rechnungen – Home Assistant App (Ingress-Weboberfläche + REST-API)."""
+import hashlib
 import json
 import os
 from datetime import date
@@ -29,14 +30,26 @@ def pdf_dir():
 
 # ---------- Frontend ----------
 
+def _asset_version(name):
+    """Kurzer Inhalts-Hash – ändert sich bei jedem Update, damit Browser keine alten Dateien nutzen."""
+    with open(os.path.join(STATIC_DIR, name), "rb") as f:
+        return hashlib.sha1(f.read()).hexdigest()[:10]
+
+
 @app.get("/")
 def index():
-    return send_from_directory(STATIC_DIR, "index.html")
+    with open(os.path.join(STATIC_DIR, "index.html"), encoding="utf-8") as f:
+        html = f.read()
+    for name in ("style.css", "app.js"):
+        html = html.replace(f'"static/{name}"', f'"static/{name}?v={_asset_version(name)}"')
+    return Response(html, mimetype="text/html", headers={"Cache-Control": "no-cache"})
 
 
 @app.get("/static/<path:name>")
 def static_files(name):
-    return send_from_directory(STATIC_DIR, name)
+    resp = send_from_directory(STATIC_DIR, name)
+    resp.headers["Cache-Control"] = "no-cache"
+    return resp
 
 
 # ---------- Einstellungen ----------
