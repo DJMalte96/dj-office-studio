@@ -13,7 +13,7 @@
       <button data-tab="neu" class="active">Neue Rechnung</button>
       <button data-tab="liste">Rechnungen</button>
       <button data-tab="kunden">Kunden</button>
-      <button data-tab="textbausteine">Textbausteine</button>
+      <button data-tab="textbausteine">Anlässe</button>
       <button data-tab="zahlungsbedingungen">Zahlungsbedingungen</button>
     </nav>
   </header>
@@ -86,7 +86,7 @@
           <button type="button" id="import-zu" class="icon" title="Schließen">✕</button>
         </div>
         <p class="hint">PDFs deiner bisherigen Rechnungen hochladen. Daraus werden Empfänger und
-          Vorschläge für Textbausteine erkannt – du entscheidest danach, was übernommen wird.</p>
+          Vorschläge für Anlässe erkannt – du entscheidest danach, was übernommen wird.</p>
         <label class="dropzone" id="dropzone">
           <input type="file" id="import-dateien" accept=".pdf,application/pdf" multiple>
           <strong>PDFs hierher ziehen</strong> oder klicken zum Auswählen
@@ -119,15 +119,16 @@
 
   <template id="tpl-position">
     <div class="pos">
+      <button type="button" class="icon del" title="Position entfernen">✕</button>
       <div class="pos-head">
-        <select class="tb" title="Fertigen Textbaustein wählen oder Freitext schreiben"><option value="">Freitext</option></select>
-        <span class="calc hidden">
-          von <input type="time" class="von"> bis <input type="time" class="bis">
-          <span class="stunden"></span>
-        </span>
-        <button type="button" class="icon del" title="Position entfernen">✕</button>
+        <label class="anlass">Anlass <select class="tb"></select></label>
+        <label class="zeit calc">von <input type="time" class="von"></label>
+        <label class="zeit calc">bis <input type="time" class="bis"></label>
+        <span class="stunden calc"></span>
       </div>
-      <textarea class="beschreibung" rows="2" placeholder="Freitext: Beschreibung der Leistung eingeben – oder oben einen Textbaustein wählen"></textarea>
+      <label class="text-label">Text auf der Rechnung <span class="opt text-hinweis"></span>
+        <textarea class="beschreibung" rows="2" placeholder="Anlass wählen und Zeiten eintragen – oder eigenen Text schreiben"></textarea>
+      </label>
       <div class="pos-foot">
         <label>Lieferdatum <input type="date" class="lieferdatum"></label>
         <label>Preis (€) <input type="number" step="0.01" min="0" class="preis"></label>

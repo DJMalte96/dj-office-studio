@@ -155,12 +155,15 @@ button.danger:hover { background: var(--danger-soft); }
   background: var(--chip-bg); color: var(--chip-fg); font-size: 13px; font-weight: 700;
 }
 .pos input, .pos select, .pos textarea { background: var(--card); }
-.pos-head { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
-.pos-head select { flex: 0 1 280px; }
-.pos-head .del { margin-left: auto; }
-.calc { display: flex; gap: 8px; align-items: center; font-size: 13px; color: var(--muted); }
-.calc input { width: 110px; padding: 7px 10px; }
-.stunden { font-weight: 600; color: var(--ink); }
+.pos > .del { position: absolute; top: 10px; right: 10px; }
+.pos-head { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; padding-right: 36px; }
+.pos-head label { margin: 0; }
+.pos-head .anlass { flex: 1 1 240px; max-width: 340px; }
+.pos-head .anlass select { font-weight: 600; }
+.pos-head .zeit { flex: 0 0 130px; }
+.stunden { align-self: flex-end; padding-bottom: 10px; font-weight: 600; color: var(--ink); white-space: nowrap; }
+.text-label { margin: 12px 0 0; }
+.text-hinweis { font-weight: 400; }
 .pos-foot { display: flex; gap: 12px; margin-top: 10px; flex-wrap: wrap; }
 .pos-foot label { margin: 0; flex: 0 1 200px; }
 .pos-foot .preis { font-weight: 600; }

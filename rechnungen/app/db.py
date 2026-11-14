@@ -52,15 +52,24 @@ DEFAULT_ZAHLUNGSBEDINGUNGEN = [
     ("Bereits bezahlt", "Der Rechnungsbetrag wurde bereits vollständig beglichen."),
 ]
 
-DEFAULT_TEXTBAUSTEINE = [
-    # titel, text, preis, grundpreis, grundstunden, stundensatz
+def anlass_text(anlass):
+    """Standard-Textvorlage für einen Anlass (Tabelle textbausteine: titel = Anlass, text = Vorlage)."""
+    return f"DJ – Tätigkeit {anlass} – {{von}} Uhr bis {{bis}} Uhr"
+
+
+# Anlass → Textvorlage
+DEFAULT_ANLAESSE = {
+    "Hochzeit": anlass_text("Hochzeit"),
+    "Geburtstag": anlass_text("Geburtstagsfeier"),
+    "Firmenfeier": anlass_text("Firmenfeier"),
+}
+
+# Frühere Standard-Textbausteine (bis 0.2.1) → werden, falls unverändert, zu Anlässen umbenannt
+LEGACY_TEXTBAUSTEINE = {
     ("DJ Hochzeit",
-     "DJ – Tätigkeit Hochzeit (750€ für 6 Stunden, jede weitere Stunde 70€) – {von} Uhr bis {bis} Uhr",
-     None, 750, 6, 70),
-    ("DJ Geburtstag",
-     "DJ – Tätigkeit Geburtstagsfeier – {von} Uhr bis {bis} Uhr",
-     None, None, None, None),
-]
+     "DJ – Tätigkeit Hochzeit (750€ für 6 Stunden, jede weitere Stunde 70€) – {von} Uhr bis {bis} Uhr"): "Hochzeit",
+    ("DJ Geburtstag", "DJ – Tätigkeit Geburtstagsfeier – {von} Uhr bis {bis} Uhr"): "Geburtstag",
+}
 
 
 def connect():
@@ -80,11 +89,12 @@ def init():
                 [(t, x, i) for i, (t, x) in enumerate(DEFAULT_ZAHLUNGSBEDINGUNGEN)],
             )
         if con.execute("SELECT COUNT(*) FROM textbausteine").fetchone()[0] == 0:
-            con.executemany(
-                "INSERT INTO textbausteine (titel, text, preis, grundpreis, grundstunden, stundensatz)"
-                " VALUES (?, ?, ?, ?, ?, ?)",
-                DEFAULT_TEXTBAUSTEINE,
-            )
+            con.executemany("INSERT INTO textbausteine (titel, text) VALUES (?, ?)",
+                            list(DEFAULT_ANLAESSE.items()))
+        for (titel, text), anlass in LEGACY_TEXTBAUSTEINE.items():
+            con.execute("UPDATE textbausteine SET titel = ?, text = ?, preis = NULL, grundpreis = NULL,"
+                        " grundstunden = NULL, stundensatz = NULL WHERE titel = ? AND text = ?",
+                        (anlass, DEFAULT_ANLAESSE[anlass], titel, text))
 
 
 def rows(cur):

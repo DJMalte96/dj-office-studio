@@ -76,7 +76,9 @@ def _clean(table, data):
         else:
             v = (v or "").strip()
         out[col] = v
-    required = {"kunden": "name", "textbausteine": "text", "zahlungsbedingungen": "text"}[table]
+    if table == "textbausteine" and out["titel"] and not out["text"]:
+        out["text"] = db.anlass_text(out["titel"])  # Anlass ohne eigene Vorlage → Standardtext
+    required = {"kunden": "name", "textbausteine": "titel", "zahlungsbedingungen": "text"}[table]
     if not out[required]:
         abort(Response(json.dumps({"error": f"Feld '{required}' fehlt"}), 400,
                        mimetype="application/json"))
@@ -260,13 +262,14 @@ def import_analyse():
             kunden.append({**k, "vorhanden": key in bekannte})
 
     # Textbaustein-Vorschläge (gleiche Texte zusammengefasst, vorhandene ausgelassen)
-    vorhandene_tb = {_norm_key(t["text"]) for t in db.list_items("textbausteine")}
+    vorhandene = db.list_items("textbausteine")
+    vorhandene_tb = {_norm_key(t["text"]) for t in vorhandene} | {_norm_key(t["titel"]) for t in vorhandene}
     vorschlaege = {}
     for inv in rechnungen:
         for p in inv["positionen"]:
             v = importer.textbaustein_vorschlag(p["beschreibung"])
             key = _norm_key(v["text"])
-            if key in vorhandene_tb:
+            if key in vorhandene_tb or _norm_key(v["titel"]) in vorhandene_tb:
                 continue
             vorschlaege.setdefault(key, {**v, "anzahl": 0})["anzahl"] += 1
     textbausteine = sorted(vorschlaege.values(), key=lambda v: -v["anzahl"])

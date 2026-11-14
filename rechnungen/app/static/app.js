@@ -176,9 +176,17 @@ $("#k-name").addEventListener("blur", () => setTimeout(closeAc, 100));
 function fillTbSelect(pos) {
   const sel = $(".tb", pos);
   const current = sel.value;
-  sel.innerHTML = `<option value="">Freitext</option><optgroup label="Textbausteine">` +
-    state.textbausteine.map(t => `<option value="${t.id}">${esc(t.titel)}</option>`).join("") + `</optgroup>`;
+  sel.innerHTML = `<option value="">Anlass wählen …</option>` +
+    state.textbausteine.map(t => `<option value="${t.id}">${esc(t.titel)}</option>`).join("") +
+    `<option value="frei">Freitext (eigener Text)</option>`;
   sel.value = current;
+}
+
+/* Zeitfelder nur zeigen, wenn die Vorlage des Anlasses {von}/{bis} enthält. */
+function updatePosMode(pos) {
+  const zeiten = !!(pos._tb && hasTimes(pos._tb.text));
+  $$(".calc", pos).forEach(el => el.classList.toggle("hidden", !zeiten));
+  $(".text-hinweis", pos).textContent = pos._tb ? "(wird automatisch erzeugt – anpassbar)" : "";
 }
 
 const hasTimes = text => /\{von\}|\{bis\}/.test(text || "");
@@ -216,13 +224,17 @@ function addPosition(p = {}) {
   $(".lieferdatum", pos).value = p.lieferdatum ?? (prev ? $(".lieferdatum", prev).value : "");
   $(".preis", pos).value = p.preis ?? "";
 
+  updatePosMode(pos);
   $(".tb", pos).addEventListener("change", e => {
     pos._tb = state.textbausteine.find(t => String(t.id) === e.target.value) || null;
-    $(".calc", pos).classList.toggle("hidden", !(pos._tb && hasTimes(pos._tb.text)));
-    $(".von", pos).value = $(".bis", pos).value = "";
-    $(".stunden", pos).textContent = "";
-    if (pos._tb) applyTb(pos);
-    else { $(".beschreibung", pos).value = ""; $(".beschreibung", pos).focus(); }
+    updatePosMode(pos);
+    if (pos._tb) {
+      applyTb(pos);                      // Zeiten bleiben beim Wechsel des Anlasses erhalten
+      if (hasTimes(pos._tb.text) && !$(".von", pos).value) $(".von", pos).focus();
+    } else if (e.target.value === "frei") {
+      $(".beschreibung", pos).value = "";
+      $(".beschreibung", pos).focus();
+    }
   });
   $(".von", pos).addEventListener("input", () => applyTb(pos));
   $(".bis", pos).addEventListener("input", () => applyTb(pos));
@@ -390,10 +402,11 @@ const STAMM = {
     info: k => esc([k.strasse, [k.plz, k.ort].filter(Boolean).join(" ")].filter(Boolean).join(", ")),
   },
   textbausteine: {
-    titel: "Textbausteine", einzahl: "Textbaustein",
-    hinweis: "Platzhalter {von} und {bis} im Text werden im Editor durch Uhrzeiten ersetzt. " +
-      "Der Preis wird bei jeder Rechnung individuell eingetragen.",
-    felder: [["titel", "Titel"], ["text", "Text", "textarea"]],
+    titel: "Anlässe", einzahl: "Anlass",
+    hinweis: "Im Editor wählst du den Anlass und trägst die Zeiten ein – daraus entsteht der Rechnungstext. " +
+      "Bleibt die Text-Vorlage leer, wird „DJ – Tätigkeit <Anlass> – {von} Uhr bis {bis} Uhr“ verwendet. " +
+      "{von} und {bis} werden durch die Uhrzeiten ersetzt.",
+    felder: [["titel", "Anlass (z. B. Hochzeit)"], ["text", "Text-Vorlage (optional)", "textarea"]],
     zeile: t => `${esc(t.titel)}<br><small>${esc(t.text)}</small>`,
     info: () => "",
   },
@@ -532,8 +545,8 @@ function renderImport() {
     </div>
 
     <div class="import-block">
-      <h3>Vorschläge für Textbausteine <span class="badge">${d.textbausteine.length}</span></h3>
-      <p class="hint">Uhrzeiten wurden durch {von}/{bis} ersetzt. Titel und Text kannst du hier noch anpassen.</p>
+      <h3>Vorschläge für Anlässe <span class="badge">${d.textbausteine.length}</span></h3>
+      <p class="hint">Uhrzeiten wurden durch {von}/{bis} ersetzt. Preisangaben wurden entfernt. Name und Vorlage kannst du hier noch anpassen.</p>
       ${d.textbausteine.map((t, i) => `<div class="tb-vorschlag">
           ${check("textbausteine", i, true)}
           <div class="grow">
@@ -541,7 +554,7 @@ function renderImport() {
             <textarea class="tb-text" data-i="${i}" rows="2">${esc(t.text)}</textarea>
           </div>
           <span class="tag">${t.anzahl}×</span>
-        </div>`).join("") || `<p class="hint">Keine neuen Textbausteine – alle Positionen gibt es schon.</p>`}
+        </div>`).join("") || `<p class="hint">Keine neuen Anlässe – alle gibt es schon.</p>`}
     </div>
 
     <div class="import-block">
@@ -584,7 +597,7 @@ async function uebernehmeImport() {
   };
   try {
     const r = await api("import/uebernehmen", { method: "POST", body });
-    toast(`Übernommen: ${r.kunden} Empfänger, ${r.textbausteine} Textbausteine, ${r.rechnungen} Rechnungen`);
+    toast(`Übernommen: ${r.kunden} Empfänger, ${r.textbausteine} Anlässe, ${r.rechnungen} Rechnungen`);
     imp.daten = null;
     $("#import-ergebnis").innerHTML = "";
     $("#import-status").textContent = "";
