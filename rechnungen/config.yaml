@@ -1,7 +1,7 @@
-name: Rechnungen
-version: "0.3.0"
+name: DJ Office Studio
+version: "0.3.1"
 slug: rechnungen
-description: Rechnungen schreiben und als PDF erzeugen
+description: DJ Office Studio – Rechnungen schreiben, Kunden und Anlässe verwalten
 url: https://github.com/DJMalte96/ha-rechnungen
 arch:
   - aarch64
@@ -9,8 +9,8 @@ arch:
 init: false
 ingress: true
 ingress_port: 8099
-panel_icon: mdi:file-document-edit-outline
-panel_title: Rechnungen
+panel_icon: mdi:album
+panel_title: DJ Office Studio
 map:
   - type: share
     read_only: false
