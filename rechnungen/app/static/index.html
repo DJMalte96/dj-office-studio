@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Rechnungen</title>
+  <link rel="stylesheet" href="static/style.css">
+</head>
+<body>
+  <header>
+    <h1>Rechnungen</h1>
+    <nav>
+      <button data-tab="neu" class="active">Neue Rechnung</button>
+      <button data-tab="liste">Rechnungen</button>
+      <button data-tab="kunden">Kunden</button>
+      <button data-tab="textbausteine">Textbausteine</button>
+      <button data-tab="zahlungsbedingungen">Zahlungsbedingungen</button>
+    </nav>
+  </header>
+
+  <div id="warnung" class="banner hidden">
+    Absenderdaten (Name, IBAN …) fehlen noch. Bitte in Home Assistant unter
+    <b>Einstellungen → Apps → Rechnungen → Konfiguration</b> eintragen – daraus wird die Fußzeile erzeugt.
+  </div>
+  <div id="toast" class="toast hidden"></div>
+
+  <main>
+    <!-- ================= Neue Rechnung ================= -->
+    <section id="tab-neu" class="tab active">
+      <form id="rechnung" autocomplete="off">
+        <div class="grid2">
+          <div class="card">
+            <h2>Kunde</h2>
+            <label>Name
+              <div class="ac-wrap">
+                <input id="k-name" placeholder="Name eingeben – bekannte Kunden werden vorgeschlagen" required>
+                <ul id="ac-list" class="ac-list hidden"></ul>
+              </div>
+            </label>
+            <label>Zusatz <span class="opt">(optional, z. B. Firma / c/o)</span>
+              <input id="k-zusatz">
+            </label>
+            <label>Straße und Hausnummer
+              <input id="k-strasse">
+            </label>
+            <div class="row">
+              <label class="plz">PLZ <input id="k-plz" inputmode="numeric" maxlength="5"></label>
+              <label class="grow">Ort <input id="k-ort"></label>
+            </div>
+            <p id="k-hinweis" class="hint"></p>
+          </div>
+
+          <div class="card">
+            <h2>Rechnung</h2>
+            <div class="row">
+              <label>Rechnungs-Nr. <input id="r-nummer" required></label>
+              <label>Rechnungsdatum <input id="r-datum" type="date" required></label>
+            </div>
+            <label>Zahlungsbedingung
+              <select id="r-zahlung"></select>
+            </label>
+            <p id="r-zahlung-text" class="hint"></p>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Positionen</h2>
+          <div id="positionen"></div>
+          <button type="button" id="pos-add" class="secondary">+ Position hinzufügen</button>
+          <div class="total">Gesamt: <span id="gesamt">0,- Euro</span></div>
+        </div>
+
+        <div class="actions">
+          <button type="button" id="btn-neu" class="secondary">Formular leeren</button>
+          <button type="button" id="btn-vorschau" class="secondary">PDF-Vorschau</button>
+          <button type="submit" id="btn-speichern">Rechnung speichern &amp; PDF öffnen</button>
+        </div>
+      </form>
+    </section>
+
+    <!-- ================= Rechnungsliste ================= -->
+    <section id="tab-liste" class="tab">
+      <div class="card">
+        <div class="row between">
+          <h2>Alle Rechnungen</h2>
+          <input id="liste-suche" class="search" placeholder="Suchen …">
+        </div>
+        <table class="list">
+          <thead><tr><th>Nr.</th><th>Datum</th><th>Kunde</th><th class="num">Betrag</th><th>Bezahlt</th><th></th></tr></thead>
+          <tbody id="liste-body"></tbody>
+        </table>
+        <p id="liste-summe" class="hint"></p>
+      </div>
+    </section>
+
+    <!-- ================= Stammdaten (generisch) ================= -->
+    <section id="tab-kunden" class="tab" data-stamm="kunden"></section>
+    <section id="tab-textbausteine" class="tab" data-stamm="textbausteine"></section>
+    <section id="tab-zahlungsbedingungen" class="tab" data-stamm="zahlungsbedingungen"></section>
+  </main>
+
+  <template id="tpl-position">
+    <div class="pos">
+      <div class="pos-head">
+        <select class="tb" title="Fertigen Textbaustein wählen oder Freitext schreiben"><option value="">Freitext</option></select>
+        <span class="calc hidden">
+          von <input type="time" class="von"> bis <input type="time" class="bis">
+          <span class="stunden"></span>
+        </span>
+        <button type="button" class="icon del" title="Position entfernen">✕</button>
+      </div>
+      <textarea class="beschreibung" rows="2" placeholder="Freitext: Beschreibung der Leistung eingeben – oder oben einen Textbaustein wählen"></textarea>
+      <div class="pos-foot">
+        <label>Lieferdatum <input type="date" class="lieferdatum"></label>
+        <label>Preis (€) <input type="number" step="0.01" min="0" class="preis"></label>
+      </div>
+    </div>
+  </template>
+
+  <script src="static/app.js"></script>
+</body>
+</html>

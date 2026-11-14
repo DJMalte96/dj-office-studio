@@ -1,0 +1,19 @@
+ARG BUILD_FROM=python:3.12-slim-bookworm
+FROM ${BUILD_FROM}
+
+# Carlito = metrisch kompatibel zu Calibri (Schrift der Vorlage)
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends fonts-crosextra-carlito \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt /tmp/requirements.txt
+RUN pip install --no-cache-dir -r /tmp/requirements.txt
+
+COPY app /app
+WORKDIR /app
+
+ENV DATA_DIR=/data \
+    OPTIONS_PATH=/data/options.json \
+    PORT=8099
+
+CMD ["python3", "-u", "/app/main.py"]
