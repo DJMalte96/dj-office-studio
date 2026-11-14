@@ -2,6 +2,12 @@
 
 Alle Änderungen an DJ Office Studio. Neueste Version oben.
 
+## 0.4.1 – 2026-11-14
+
+### Geändert
+- **Offene Rechnungen** kompakter: pro Zeile nur noch Rechnungsname, Betrag, verbleibende Zeit und ein Haken „Bezahlt“. Haken setzen verschiebt die Rechnung ins Archiv. Ein Klick auf den Rechnungsnamen öffnet sie im Editor.
+- **Archiv** wieder im bisherigen Aussehen (Spalte „Nr.“ statt Rechnungsname) – enthält weiterhin nur bezahlte Rechnungen.
+
 ## 0.4.0 – 2026-11-14
 
 ### Neu

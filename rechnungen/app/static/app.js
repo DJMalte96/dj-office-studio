@@ -408,7 +408,6 @@ function fristBadge(z) {
 }
 
 const aktionen = (...welche) => welche.map(a => ({
-  bezahlt: `<button class="small" data-act="bezahlt">✓ Bezahlt</button>`,
   pdf: `<button class="small secondary" data-act="pdf">PDF</button>`,
   edit: `<button class="small secondary" data-act="edit">Bearbeiten</button>`,
   del: `<button class="small danger" data-act="del">Löschen</button>`,
@@ -437,14 +436,14 @@ function renderOffen() {
       ${kachel("Überfällig", ueber, "rot")}
       ${kachel("Fällig in 7 Tagen", bald, "gelb")}
     </div>
-    ${offen.length ? `<table class="list offen-liste"><tbody>
+    ${offen.length ? `<table class="list offen-liste">
+      <thead><tr><th>Rechnung</th><th class="num">Betrag</th><th>Verbleibende Zeit</th><th class="haken-spalte">Bezahlt</th></tr></thead>
+      <tbody>
       ${offen.map(r => `<tr data-id="${r.id}">
-        <td>
-          <div class="rname"><strong>${esc(rechnungsName(r))}</strong>${fristBadge(r.ziel)}</div>
-          <small>${esc(r.kunde.name)} · vom ${fmtDate(r.datum)}${r.ziel ? ` · fällig am ${utcToDe(r.ziel.faellig)}` : ""}</small>
-        </td>
+        <td><a href="#" class="rlink" title="Im Editor öffnen">${esc(rechnungsName(r))}</a></td>
         <td class="num">${fmtEuro(r.gesamt)}</td>
-        <td class="btns">${aktionen("bezahlt", "pdf", "edit", "del")}</td>
+        <td title="${r.ziel ? `fällig am ${utcToDe(r.ziel.faellig)}` : ""}">${fristBadge(r.ziel)}</td>
+        <td class="haken-spalte"><input type="checkbox" class="offen-haken" title="Als bezahlt markieren → ins Archiv"></td>
       </tr>`).join("")}
       </tbody></table>`
     : `<p class="hint alles-bezahlt">Keine offenen Rechnungen – alles bezahlt.</p>`}`;
@@ -467,7 +466,7 @@ function renderListe() {
   });
   $("#liste-body").innerHTML = list.map(r => `
     <tr data-id="${r.id}">
-      <td><strong>${esc(rechnungsName(r))}</strong></td>
+      <td>${esc(r.nummer)}</td>
       <td>${fmtDate(r.datum)}</td>
       <td>${esc(r.kunde.name)}<br><small>${esc(r.kunde.ort)}</small></td>
       <td class="num">${fmtEuro(r.gesamt)}</td>
@@ -489,6 +488,21 @@ async function setBezahlt(id, bezahlt) {
                 : `${rechnungsName(inv)} ist wieder offen`);
 }
 
+// Klick auf den Rechnungsnamen → im Editor öffnen
+$("#offen").addEventListener("click", e => {
+  const a = e.target.closest("a.rlink");
+  if (!a) return;
+  e.preventDefault();
+  loadIntoForm(state.rechnungen.find(r => r.id === Number(a.closest("tr").dataset.id)));
+});
+
+// Haken in „Offene Rechnungen“ → bezahlt → ins Archiv
+$("#offen").addEventListener("change", async e => {
+  if (!e.target.classList.contains("offen-haken")) return;
+  try { await setBezahlt(Number(e.target.closest("tr").dataset.id), true); }
+  catch (err) { toast(err.message, true); e.target.checked = false; }
+});
+
 // Schalter im Archiv: Haken entfernen → zurück zu den offenen Rechnungen
 $("#liste-body").addEventListener("change", async e => {
   if (!e.target.classList.contains("bezahlt")) return;
@@ -496,14 +510,13 @@ $("#liste-body").addEventListener("change", async e => {
   catch (err) { toast(err.message, true); e.target.checked = !e.target.checked; }
 });
 
-// Buttons in „Offen“ und „Archiv“
+// Buttons im Archiv
 $("#tab-liste").addEventListener("click", async e => {
   const btn = e.target.closest("tr[data-id] button[data-act]");
   if (!btn) return;
   const id = Number(btn.closest("tr").dataset.id);
   const inv = state.rechnungen.find(r => r.id === id);
   try {
-    if (btn.dataset.act === "bezahlt") await setBezahlt(id, true);
     if (btn.dataset.act === "pdf") window.open(`api/rechnungen/${id}/pdf`, "_blank");
     if (btn.dataset.act === "edit") loadIntoForm(inv);
     if (btn.dataset.act === "del" && confirm(`${rechnungsName(inv)} wirklich löschen?`)) {
