@@ -112,13 +112,33 @@
       <div class="card">
         <div class="row between">
           <h2>Alle Rechnungen</h2>
-          <div class="row">
-            <input id="liste-suche" class="search" placeholder="Suchen …">
-            <button type="button" id="btn-import" class="secondary">⇪ Alte Rechnungen importieren</button>
-          </div>
+          <button type="button" id="btn-import" class="secondary">⇪ Alte Rechnungen importieren</button>
+        </div>
+        <div class="liste-tools">
+          <input id="liste-suche" class="search" placeholder="Suchen …">
+          <select id="liste-status" title="Filtern">
+            <option value="">Alle Rechnungen</option>
+            <option value="offen">Nur offene</option>
+            <option value="bezahlt">Nur bezahlte</option>
+          </select>
+          <select id="liste-sort" title="Sortieren">
+            <option value="datum:desc">Datum – neueste zuerst</option>
+            <option value="datum:asc">Datum – älteste zuerst</option>
+            <option value="nummer:desc">Rechnungs-Nr. – absteigend</option>
+            <option value="nummer:asc">Rechnungs-Nr. – aufsteigend</option>
+            <option value="gesamt:desc">Betrag – höchster zuerst</option>
+            <option value="gesamt:asc">Betrag – niedrigster zuerst</option>
+            <option value="kunde:asc">Kunde – A bis Z</option>
+            <option value="kunde:desc">Kunde – Z bis A</option>
+            <option value="bezahlt:asc">Offene zuerst</option>
+            <option value="bezahlt:desc">Bezahlte zuerst</option>
+          </select>
         </div>
         <table class="list">
-          <thead><tr><th>Nr.</th><th>Datum</th><th>Kunde</th><th class="num">Betrag</th><th>Bezahlt</th><th></th></tr></thead>
+          <thead><tr>
+            <th data-sort="nummer">Nr.</th><th data-sort="datum">Datum</th><th data-sort="kunde">Kunde</th>
+            <th class="num" data-sort="gesamt">Betrag</th><th data-sort="bezahlt">Bezahlt</th><th></th>
+          </tr></thead>
           <tbody id="liste-body"></tbody>
         </table>
         <p id="liste-summe" class="hint"></p>

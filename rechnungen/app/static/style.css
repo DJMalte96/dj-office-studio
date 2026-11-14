@@ -226,8 +226,6 @@ input.bezahlt:focus { box-shadow: 0 0 0 4px var(--primary-soft); }
 
 /* ---------- Import alter Rechnungen ---------- */
 input[type="checkbox"] { width: auto; accent-color: var(--neon); cursor: pointer; transform: scale(1.15); }
-#tab-liste .between .row { align-items: center; gap: 10px; }
-#tab-liste .between .row .search { margin: 0; }
 #import { border-color: var(--neon); box-shadow: 0 0 0 1px var(--neon), var(--shadow); }
 .dropzone {
   display: flex; flex-direction: column; align-items: center; gap: 4px; margin: 16px 0;
@@ -255,3 +253,11 @@ label.inline { display: flex; align-items: center; gap: 8px; margin: 12px 0 0; c
 #import .actions { margin-top: 20px; }
 input.bezahlt { transform: none; accent-color: auto; }
 #btn-import { white-space: nowrap; }
+
+/* ---------- Rechnungsliste: Suche, Filter, Sortierung ---------- */
+.liste-tools { display: flex; gap: 10px; flex-wrap: wrap; margin: 16px 0 6px; }
+.liste-tools .search { flex: 1 1 220px; max-width: none; }
+.liste-tools select { flex: 0 1 250px; width: auto; }
+table.list th[data-sort] { cursor: pointer; user-select: none; white-space: nowrap; transition: color .15s; }
+table.list th[data-sort]:hover, table.list th.sortiert { color: var(--text); }
+table.list th[data-sort]::after { content: attr(data-pfeil); margin-left: 5px; font-size: 10px; color: var(--ink); }

@@ -340,11 +340,61 @@ async function loadListe() {
   renderListe();
 }
 
+/* Sortierung: Feld + Richtung, wird im Browser gemerkt. */
+const SORT_DEFAULT = { feld: "datum", richtung: "desc" };
+const ERSTE_RICHTUNG = { datum: "desc", nummer: "desc", gesamt: "desc", kunde: "asc", bezahlt: "asc" };
+let sortierung = (() => {
+  try { return JSON.parse(localStorage.getItem("liste-sort")) || SORT_DEFAULT; } catch (_) { return SORT_DEFAULT; }
+})();
+
+const vergleich = {
+  nummer: (a, b) => a.nummer.localeCompare(b.nummer, "de", { numeric: true }),
+  datum: (a, b) => a.datum.localeCompare(b.datum),
+  gesamt: (a, b) => a.gesamt - b.gesamt,
+  kunde: (a, b) => (a.kunde.name || "").localeCompare(b.kunde.name || "", "de", { sensitivity: "base" }),
+  bezahlt: (a, b) => Number(a.bezahlt) - Number(b.bezahlt),
+};
+
+function sortiere(list) {
+  const { feld, richtung } = sortierung;
+  const dir = richtung === "asc" ? 1 : -1;
+  // Bei Gleichstand: neueste Rechnung zuerst
+  return [...list].sort((a, b) => dir * vergleich[feld](a, b) || -vergleich.datum(a, b) || -vergleich.nummer(a, b));
+}
+
+function setSortierung(feld, richtung) {
+  sortierung = { feld, richtung };
+  localStorage.setItem("liste-sort", JSON.stringify(sortierung));
+  renderListe();
+}
+
+$("#liste-sort").addEventListener("change", e => {
+  const [feld, richtung] = e.target.value.split(":");
+  setSortierung(feld, richtung);
+});
+$$("#tab-liste th[data-sort]").forEach(th => th.addEventListener("click", () => {
+  const feld = th.dataset.sort;
+  const richtung = sortierung.feld === feld
+    ? (sortierung.richtung === "asc" ? "desc" : "asc")   // gleiche Spalte → umdrehen
+    : ERSTE_RICHTUNG[feld];
+  setSortierung(feld, richtung);
+}));
+$("#liste-status").addEventListener("change", renderListe);
+
 function renderListe() {
   const q = $("#liste-suche").value.trim().toLowerCase();
-  const list = state.rechnungen.filter(r => !q ||
-    [r.nummer, r.kunde.name, r.kunde.ort, ...r.positionen.map(p => p.beschreibung)]
-      .join(" ").toLowerCase().includes(q));
+  const status = $("#liste-status").value;
+  const list = sortiere(state.rechnungen.filter(r =>
+    (!status || (status === "bezahlt") === r.bezahlt) &&
+    (!q || [r.nummer, r.kunde.name, r.kunde.ort, ...r.positionen.map(p => p.beschreibung)]
+      .join(" ").toLowerCase().includes(q))));
+
+  $("#liste-sort").value = `${sortierung.feld}:${sortierung.richtung}`;
+  $$("#tab-liste th[data-sort]").forEach(th => {
+    const aktiv = th.dataset.sort === sortierung.feld;
+    th.classList.toggle("sortiert", aktiv);
+    th.dataset.pfeil = aktiv ? (sortierung.richtung === "asc" ? "▲" : "▼") : "";
+  });
   $("#liste-body").innerHTML = list.map(r => `
     <tr data-id="${r.id}">
       <td>${esc(r.nummer)}</td>
