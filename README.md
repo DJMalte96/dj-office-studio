@@ -2,7 +2,7 @@
 
 # DJ Office Studio
 
-Eine Home-Assistant-App zum Schreiben von DJ-Rechnungen. Kunden auswählen, Anlass und Uhrzeiten eintragen, Preis festlegen – fertig ist das PDF im Layout der bisherigen Word-Vorlage.
+Eine Home-Assistant-App zum Schreiben von DJ-Rechnungen. Kunden auswählen, Rechnungsposten und Uhrzeiten eintragen, Preis festlegen – fertig ist das PDF im Layout der bisherigen Word-Vorlage.
 
 ![Screenshot: Rechnung erstellen](docs/screenshot.png)
 
@@ -11,7 +11,7 @@ Eine Home-Assistant-App zum Schreiben von DJ-Rechnungen. Kunden auswählen, Anla
 - **Startseite** mit Kacheln für alle Aktionen der App und dem Status der Rechnungen: offene Rechnungen mit Restzeit und Warnung bei Überfälligkeit, Umsatz nach Monat/Jahr und die letzten Rechnungen.
 - **Rechnungseditor**
   - Kunde mit Autovervollständigung aus bisherigen Kunden; neue Kunden werden beim Speichern automatisch angelegt
-  - Positionen per **Anlass** (Hochzeit, Geburtstag, Firmenfeier, …) mit **von/bis-Zeiten** – der Rechnungstext wird daraus erzeugt, z. B. „DJ – Tätigkeit Hochzeit – 17:00 Uhr bis 2:00 Uhr“
+  - Positionen per **Rechnungsposten** (Hochzeit, Geburtstag, Firmenfeier, …) mit **von/bis-Zeiten** – der Rechnungstext wird daraus erzeugt, z. B. „DJ – Tätigkeit Hochzeit – 17:00 Uhr bis 2:00 Uhr“
   - Freitext-Positionen für alles andere (z. B. Fahrtkosten)
   - Preis wird pro Position individuell eingetragen
   - Auswählbare Zahlungsbedingungen (Überweisung 8/14 Tage, bar erhalten, …)
@@ -19,8 +19,8 @@ Eine Home-Assistant-App zum Schreiben von DJ-Rechnungen. Kunden auswählen, Anla
 - **PDF** im A4-Layout mit Absenderzeile, Adressfeld, Positionstabelle und Fußzeile (Bankverbindung, Steuernummer, Kleinunternehmer-Hinweis nach §19 UStG). Vorschau vor dem Speichern; beim Speichern wird eine Kopie im Ordner `/share/rechnungen` abgelegt.
 - **Offene Rechnungen** auf einen Blick: eine Summenzeile mit Anzahl, Gesamtbetrag und nächster Frist; darunter je Rechnung Rechnungsname (z. B. `Rechnung_037_311026`), Betrag, verbleibende Zeit („noch 5 Tage“, „3 Tage überfällig“) und ein Haken zum Abhaken, wenn bezahlt wurde. Das Zahlungsziel wird aus der Zahlungsbedingung gelesen (z. B. „innerhalb der nächsten 8 Tage“) und ab dem Rechnungsdatum gerechnet.
 - **Archiv** für bezahlte Rechnungen: Wird eine offene Rechnung abgehakt, wandert sie ins Archiv – mit Suche und Sortierung nach Nummer, Datum, Betrag oder Kunde. Rechnungen lassen sich jederzeit bearbeiten oder wieder auf „offen“ setzen.
-- **Import alter Rechnungen**: Bisherige Rechnungs-PDFs hochladen – Empfänger, Positionen und Vorschläge für Anlässe werden erkannt und können übernommen werden, optional auch die Rechnungen selbst als Archiv.
-- **Stammdaten** für Kunden, Anlässe und Zahlungsbedingungen.
+- **Import alter Rechnungen**: Bisherige Rechnungs-PDFs hochladen – Empfänger, Positionen und Vorschläge für Rechnungsposten werden erkannt und können übernommen werden, optional auch die Rechnungen selbst als Archiv.
+- **Stammdaten** für Kunden, Rechnungsposten und Zahlungsbedingungen.
 - Helles und dunkles Design (folgt der Geräteeinstellung).
 
 ## Installation
@@ -62,17 +62,17 @@ Solange Name oder IBAN fehlen, zeigt die App oben einen Hinweis.
 
 ![Screenshot: Startseite](docs/startseite.png)
 
-**Neue Rechnung:** Kundennamen eintippen und einen Vorschlag übernehmen (oder neue Adresse eingeben). Pro Position einen Anlass wählen, von/bis eintragen, Lieferdatum und Preis ergänzen. Zahlungsbedingung wählen, dann **PDF-Vorschau** oder **Rechnung speichern & PDF öffnen**.
+**Neue Rechnung:** Kundennamen eintippen und einen Vorschlag übernehmen (oder neue Adresse eingeben). Pro Position einen Rechnungsposten wählen, von/bis eintragen, Lieferdatum und Preis ergänzen. Zahlungsbedingung wählen, dann **PDF-Vorschau** oder **Rechnung speichern & PDF öffnen**.
 
-**Anlässe:** Im gleichen Tab neue Anlässe anlegen. Ohne eigene Text-Vorlage wird `DJ – Tätigkeit <Anlass> – {von} Uhr bis {bis} Uhr` verwendet; `{von}` und `{bis}` werden durch die Uhrzeiten ersetzt.
+**Rechnungsposten:** Im gleichen Tab neue Rechnungsposten (z. B. Hochzeit) anlegen. Ohne eigene Text-Vorlage wird `DJ – Tätigkeit <Bezeichnung> – {von} Uhr bis {bis} Uhr` verwendet; `{von}` und `{bis}` werden durch die Uhrzeiten ersetzt.
 
-**Alte Rechnungen importieren:** Im Tab **Rechnungen** auf **Alte Rechnungen importieren** klicken und PDFs hineinziehen. Danach auswählen, welche Empfänger, Anlässe und Rechnungen übernommen werden. Erkannt werden PDFs mit echtem Text im Aufbau der Vorlage (Absenderzeile mit „|“, Adresse, „Rechnung Nr.“, Tabelle, „Gesamt“). Eingescannte Rechnungen werden nicht unterstützt.
+**Alte Rechnungen importieren:** Im Tab **Rechnungen** auf **Alte Rechnungen importieren** klicken und PDFs hineinziehen. Danach auswählen, welche Empfänger, Rechnungsposten und Rechnungen übernommen werden. Erkannt werden PDFs mit echtem Text im Aufbau der Vorlage (Absenderzeile mit „|“, Adresse, „Rechnung Nr.“, Tabelle, „Gesamt“). Eingescannte Rechnungen werden nicht unterstützt.
 
 ## Daten & Backup
 
 | Was | Wo |
 |---|---|
-| Kunden, Anlässe, Zahlungsbedingungen, Rechnungen | SQLite-Datenbank `rechnungen.db` im App-Datenordner (`/data`) |
+| Kunden, Rechnungsposten, Zahlungsbedingungen, Rechnungen | SQLite-Datenbank `rechnungen.db` im App-Datenordner (`/data`) |
 | PDF-Kopien | `pdf_ordner`, standardmäßig `/share/rechnungen` (z. B. per Samba erreichbar) |
 
 Beides ist in den normalen Home-Assistant-Backups enthalten.

@@ -28,7 +28,7 @@
       <button data-tab="neu">Neue Rechnung</button>
       <button data-tab="liste">Rechnungen</button>
       <button data-tab="kunden">Kunden</button>
-      <button data-tab="textbausteine">Anlässe</button>
+      <button data-tab="textbausteine">Rechnungsposten</button>
       <button data-tab="zahlungsbedingungen">Zahlungsbedingungen</button>
     </nav>
   </header>
@@ -62,7 +62,7 @@
           <span class="a-icon">◉</span><span class="a-titel">Kunden</span><small>Adressen verwalten</small>
         </button>
         <button type="button" class="aktion" data-goto="textbausteine">
-          <span class="a-icon">♪</span><span class="a-titel">Anlässe</span><small>Textvorlagen für Positionen</small>
+          <span class="a-icon">♪</span><span class="a-titel">Rechnungsposten</span><small>Textvorlagen für Positionen</small>
         </button>
         <button type="button" class="aktion" data-goto="zahlungsbedingungen">
           <span class="a-icon">€</span><span class="a-titel">Zahlungsbedingungen</span><small>Zahlungsoptionen pflegen</small>
@@ -151,7 +151,7 @@
           <button type="button" id="import-zu" class="icon" title="Schließen">✕</button>
         </div>
         <p class="hint">PDFs deiner bisherigen Rechnungen hochladen. Daraus werden Empfänger und
-          Vorschläge für Anlässe erkannt – du entscheidest danach, was übernommen wird.</p>
+          Vorschläge für Rechnungsposten erkannt – du entscheidest danach, was übernommen wird.</p>
         <label class="dropzone" id="dropzone">
           <input type="file" id="import-dateien" accept=".pdf,application/pdf" multiple>
           <strong>PDFs hierher ziehen</strong> oder klicken zum Auswählen
@@ -201,13 +201,13 @@
     <div class="pos">
       <button type="button" class="icon del" title="Position entfernen">✕</button>
       <div class="pos-head">
-        <label class="anlass">Anlass <select class="tb"></select></label>
+        <label class="anlass">Rechnungsposten <select class="tb"></select></label>
         <label class="zeit calc">von <input type="time" class="von"></label>
         <label class="zeit calc">bis <input type="time" class="bis"></label>
         <span class="stunden calc"></span>
       </div>
       <label class="text-label">Text auf der Rechnung <span class="opt text-hinweis"></span>
-        <textarea class="beschreibung" rows="2" placeholder="Anlass wählen und Zeiten eintragen – oder eigenen Text schreiben"></textarea>
+        <textarea class="beschreibung" rows="2" placeholder="Rechnungsposten wählen und Zeiten eintragen – oder eigenen Text schreiben"></textarea>
       </label>
       <div class="pos-foot">
         <label>Lieferdatum <input type="date" class="lieferdatum"></label>
