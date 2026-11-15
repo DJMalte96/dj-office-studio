@@ -2,6 +2,11 @@
 
 Alle Änderungen an DJ Office Studio. Neueste Version oben.
 
+## 0.5.4 – 2026-11-15
+
+### Neu
+- **Offene Rechnungen direkt löschen**: Jede Zeile in „Offene Rechnungen“ hat jetzt ein ✕ zum Löschen (mit Sicherheitsabfrage). Vorher musste die Rechnung erst als bezahlt markiert und dann im Archiv gelöscht werden.
+
 ## 0.5.3 – 2026-11-15
 
 ### Geändert

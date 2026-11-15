@@ -428,19 +428,20 @@ function renderOffen() {
   $("#offen").innerHTML = `
     <h2>Offene Rechnungen</h2>
     ${offen.length ? `<table class="list offen-liste">
-      <thead><tr><th>Rechnung</th><th class="num">Betrag</th><th>Verbleibende Zeit</th><th class="haken-spalte">Bezahlt</th></tr></thead>
+      <thead><tr><th>Rechnung</th><th class="num">Betrag</th><th>Verbleibende Zeit</th><th class="haken-spalte">Bezahlt</th><th class="loesch-spalte"></th></tr></thead>
       <tbody>
       <tr class="summen-zeile">
         <td>${offen.length} offene Rechnung${offen.length === 1 ? "" : "en"}</td>
         <td class="num">${fmtEuro(summe)}</td>
         <td><span class="naechste">nächste Frist:</span> ${fristBadge(dringendste.ziel)}</td>
-        <td></td>
+        <td></td><td></td>
       </tr>
       ${offen.map(r => `<tr data-id="${r.id}">
         <td><a href="#" class="rlink" title="Im Editor öffnen">${esc(rechnungsName(r))}</a></td>
         <td class="num">${fmtEuro(r.gesamt)}</td>
         <td title="${r.ziel ? `fällig am ${utcToDe(r.ziel.faellig)}` : ""}">${fristBadge(r.ziel)}</td>
         <td class="haken-spalte"><input type="checkbox" class="offen-haken" title="Als bezahlt markieren → ins Archiv"></td>
+        <td class="loesch-spalte"><button type="button" class="icon del" data-act="del" title="Rechnung löschen">✕</button></td>
       </tr>`).join("")}
       </tbody></table>`
     : `<p class="hint alles-bezahlt">Keine offenen Rechnungen – alles bezahlt.</p>`}`;
@@ -520,6 +521,7 @@ $("#tab-liste").addEventListener("click", async e => {
       await api("rechnungen/" + id, { method: "DELETE" });
       if (state.editId === id) resetForm();
       await loadListe();
+      toast(`${rechnungsName(inv)} gelöscht`);
     }
   } catch (err) { toast(err.message, true); }
 });
