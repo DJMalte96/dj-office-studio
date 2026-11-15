@@ -279,6 +279,7 @@ table.list th[data-sort]::after { content: attr(data-pfeil); margin-left: 5px; f
 .offen-liste td { vertical-align: middle; }
 .h2-sub { font-size: 13px; font-weight: 500; color: var(--muted); margin-left: 6px; }
 .haken-spalte { width: 90px; text-align: center !important; }
+.loesch-spalte { width: 44px; text-align: right !important; }
 input.offen-haken { width: 20px; height: 20px; transform: none; accent-color: var(--neon); }
 a.rlink { color: var(--text); font-weight: 650; text-decoration: none; border-bottom: 1px dashed transparent; }
 a.rlink:hover { border-bottom-color: var(--neon); }
