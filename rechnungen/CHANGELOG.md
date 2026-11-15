@@ -2,6 +2,16 @@
 
 Alle Änderungen an DJ Office Studio. Neueste Version oben.
 
+## 0.5.0 – 2026-11-15
+
+### Neu
+- **Startseite** als neuer erster Menüpunkt (öffnet sich beim Aufruf der App):
+  - Begrüßung mit Datum und Schnellaktionen (Neue Rechnung, Kunde anlegen, Rechnungen importieren)
+  - **Aufgaben**: eigene To-do-Liste mit optionalem Fälligkeitsdatum („heute“, „morgen“, „2 Tage überfällig“), abhaken, erledigte ein-/ausklappen und löschen
+  - **Hinweise**: überfällige oder heute fällige Rechnungen, überfällige Aufgaben, fehlende Absenderdaten
+  - Kurzübersicht offene Rechnungen, Umsatz (aktueller Monat, aktuelles Jahr, Vorjahr) und die letzten Rechnungen
+- Die übrigen Seiten bleiben unverändert.
+
 ## 0.4.3 – 2026-11-14
 
 ### Neu

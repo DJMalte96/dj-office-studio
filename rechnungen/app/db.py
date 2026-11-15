@@ -31,6 +31,13 @@ CREATE TABLE IF NOT EXISTS zahlungsbedingungen (
     text TEXT NOT NULL,
     sortierung INTEGER DEFAULT 0
 );
+CREATE TABLE IF NOT EXISTS aufgaben (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    titel TEXT NOT NULL,
+    faellig TEXT DEFAULT '',
+    erledigt INTEGER DEFAULT 0,
+    erstellt TEXT DEFAULT CURRENT_TIMESTAMP
+);
 CREATE TABLE IF NOT EXISTS rechnungen (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     nummer TEXT NOT NULL UNIQUE,
@@ -107,11 +114,13 @@ TABLES = {
     "kunden": ["name", "zusatz", "strasse", "plz", "ort", "email"],
     "textbausteine": ["titel", "text", "preis", "grundpreis", "grundstunden", "stundensatz"],
     "zahlungsbedingungen": ["titel", "text", "sortierung"],
+    "aufgaben": ["titel", "faellig", "erledigt"],
 }
 ORDER = {
     "kunden": "name COLLATE NOCASE",
     "textbausteine": "titel COLLATE NOCASE",
     "zahlungsbedingungen": "sortierung, id",
+    "aufgaben": "erledigt, faellig = '', faellig, id",
 }
 
 
