@@ -285,3 +285,63 @@ tr.summen-zeile td:first-child { border-radius: 10px 0 0 10px; }
 tr.summen-zeile td:last-child { border-radius: 0 10px 10px 0; }
 tr.summen-zeile:hover { background: none; }
 .naechste { font-size: 12.5px; font-weight: 500; color: var(--muted); margin-right: 4px; }
+
+/* ---------- Startseite ---------- */
+.start-kopf { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; margin: 4px 0 20px; }
+.gruss { font-size: 26px; font-weight: 750; letter-spacing: -.03em; margin: 0; }
+.start-kopf .hint { margin-top: 2px; font-size: 14px; }
+.schnell { display: flex; gap: 8px; flex-wrap: wrap; }
+.start-grid { display: grid; grid-template-columns: 3fr 2fr; gap: 20px; align-items: start; }
+@media (max-width: 900px) { .start-grid { grid-template-columns: 1fr; } }
+.start-spalte > .card:last-child { margin-bottom: 0; }
+.start-spalte { display: grid; gap: 20px; }
+.start-spalte > .card { margin: 0; }
+a.mehr { font-size: 13px; color: var(--muted); text-decoration: none; }
+a.mehr:hover { color: var(--text); }
+
+/* Aufgaben */
+.aufgabe-form { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+.aufgabe-form #aufgabe-titel { flex: 1 1 260px; }
+.aufgabe-form #aufgabe-faellig { flex: 0 0 160px; }
+ul.aufgaben { list-style: none; margin: 0; padding: 0; }
+ul.aufgaben li { display: flex; align-items: center; gap: 12px; padding: 10px 4px; border-bottom: 1px solid var(--border); }
+ul.aufgaben li:last-child { border-bottom: none; }
+ul.aufgaben li.leer { color: var(--muted); font-size: 14px; }
+ul.aufgaben .aufgabe-titel { flex: 1; }
+ul.aufgaben li.fertig .aufgabe-titel { text-decoration: line-through; color: var(--muted); }
+ul.aufgaben input.aufgabe-haken { width: 19px; height: 19px; transform: none; accent-color: var(--neon); }
+ul.aufgaben .del { opacity: 0; transition: opacity .15s; }
+ul.aufgaben li:hover .del { opacity: 1; }
+@media (hover: none) { ul.aufgaben .del { opacity: 1; } }
+details.erledigt { margin-top: 10px; }
+details.erledigt summary { cursor: pointer; color: var(--muted); font-size: 13.5px; font-weight: 600; padding: 6px 0; }
+details.erledigt > button { margin-top: 8px; }
+
+/* Hinweise */
+ul.hinweise { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+ul.hinweise li { padding: 10px 14px; border-radius: 10px; font-size: 14px; background: var(--input-bg); border-left: 3px solid var(--border); }
+ul.hinweise li.rot { background: var(--danger-soft); border-left-color: var(--danger); }
+ul.hinweise li.gelb, ul.hinweise li.warn { background: var(--gelb-soft); border-left-color: var(--gelb); }
+ul.hinweise li.ok { background: var(--primary-soft); border-left-color: var(--neon); }
+ul.hinweise a, ul.mini-liste a { color: var(--text); font-weight: 650; text-decoration: none; border-bottom: 1px dashed transparent; }
+ul.hinweise a:hover, ul.mini-liste a:hover { border-bottom-color: var(--neon); }
+
+/* Kennzahlen & Mini-Listen */
+.stat-gross { font-size: 28px; font-weight: 750; letter-spacing: -.02em; margin-bottom: 8px; font-variant-numeric: tabular-nums; }
+.stat-gross small { display: block; font-size: 13px; font-weight: 500; color: var(--muted); letter-spacing: 0; }
+.stat-liste { display: grid; }
+.stat-zeile { display: grid; grid-template-columns: 1fr auto; column-gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.stat-zeile:last-child { border-bottom: none; }
+.stat-zeile span { color: var(--muted); font-size: 14px; }
+.stat-zeile strong { font-size: 17px; text-align: right; font-variant-numeric: tabular-nums; }
+.stat-zeile small { grid-column: 2; text-align: right; color: var(--muted); font-size: 12px; }
+ul.mini-liste { list-style: none; margin: 0; padding: 0; }
+ul.mini-liste li { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 14px; flex-wrap: wrap; }
+ul.mini-liste li:last-child { border-bottom: none; }
+ul.mini-liste li.leer { color: var(--muted); }
+ul.mini-liste .ml-text { flex: 1; min-width: 0; display: grid; }
+ul.mini-liste .ml-text small { color: var(--muted); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+ul.mini-liste .ml-text a { justify-self: start; }
+ul.mini-liste .num { font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+ul.mini-liste li { flex-wrap: nowrap; }
+.start-spalte .card > .row.between { margin-bottom: 14px; }

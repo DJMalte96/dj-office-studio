@@ -80,6 +80,7 @@ function showTab(name) {
   $$("nav button").forEach(b => b.classList.toggle("active", b.dataset.tab === name));
   $$(".tab").forEach(s => s.classList.toggle("active", s.id === "tab-" + name));
   if (name === "liste") loadListe();
+  if (name === "start") renderStart();
   const stamm = $(`#tab-${name}[data-stamm]`);
   if (stamm) renderStamm(stamm.dataset.stamm);
 }
@@ -740,14 +741,188 @@ async function uebernehmeImport() {
   } catch (e) { toast(e.message, true); }
 }
 
+// ---------- Startseite ----------
+
+const MONATE = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August",
+  "September", "Oktober", "November", "Dezember"];
+
+function heuteIso() {
+  const n = new Date();
+  return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-${String(n.getDate()).padStart(2, "0")}`;
+}
+
+/* Fälligkeit einer Aufgabe als Badge („heute“, „morgen“, „in 3 Tagen“, „2 Tage überfällig“). */
+function aufgabeBadge(faellig) {
+  if (!faellig) return "";
+  const rest = Math.round((isoToUtc(faellig) - heuteUtc()) / TAG_MS);
+  const datum = fmtDate(faellig);
+  if (rest < 0) return `<span class="frist rot" title="${datum}">${-rest} ${-rest === 1 ? "Tag" : "Tage"} überfällig</span>`;
+  if (rest === 0) return `<span class="frist gelb" title="${datum}">heute</span>`;
+  if (rest === 1) return `<span class="frist gelb" title="${datum}">morgen</span>`;
+  if (rest <= 7) return `<span class="frist gruen" title="${datum}">in ${rest} Tagen</span>`;
+  return `<span class="frist neutral">${datum}</span>`;
+}
+
+let aufgaben = [];
+
+async function loadAufgaben() {
+  aufgaben = await api("aufgaben");
+  renderAufgaben();
+}
+
+function renderAufgaben() {
+  const offen = aufgaben.filter(a => !a.erledigt);
+  const erledigt = aufgaben.filter(a => a.erledigt);
+  const zeile = a => `<li data-id="${a.id}" class="${a.erledigt ? "fertig" : ""}">
+      <input type="checkbox" class="aufgabe-haken" ${a.erledigt ? "checked" : ""} title="${a.erledigt ? "Wieder öffnen" : "Erledigt"}">
+      <span class="aufgabe-titel">${esc(a.titel)}</span>
+      ${a.erledigt ? "" : aufgabeBadge(a.faellig)}
+      <button type="button" class="icon del" title="Aufgabe löschen">✕</button>
+    </li>`;
+  $("#aufgaben-liste").innerHTML = offen.map(zeile).join("") ||
+    `<li class="leer">Keine offenen Aufgaben.</li>`;
+  $("#aufgaben-zaehler").textContent = offen.length ? `${offen.length} offen` : "";
+  $("#aufgaben-zaehler").classList.toggle("hidden", !offen.length);
+  const det = $("#aufgaben-erledigt");
+  det.classList.toggle("hidden", !erledigt.length);
+  $("summary", det).textContent = `Erledigt (${erledigt.length})`;
+  $("ul", det).innerHTML = erledigt.map(zeile).join("");
+}
+
+$("#aufgabe-neu").addEventListener("submit", async e => {
+  e.preventDefault();
+  const titel = $("#aufgabe-titel").value.trim();
+  if (!titel) return $("#aufgabe-titel").focus();
+  try {
+    await api("aufgaben", { method: "POST", body: { titel, faellig: $("#aufgabe-faellig").value } });
+    $("#aufgabe-titel").value = "";
+    $("#aufgabe-faellig").value = "";
+    await loadAufgaben();
+    $("#aufgabe-titel").focus();
+  } catch (err) { toast(err.message, true); }
+});
+
+$("#tab-start").addEventListener("change", async e => {
+  if (!e.target.classList.contains("aufgabe-haken")) return;
+  const a = aufgaben.find(x => x.id === Number(e.target.closest("li").dataset.id));
+  try {
+    await api(`aufgaben/${a.id}`, { method: "PUT", body: { ...a, erledigt: e.target.checked } });
+    await loadAufgaben();
+  } catch (err) { toast(err.message, true); e.target.checked = !e.target.checked; }
+});
+
+$("#tab-start").addEventListener("click", async e => {
+  const del = e.target.closest(".aufgaben li .del");
+  if (del) {
+    await api(`aufgaben/${del.closest("li").dataset.id}`, { method: "DELETE" });
+    return loadAufgaben();
+  }
+  const ziel = e.target.closest("[data-goto]");
+  if (ziel) {
+    e.preventDefault();
+    const tab = ziel.dataset.goto;
+    if (tab === "import") {
+      showTab("liste");
+      $("#import").classList.remove("hidden");
+      window.scrollTo(0, 0);
+    } else {
+      showTab(tab);
+      if (tab === "kunden") setTimeout(() => $("#tab-kunden [name=name]")?.focus(), 100);
+    }
+    return;
+  }
+  const rl = e.target.closest("a.start-rlink");
+  if (rl) {
+    e.preventDefault();
+    loadIntoForm(state.rechnungen.find(r => r.id === Number(rl.dataset.id)));
+  }
+});
+
+$("#erledigte-loeschen").addEventListener("click", async () => {
+  const erledigt = aufgaben.filter(a => a.erledigt);
+  if (!erledigt.length || !confirm(`${erledigt.length} erledigte Aufgabe(n) löschen?`)) return;
+  await Promise.all(erledigt.map(a => api(`aufgaben/${a.id}`, { method: "DELETE" })));
+  loadAufgaben();
+});
+
+async function renderStart() {
+  const jetzt = new Date();
+  const h = jetzt.getHours();
+  const vorname = (state.absender?.name || "").trim().split(/\s+/)[0];
+  const gruss = h < 11 ? "Guten Morgen" : h < 18 ? "Hallo" : "Guten Abend";
+  $("#start-gruss").textContent = vorname ? `${gruss}, ${vorname}!` : `${gruss}!`;
+  $("#start-datum").textContent = jetzt.toLocaleDateString("de-DE",
+    { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+
+  try {
+    [state.rechnungen] = await Promise.all([api("rechnungen"), loadAufgaben()]);
+  } catch (e) { return toast("Laden fehlgeschlagen: " + e.message, true); }
+  const alle = state.rechnungen;
+
+  // Offene Rechnungen (Kurzfassung)
+  const offen = alle.filter(r => !r.bezahlt).map(r => ({ ...r, ziel: zahlungsziel(r) }))
+    .sort((a, b) => (a.ziel ? a.ziel.faellig : Infinity) - (b.ziel ? b.ziel.faellig : Infinity));
+  const summeOffen = offen.reduce((s, r) => s + r.gesamt, 0);
+  $("#start-offen").innerHTML = offen.length ? `
+    <div class="stat-gross">${fmtEuro(summeOffen)}<small>${offen.length} offene Rechnung${offen.length === 1 ? "" : "en"}</small></div>
+    <ul class="mini-liste">${offen.slice(0, 4).map(r => `<li>
+      <div class="ml-text"><a href="#" class="start-rlink" data-id="${r.id}">${esc(rechnungsName(r))}</a>
+        <small>${esc(r.kunde.name)}</small></div>
+      <span class="num">${fmtEuro(r.gesamt)}</span>${fristBadge(r.ziel)}</li>`).join("")}</ul>
+    ${offen.length > 4 ? `<p class="hint">+ ${offen.length - 4} weitere</p>` : ""}`
+    : `<p class="hint">Keine offenen Rechnungen – alles bezahlt.</p>`;
+
+  // Umsatz nach Rechnungsdatum
+  const jahr = String(jetzt.getFullYear());
+  const monat = `${jahr}-${String(jetzt.getMonth() + 1).padStart(2, "0")}`;
+  const vorjahr = String(jetzt.getFullYear() - 1);
+  const summeVon = praefix => alle.filter(r => r.datum.startsWith(praefix)).reduce((s, r) => s + r.gesamt, 0);
+  const anzahlVon = praefix => alle.filter(r => r.datum.startsWith(praefix)).length;
+  $("#start-umsatz").innerHTML = [
+    [`${MONATE[jetzt.getMonth()]} ${jahr}`, summeVon(monat), anzahlVon(monat)],
+    [`Jahr ${jahr}`, summeVon(jahr), anzahlVon(jahr)],
+    [`Jahr ${vorjahr}`, summeVon(vorjahr), anzahlVon(vorjahr)],
+  ].map(([titel, summe, n]) => `<div class="stat-zeile"><span>${titel}</span>
+      <strong>${fmtEuro(summe)}</strong><small>${n} Rechnung${n === 1 ? "" : "en"}</small></div>`).join("");
+
+  // Letzte Rechnungen
+  const letzte = [...alle].sort((a, b) => b.datum.localeCompare(a.datum) || b.nummer.localeCompare(a.nummer, "de", { numeric: true })).slice(0, 5);
+  $("#start-letzte").innerHTML = letzte.map(r => `<li>
+      <div class="ml-text"><a href="#" class="start-rlink" data-id="${r.id}">${esc(rechnungsName(r))}</a>
+        <small>${esc(r.kunde.name)} · ${fmtDate(r.datum)}</small></div>
+      <span class="num">${fmtEuro(r.gesamt)}</span>
+      ${r.bezahlt ? `<span class="frist gruen">bezahlt</span>` : `<span class="frist neutral">offen</span>`}</li>`).join("")
+    || `<li class="leer">Noch keine Rechnungen.</li>`;
+
+  // Hinweise, die die App selbst erkennt
+  const hinweise = [];
+  if (state.absender && !state.absender.vollstaendig) {
+    hinweise.push(["warn", "Absenderdaten fehlen – in Home Assistant unter Apps → DJ Office Studio → Konfiguration eintragen."]);
+  }
+  for (const r of offen.filter(r => r.ziel && r.ziel.rest < 0)) {
+    hinweise.push(["rot", `<a href="#" class="start-rlink" data-id="${r.id}">${esc(rechnungsName(r))}</a> ist seit ${-r.ziel.rest} ${-r.ziel.rest === 1 ? "Tag" : "Tagen"} überfällig (${esc(r.kunde.name)}, ${fmtEuro(r.gesamt)}).`]);
+  }
+  for (const r of offen.filter(r => r.ziel && r.ziel.rest === 0)) {
+    hinweise.push(["gelb", `<a href="#" class="start-rlink" data-id="${r.id}">${esc(rechnungsName(r))}</a> ist heute fällig.`]);
+  }
+  const ueberfaelligeAufgaben = aufgaben.filter(a => !a.erledigt && a.faellig && a.faellig < heuteIso()).length;
+  if (ueberfaelligeAufgaben) {
+    hinweise.push(["gelb", `${ueberfaelligeAufgaben} Aufgabe${ueberfaelligeAufgaben === 1 ? " ist" : "n sind"} überfällig.`]);
+  }
+  $("#start-hinweise").innerHTML = hinweise.map(([art, text]) => `<li class="${art}">${text}</li>`).join("")
+    || `<li class="ok">Alles im grünen Bereich – nichts zu tun.</li>`;
+}
+
 // ---------- Start ----------
 
 (async () => {
   try {
     const abs = await api("absender");
+    state.absender = abs;
     $("#warnung").classList.toggle("hidden", abs.vollstaendig);
     await loadLookups();
     await resetForm();
+    await renderStart();
   } catch (e) {
     toast("Laden fehlgeschlagen: " + e.message, true);
   }

@@ -73,12 +73,15 @@ def _clean(table, data):
             v = float(v) if v not in (None, "") else None
         elif col == "sortierung":
             v = int(v or 0)
+        elif col == "erledigt":
+            v = 1 if v in (True, 1, "1", "true", "on") else 0
         else:
             v = (v or "").strip()
         out[col] = v
     if table == "textbausteine" and out["titel"] and not out["text"]:
         out["text"] = db.anlass_text(out["titel"])  # Anlass ohne eigene Vorlage → Standardtext
-    required = {"kunden": "name", "textbausteine": "titel", "zahlungsbedingungen": "text"}[table]
+    required = {"kunden": "name", "textbausteine": "titel", "zahlungsbedingungen": "text",
+                "aufgaben": "titel"}[table]
     if not out[required]:
         abort(Response(json.dumps({"error": f"Feld '{required}' fehlt"}), 400,
                        mimetype="application/json"))
