@@ -746,77 +746,7 @@ async function uebernehmeImport() {
 const MONATE = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August",
   "September", "Oktober", "November", "Dezember"];
 
-function heuteIso() {
-  const n = new Date();
-  return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-${String(n.getDate()).padStart(2, "0")}`;
-}
-
-/* Fälligkeit einer Aufgabe als Badge („heute“, „morgen“, „in 3 Tagen“, „2 Tage überfällig“). */
-function aufgabeBadge(faellig) {
-  if (!faellig) return "";
-  const rest = Math.round((isoToUtc(faellig) - heuteUtc()) / TAG_MS);
-  const datum = fmtDate(faellig);
-  if (rest < 0) return `<span class="frist rot" title="${datum}">${-rest} ${-rest === 1 ? "Tag" : "Tage"} überfällig</span>`;
-  if (rest === 0) return `<span class="frist gelb" title="${datum}">heute</span>`;
-  if (rest === 1) return `<span class="frist gelb" title="${datum}">morgen</span>`;
-  if (rest <= 7) return `<span class="frist gruen" title="${datum}">in ${rest} Tagen</span>`;
-  return `<span class="frist neutral">${datum}</span>`;
-}
-
-let aufgaben = [];
-
-async function loadAufgaben() {
-  aufgaben = await api("aufgaben");
-  renderAufgaben();
-}
-
-function renderAufgaben() {
-  const offen = aufgaben.filter(a => !a.erledigt);
-  const erledigt = aufgaben.filter(a => a.erledigt);
-  const zeile = a => `<li data-id="${a.id}" class="${a.erledigt ? "fertig" : ""}">
-      <input type="checkbox" class="aufgabe-haken" ${a.erledigt ? "checked" : ""} title="${a.erledigt ? "Wieder öffnen" : "Erledigt"}">
-      <span class="aufgabe-titel">${esc(a.titel)}</span>
-      ${a.erledigt ? "" : aufgabeBadge(a.faellig)}
-      <button type="button" class="icon del" title="Aufgabe löschen">✕</button>
-    </li>`;
-  $("#aufgaben-liste").innerHTML = offen.map(zeile).join("") ||
-    `<li class="leer">Keine offenen Aufgaben.</li>`;
-  $("#aufgaben-zaehler").textContent = offen.length ? `${offen.length} offen` : "";
-  $("#aufgaben-zaehler").classList.toggle("hidden", !offen.length);
-  const det = $("#aufgaben-erledigt");
-  det.classList.toggle("hidden", !erledigt.length);
-  $("summary", det).textContent = `Erledigt (${erledigt.length})`;
-  $("ul", det).innerHTML = erledigt.map(zeile).join("");
-}
-
-$("#aufgabe-neu").addEventListener("submit", async e => {
-  e.preventDefault();
-  const titel = $("#aufgabe-titel").value.trim();
-  if (!titel) return $("#aufgabe-titel").focus();
-  try {
-    await api("aufgaben", { method: "POST", body: { titel, faellig: $("#aufgabe-faellig").value } });
-    $("#aufgabe-titel").value = "";
-    $("#aufgabe-faellig").value = "";
-    await loadAufgaben();
-    $("#aufgabe-titel").focus();
-  } catch (err) { toast(err.message, true); }
-});
-
-$("#tab-start").addEventListener("change", async e => {
-  if (!e.target.classList.contains("aufgabe-haken")) return;
-  const a = aufgaben.find(x => x.id === Number(e.target.closest("li").dataset.id));
-  try {
-    await api(`aufgaben/${a.id}`, { method: "PUT", body: { ...a, erledigt: e.target.checked } });
-    await loadAufgaben();
-  } catch (err) { toast(err.message, true); e.target.checked = !e.target.checked; }
-});
-
-$("#tab-start").addEventListener("click", async e => {
-  const del = e.target.closest(".aufgaben li .del");
-  if (del) {
-    await api(`aufgaben/${del.closest("li").dataset.id}`, { method: "DELETE" });
-    return loadAufgaben();
-  }
+$("#tab-start").addEventListener("click", e => {
   const ziel = e.target.closest("[data-goto]");
   if (ziel) {
     e.preventDefault();
@@ -838,13 +768,6 @@ $("#tab-start").addEventListener("click", async e => {
   }
 });
 
-$("#erledigte-loeschen").addEventListener("click", async () => {
-  const erledigt = aufgaben.filter(a => a.erledigt);
-  if (!erledigt.length || !confirm(`${erledigt.length} erledigte Aufgabe(n) löschen?`)) return;
-  await Promise.all(erledigt.map(a => api(`aufgaben/${a.id}`, { method: "DELETE" })));
-  loadAufgaben();
-});
-
 async function renderStart() {
   const jetzt = new Date();
   const h = jetzt.getHours();
@@ -855,7 +778,7 @@ async function renderStart() {
     { weekday: "long", day: "numeric", month: "long", year: "numeric" });
 
   try {
-    [state.rechnungen] = await Promise.all([api("rechnungen"), loadAufgaben()]);
+    state.rechnungen = await api("rechnungen");
   } catch (e) { return toast("Laden fehlgeschlagen: " + e.message, true); }
   const alle = state.rechnungen;
 
@@ -905,12 +828,8 @@ async function renderStart() {
   for (const r of offen.filter(r => r.ziel && r.ziel.rest === 0)) {
     hinweise.push(["gelb", `<a href="#" class="start-rlink" data-id="${r.id}">${esc(rechnungsName(r))}</a> ist heute fällig.`]);
   }
-  const ueberfaelligeAufgaben = aufgaben.filter(a => !a.erledigt && a.faellig && a.faellig < heuteIso()).length;
-  if (ueberfaelligeAufgaben) {
-    hinweise.push(["gelb", `${ueberfaelligeAufgaben} Aufgabe${ueberfaelligeAufgaben === 1 ? " ist" : "n sind"} überfällig.`]);
-  }
-  $("#start-hinweise").innerHTML = hinweise.map(([art, text]) => `<li class="${art}">${text}</li>`).join("")
-    || `<li class="ok">Alles im grünen Bereich – nichts zu tun.</li>`;
+  $("#start-hinweise").innerHTML = hinweise.map(([art, text]) => `<li class="${art}">${text}</li>`).join("");
+  $("#start-hinweise").classList.toggle("hidden", !hinweise.length);
 }
 
 // ---------- Start ----------

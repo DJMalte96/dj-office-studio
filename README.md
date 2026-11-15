@@ -8,7 +8,7 @@ Eine Home-Assistant-App zum Schreiben von DJ-Rechnungen. Kunden auswählen, Anla
 
 ## Funktionen
 
-- **Startseite** mit Aufgabenliste (To-dos mit Fälligkeit), automatischen Hinweisen (überfällige Rechnungen, fehlende Absenderdaten), Kurzübersicht offener Rechnungen, Umsatz nach Monat/Jahr und den letzten Rechnungen.
+- **Startseite** mit Kacheln für alle Aktionen der App und dem Status der Rechnungen: offene Rechnungen mit Restzeit und Warnung bei Überfälligkeit, Umsatz nach Monat/Jahr und die letzten Rechnungen.
 - **Rechnungseditor**
   - Kunde mit Autovervollständigung aus bisherigen Kunden; neue Kunden werden beim Speichern automatisch angelegt
   - Positionen per **Anlass** (Hochzeit, Geburtstag, Firmenfeier, …) mit **von/bis-Zeiten** – der Rechnungstext wird daraus erzeugt, z. B. „DJ – Tätigkeit Hochzeit – 17:00 Uhr bis 2:00 Uhr“
@@ -58,7 +58,7 @@ Solange Name oder IBAN fehlen, zeigt die App oben einen Hinweis.
 
 ## Bedienung
 
-**Start:** Die Startseite öffnet sich beim Aufruf. Oben neue Aufgaben eintragen (optional mit Datum), mit dem Haken erledigen. Über die Schnellaktionen geht es direkt zur neuen Rechnung, zu den Kunden oder zum Import.
+**Start:** Die Startseite öffnet sich beim Aufruf. Über die Kacheln geht es direkt zu jedem Bereich der App (inkl. Import alter Rechnungen). Darunter steht der Status der Rechnungen: was offen ist, wie lange noch Zeit ist, Umsatz und die letzten Rechnungen.
 
 ![Screenshot: Startseite](docs/startseite.png)
 
