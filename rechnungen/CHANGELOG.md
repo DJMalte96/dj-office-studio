@@ -2,6 +2,15 @@
 
 Alle Änderungen an DJ Office Studio. Neueste Version oben.
 
+## 0.5.1 – 2026-11-15
+
+### Geändert
+- **Startseite** neu aufgebaut: Statt der Aufgabenliste gibt es jetzt **Aktions-Kacheln** für alle Bereiche der App (Neue Rechnung, Rechnungen, Importieren, Kunden, Anlässe, Zahlungsbedingungen).
+- Darunter nur noch der **Status der Rechnungen**: offene Rechnungen mit Restzeit (Warnung bei überfälligen oder heute fälligen Rechnungen), Umsatz und die letzten Rechnungen.
+
+### Entfernt
+- Aufgabenliste (To-dos) auf der Startseite.
+
 ## 0.5.0 – 2026-11-15
 
 ### Neu

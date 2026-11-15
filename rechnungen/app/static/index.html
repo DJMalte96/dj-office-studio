@@ -44,45 +44,41 @@
     <!-- ================= Startseite ================= -->
     <section id="tab-start" class="tab active">
       <div class="start-kopf">
-        <div>
-          <h2 id="start-gruss" class="gruss">Hallo!</h2>
-          <p id="start-datum" class="hint"></p>
-        </div>
-        <div class="schnell">
-          <button type="button" data-goto="neu">+ Neue Rechnung</button>
-          <button type="button" class="secondary" data-goto="kunden">+ Kunde</button>
-          <button type="button" class="secondary" data-goto="import">⇪ Rechnungen importieren</button>
-        </div>
+        <h2 id="start-gruss" class="gruss">Hallo!</h2>
+        <p id="start-datum" class="hint"></p>
+      </div>
+
+      <div class="aktionen">
+        <button type="button" class="aktion haupt" data-goto="neu">
+          <span class="a-icon">＋</span><span class="a-titel">Neue Rechnung</span><small>Rechnung schreiben &amp; PDF erzeugen</small>
+        </button>
+        <button type="button" class="aktion" data-goto="liste">
+          <span class="a-icon">☰</span><span class="a-titel">Rechnungen</span><small>Offene Rechnungen &amp; Archiv</small>
+        </button>
+        <button type="button" class="aktion" data-goto="import">
+          <span class="a-icon">⇪</span><span class="a-titel">Importieren</span><small>Alte Rechnungen hochladen</small>
+        </button>
+        <button type="button" class="aktion" data-goto="kunden">
+          <span class="a-icon">◉</span><span class="a-titel">Kunden</span><small>Adressen verwalten</small>
+        </button>
+        <button type="button" class="aktion" data-goto="textbausteine">
+          <span class="a-icon">♪</span><span class="a-titel">Anlässe</span><small>Textvorlagen für Positionen</small>
+        </button>
+        <button type="button" class="aktion" data-goto="zahlungsbedingungen">
+          <span class="a-icon">€</span><span class="a-titel">Zahlungsbedingungen</span><small>Zahlungsoptionen pflegen</small>
+        </button>
       </div>
 
       <div class="start-grid">
         <div class="start-spalte">
           <div class="card">
-            <div class="row between"><h2>Aufgaben</h2><span id="aufgaben-zaehler" class="badge"></span></div>
-            <form id="aufgabe-neu" class="aufgabe-form" autocomplete="off">
-              <input id="aufgabe-titel" placeholder="Neue Aufgabe, z. B. „Playlist für Hochzeit Muster“">
-              <input id="aufgabe-faellig" type="date" title="Fällig am (optional)">
-              <button type="submit">Hinzufügen</button>
-            </form>
-            <ul id="aufgaben-liste" class="aufgaben"></ul>
-            <details id="aufgaben-erledigt" class="erledigt hidden">
-              <summary></summary>
-              <ul class="aufgaben"></ul>
-              <button type="button" class="small danger" id="erledigte-loeschen">Erledigte löschen</button>
-            </details>
-          </div>
-
-          <div class="card" id="start-hinweise-karte">
-            <h2>Hinweise</h2>
+            <div class="row between"><h2>Offene Rechnungen</h2><a href="#" class="mehr" data-goto="liste">alle →</a></div>
             <ul id="start-hinweise" class="hinweise"></ul>
+            <div id="start-offen"></div>
           </div>
         </div>
 
         <div class="start-spalte">
-          <div class="card">
-            <div class="row between"><h2>Offene Rechnungen</h2><a href="#" class="mehr" data-goto="liste">alle →</a></div>
-            <div id="start-offen"></div>
-          </div>
           <div class="card">
             <h2>Umsatz</h2>
             <div id="start-umsatz" class="stat-liste"></div>
