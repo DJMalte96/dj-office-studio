@@ -2,6 +2,11 @@
 
 Alle Änderungen an DJ Office Studio. Neueste Version oben.
 
+## 0.5.3 – 2026-11-15
+
+### Geändert
+- **„Anlässe“ heißt jetzt „Rechnungsposten“** – im Menü, auf der Startseite, im Editor („Rechnungsposten wählen …“) und beim Import. Bestehende Einträge bleiben unverändert erhalten.
+
 ## 0.5.2 – 2026-11-15
 
 ### Geändert

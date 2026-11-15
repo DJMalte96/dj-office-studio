@@ -179,7 +179,7 @@ $("#k-name").addEventListener("blur", () => setTimeout(closeAc, 100));
 function fillTbSelect(pos) {
   const sel = $(".tb", pos);
   const current = sel.value;
-  sel.innerHTML = `<option value="">Anlass wählen …</option>` +
+  sel.innerHTML = `<option value="">Rechnungsposten wählen …</option>` +
     state.textbausteine.map(t => `<option value="${t.id}">${esc(t.titel)}</option>`).join("") +
     `<option value="frei">Freitext (eigener Text)</option>`;
   sel.value = current;
@@ -537,11 +537,11 @@ const STAMM = {
     info: k => esc([k.strasse, [k.plz, k.ort].filter(Boolean).join(" ")].filter(Boolean).join(", ")),
   },
   textbausteine: {
-    titel: "Anlässe", einzahl: "Anlass",
-    hinweis: "Im Editor wählst du den Anlass und trägst die Zeiten ein – daraus entsteht der Rechnungstext. " +
-      "Bleibt die Text-Vorlage leer, wird „DJ – Tätigkeit <Anlass> – {von} Uhr bis {bis} Uhr“ verwendet. " +
+    titel: "Rechnungsposten", einzahl: "Rechnungsposten",
+    hinweis: "Im Editor wählst du den Rechnungsposten und trägst die Zeiten ein – daraus entsteht der Rechnungstext. " +
+      "Bleibt die Text-Vorlage leer, wird „DJ – Tätigkeit <Bezeichnung> – {von} Uhr bis {bis} Uhr“ verwendet. " +
       "{von} und {bis} werden durch die Uhrzeiten ersetzt.",
-    felder: [["titel", "Anlass (z. B. Hochzeit)"], ["text", "Text-Vorlage (optional)", "textarea"]],
+    felder: [["titel", "Bezeichnung (z. B. Hochzeit)"], ["text", "Text-Vorlage (optional)", "textarea"]],
     zeile: t => `${esc(t.titel)}<br><small>${esc(t.text)}</small>`,
     info: () => "",
   },
@@ -680,7 +680,7 @@ function renderImport() {
     </div>
 
     <div class="import-block">
-      <h3>Vorschläge für Anlässe <span class="badge">${d.textbausteine.length}</span></h3>
+      <h3>Vorschläge für Rechnungsposten <span class="badge">${d.textbausteine.length}</span></h3>
       <p class="hint">Uhrzeiten wurden durch {von}/{bis} ersetzt. Preisangaben wurden entfernt. Name und Vorlage kannst du hier noch anpassen.</p>
       ${d.textbausteine.map((t, i) => `<div class="tb-vorschlag">
           ${check("textbausteine", i, true)}
@@ -689,7 +689,7 @@ function renderImport() {
             <textarea class="tb-text" data-i="${i}" rows="2">${esc(t.text)}</textarea>
           </div>
           <span class="tag">${t.anzahl}×</span>
-        </div>`).join("") || `<p class="hint">Keine neuen Anlässe – alle gibt es schon.</p>`}
+        </div>`).join("") || `<p class="hint">Keine neuen Rechnungsposten – alle gibt es schon.</p>`}
     </div>
 
     <div class="import-block">
@@ -732,7 +732,7 @@ async function uebernehmeImport() {
   };
   try {
     const r = await api("import/uebernehmen", { method: "POST", body });
-    toast(`Übernommen: ${r.kunden} Empfänger, ${r.textbausteine} Anlässe, ${r.rechnungen} Rechnungen`);
+    toast(`Übernommen: ${r.kunden} Empfänger, ${r.textbausteine} Rechnungsposten, ${r.rechnungen} Rechnungen`);
     imp.daten = null;
     $("#import-ergebnis").innerHTML = "";
     $("#import-status").textContent = "";
