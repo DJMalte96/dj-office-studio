@@ -79,12 +79,14 @@ async function openPdf(loader) {
 function showTab(name) {
   $$("nav button").forEach(b => b.classList.toggle("active", b.dataset.tab === name));
   $$(".tab").forEach(s => s.classList.toggle("active", s.id === "tab-" + name));
+  document.body.classList.toggle("auf-start", name === "start");
   if (name === "liste") loadListe();
   if (name === "start") renderStart();
   const stamm = $(`#tab-${name}[data-stamm]`);
   if (stamm) renderStamm(stamm.dataset.stamm);
 }
 $$("nav button").forEach(b => b.addEventListener("click", () => showTab(b.dataset.tab)));
+$("#logo").addEventListener("click", () => showTab("start"));
 
 // ---------- Stammdaten für den Editor laden ----------
 

@@ -52,6 +52,8 @@ h1 { font-size: 18px; font-weight: 750; letter-spacing: -.02em; margin: 0; displ
 .brand em { font-style: normal; font-weight: 500; color: var(--muted); }
 h2 { font-size: 15px; font-weight: 650; letter-spacing: -.01em; margin: 0 0 16px; }
 
+body.auf-start nav { display: none; }
+#logo { cursor: pointer; }
 nav { display: flex; gap: 4px; overflow-x: auto; padding: 4px; background: var(--input-bg); border: 1px solid var(--border); border-radius: 12px; }
 nav button {
   background: none; border: none; color: var(--muted); font-weight: 500;

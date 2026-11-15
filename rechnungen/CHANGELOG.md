@@ -2,6 +2,12 @@
 
 Alle Änderungen an DJ Office Studio. Neueste Version oben.
 
+## 0.5.2 – 2026-11-15
+
+### Geändert
+- Auf der **Startseite** wird die Navigationsleiste ausgeblendet – die Kacheln übernehmen die Navigation. Auf allen anderen Seiten bleibt sie wie gewohnt sichtbar.
+- Ein Klick auf das **Logo** oben links führt jederzeit zurück zur Startseite.
+
 ## 0.5.1 – 2026-11-15
 
 ### Geändert
