@@ -58,7 +58,7 @@ Solange Name oder IBAN fehlen, zeigt die App oben einen Hinweis.
 
 ## Bedienung
 
-**Start:** Die Startseite öffnet sich beim Aufruf. Über die Kacheln geht es direkt zu jedem Bereich der App (inkl. Import alter Rechnungen). Darunter steht der Status der Rechnungen: was offen ist, wie lange noch Zeit ist, Umsatz und die letzten Rechnungen.
+**Start:** Die Startseite öffnet sich beim Aufruf. Über die Kacheln geht es direkt zu jedem Bereich der App (inkl. Import alter Rechnungen); die Navigationsleiste erscheint erst auf den anderen Seiten. Ein Klick auf das Logo führt zurück zur Startseite. Darunter steht der Status der Rechnungen: was offen ist, wie lange noch Zeit ist, Umsatz und die letzten Rechnungen.
 
 ![Screenshot: Startseite](docs/startseite.png)
 
