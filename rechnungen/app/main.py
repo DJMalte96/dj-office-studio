@@ -1,7 +1,9 @@
 """Rechnungen – Home Assistant App (Ingress-Weboberfläche + REST-API)."""
 import hashlib
+import io
 import json
 import os
+import zipfile
 from datetime import date
 
 from flask import Flask, Response, abort, jsonify, request, send_from_directory
@@ -213,8 +215,8 @@ def invoices_delete(inv_id):
     return "", 204
 
 
-def _pdf_response(inv):
-    disposition = "attachment" if request.args.get("download") else "inline"
+def _pdf_response(inv, download=False):
+    disposition = "attachment" if download or request.args.get("download") else "inline"
     return Response(build_invoice_pdf(inv, absender()), mimetype="application/pdf",
                     headers={"Content-Disposition": f'{disposition}; filename="{pdf_filename(inv)}"'})
 
@@ -222,6 +224,34 @@ def _pdf_response(inv):
 @app.get("/api/rechnungen/<int:inv_id>/pdf")
 def invoices_pdf(inv_id):
     return _pdf_response(db.get_invoice(inv_id) or abort(404))
+
+
+@app.get("/api/rechnungen/download")
+def invoices_download():
+    """Mehrere Rechnungen auf einmal: ?ids=1,2,3 → ZIP (bei genau einer Rechnung direkt das PDF)."""
+    try:
+        ids = [int(x) for x in request.args.get("ids", "").split(",") if x.strip()]
+    except ValueError:
+        abort(400)
+    invoices = [inv for inv in (db.get_invoice(i) for i in dict.fromkeys(ids)) if inv]
+    if not invoices:
+        abort(404)
+    if len(invoices) == 1:
+        return _pdf_response(invoices[0], download=True)
+
+    buf = io.BytesIO()
+    used = set()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for inv in invoices:
+            name = pdf_filename(inv)
+            stem, n = name.removesuffix(".pdf"), 2
+            while name in used:          # gleiche Dateinamen nicht überschreiben
+                name, n = f"{stem}_{n}.pdf", n + 1
+            used.add(name)
+            zf.writestr(name, build_invoice_pdf(inv, absender()))
+    zip_name = f"Rechnungen_{date.today():%Y-%m-%d}.zip"
+    return Response(buf.getvalue(), mimetype="application/zip",
+                    headers={"Content-Disposition": f'attachment; filename="{zip_name}"'})
 
 
 @app.post("/api/vorschau")

@@ -2,6 +2,11 @@
 
 Alle Änderungen an DJ Office Studio. Neueste Version oben.
 
+## 0.5.7 – 2026-11-16
+
+### Neu
+- **Mehrere Rechnungen herunterladen**: Im Archiv gibt es vorne in jeder Zeile ein Kästchen zum Markieren, in der Kopfzeile eins für „alle angezeigten auswählen“ (berücksichtigt Suche/Filter). Sobald etwas markiert ist, erscheint eine Leiste mit **⇩ Herunterladen** – mehrere Rechnungen kommen als ZIP-Datei mit allen PDFs, eine einzelne direkt als PDF.
+
 ## 0.5.6 – 2026-11-16
 
 ### Neu

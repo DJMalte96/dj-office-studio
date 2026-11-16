@@ -456,6 +456,8 @@ function renderOffen() {
 
 // ---------- Archiv (bezahlte Rechnungen) ----------
 
+const auswahl = new Set();   // IDs der im Archiv markierten Rechnungen
+
 function renderListe() {
   renderOffen();
   const q = $("#liste-suche").value.trim().toLowerCase();
@@ -470,7 +472,8 @@ function renderListe() {
     th.dataset.pfeil = aktiv ? (sortierung.richtung === "asc" ? "▲" : "▼") : "";
   });
   $("#liste-body").innerHTML = list.map(r => `
-    <tr data-id="${r.id}">
+    <tr data-id="${r.id}"${auswahl.has(r.id) ? ' class="markiert"' : ""}>
+      <td class="auswahl-spalte"><input type="checkbox" class="auswahl"${auswahl.has(r.id) ? " checked" : ""} title="Zum Herunterladen markieren"></td>
       <td>${esc(r.nummer)}</td>
       <td>${fmtDate(r.datum)}</td>
       <td>${esc(r.kunde.name)}<br><small>${esc(r.kunde.ort)}</small></td>
@@ -478,10 +481,51 @@ function renderListe() {
       <td><input type="checkbox" class="bezahlt" checked title="Haken entfernen = zurück zu den offenen Rechnungen"></td>
       <td class="btns">${aktionen("pdf", "edit", "del")}</td>
     </tr>`).join("") ||
-    `<tr><td colspan="6" class="hint">${q ? "Keine Treffer im Archiv." : "Noch keine bezahlten Rechnungen im Archiv."}</td></tr>`;
+    `<tr><td colspan="7" class="hint">${q ? "Keine Treffer im Archiv." : "Noch keine bezahlten Rechnungen im Archiv."}</td></tr>`;
   $("#liste-summe").textContent = list.length
     ? `${list.length} Rechnung${list.length === 1 ? "" : "en"} · Summe ${fmtEuro(list.reduce((s, r) => s + r.gesamt, 0))}` : "";
+  renderAuswahl();
 }
+
+/* Auswahl-Leiste + „Alle“-Checkbox passend zur aktuellen Auswahl. */
+function renderAuswahl() {
+  // Nur Rechnungen behalten, die noch existieren und im Archiv sind
+  const archivIds = new Set(state.rechnungen.filter(r => r.bezahlt).map(r => r.id));
+  [...auswahl].forEach(id => { if (!archivIds.has(id)) auswahl.delete(id); });
+
+  const n = auswahl.size;
+  $("#auswahl-leiste").classList.toggle("hidden", !n);
+  $("#auswahl-anzahl").textContent = `${n} Rechnung${n === 1 ? "" : "en"} ausgewählt`;
+  const sichtbar = $$("#liste-body tr[data-id]").map(tr => Number(tr.dataset.id));
+  const markiert = sichtbar.filter(id => auswahl.has(id)).length;
+  const alle = $("#auswahl-alle");
+  alle.checked = sichtbar.length > 0 && markiert === sichtbar.length;
+  alle.indeterminate = markiert > 0 && markiert < sichtbar.length;
+  alle.disabled = !sichtbar.length;
+}
+
+$("#auswahl-alle").addEventListener("change", e => {
+  $$("#liste-body tr[data-id]").forEach(tr => {
+    const id = Number(tr.dataset.id);
+    if (e.target.checked) auswahl.add(id); else auswahl.delete(id);
+  });
+  renderListe();
+});
+
+$("#btn-auswahl-aufheben").addEventListener("click", () => { auswahl.clear(); renderListe(); });
+
+$("#btn-auswahl-download").addEventListener("click", () => {
+  if (!auswahl.size) return;
+  // Normaler Link-Download (Server sendet Content-Disposition: attachment)
+  const a = document.createElement("a");
+  a.href = `api/rechnungen/download?ids=${[...auswahl].join(",")}`;
+  a.download = "";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  toast(auswahl.size === 1 ? "PDF wird heruntergeladen …"
+                           : `${auswahl.size} Rechnungen werden als ZIP heruntergeladen …`);
+});
 $("#liste-suche").addEventListener("input", renderListe);
 
 async function setBezahlt(id, bezahlt) {
@@ -510,6 +554,13 @@ $("#offen").addEventListener("change", async e => {
 
 // Schalter im Archiv: Haken entfernen → zurück zu den offenen Rechnungen
 $("#liste-body").addEventListener("change", async e => {
+  if (e.target.classList.contains("auswahl")) {   // Markierung zum Herunterladen
+    const tr = e.target.closest("tr");
+    const id = Number(tr.dataset.id);
+    if (e.target.checked) auswahl.add(id); else auswahl.delete(id);
+    tr.classList.toggle("markiert", e.target.checked);
+    return renderAuswahl();
+  }
   if (!e.target.classList.contains("bezahlt")) return;
   try { await setBezahlt(Number(e.target.closest("tr").dataset.id), e.target.checked); }
   catch (err) { toast(err.message, true); e.target.checked = !e.target.checked; }

@@ -269,6 +269,14 @@ input.bezahlt { transform: none; accent-color: auto; }
 .liste-tools { display: flex; gap: 10px; flex-wrap: wrap; margin: 16px 0 6px; }
 .liste-tools .search { flex: 1 1 220px; max-width: none; }
 .liste-tools select { flex: 0 1 250px; width: auto; }
+.auswahl-spalte { width: 36px; padding-right: 0 !important; }
+.auswahl-spalte input { width: 18px; height: 18px; accent-color: var(--neon); cursor: pointer; vertical-align: middle; }
+table.list tr.markiert td { background: var(--primary-soft); }
+.auswahl-leiste {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 10px 0 4px; padding: 8px 10px 8px 14px;
+  background: var(--input-bg); border: 1px solid var(--neon); border-radius: 12px; font-weight: 600; font-size: 14px;
+}
+#auswahl-anzahl { margin-right: auto; }
 table.list th[data-sort] { cursor: pointer; user-select: none; white-space: nowrap; transition: color .15s; }
 table.list th[data-sort]:hover, table.list th.sortiert { color: var(--text); }
 table.list th[data-sort]::after { content: attr(data-pfeil); margin-left: 5px; font-size: 10px; color: var(--ink); }
