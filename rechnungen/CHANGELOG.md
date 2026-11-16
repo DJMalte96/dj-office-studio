@@ -2,6 +2,11 @@
 
 Alle Änderungen an DJ Office Studio. Neueste Version oben.
 
+## 0.7.2 – 2026-11-16
+
+### Neu
+- Die Markierung **„Paperless ✓“** im Archiv lässt sich per Klick (mit Rückfrage) **zurücksetzen** – z. B. wenn das Dokument in Paperless gelöscht wurde. Die Rechnung kann danach ohne Dubletten-Nachfrage erneut gesendet werden.
+
 ## 0.7.1 – 2026-11-16
 
 ### Neu
