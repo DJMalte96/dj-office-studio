@@ -2,6 +2,11 @@
 
 Alle Änderungen an DJ Office Studio. Neueste Version oben.
 
+## 0.6.2 – 2026-11-16
+
+### Geändert
+- Der Button **⇪ An Paperless senden** ist bei markierten Rechnungen jetzt immer sichtbar. Ist Paperless noch nicht eingerichtet, erklärt ein Hinweis, was in der Konfiguration einzutragen ist (vorher war der Button dann einfach ausgeblendet).
+
 ## 0.6.1 – 2026-11-16
 
 ### Geändert
