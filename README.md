@@ -73,21 +73,25 @@ Ist `paperless_installiert` eingeschaltet, gibt es im Archiv bei markierten Rech
 Oben in der Kopfzeile gibt es auf jeder Seite das Menü: **Start**, **Rechnungen** (Neue Rechnung, Rechnungen), **Angebote** (Neues Angebot, Angebote) und **Stammdaten** (Kunden, Rechnungsposten, Zahlungsbedingungen).
 
 
-**Start:** Die Startseite öffnet sich beim Aufruf. Über die Kacheln geht es direkt zu jedem Bereich der App (inkl. Import alter Rechnungen); die Navigationsleiste erscheint erst auf den anderen Seiten. Ein Klick auf das Logo führt zurück zur Startseite. Darunter steht der Status der Rechnungen: was offen ist, wie lange noch Zeit ist, Umsatz und die letzten Rechnungen.
+**Start:** Die Startseite öffnet sich beim Aufruf. Über das Menü oder die Kacheln geht es direkt zu jedem Bereich der App (inkl. Import alter Rechnungen und Angebote). Ein Klick auf das Logo führt zurück zur Startseite. Darunter steht der aktuelle Stand: offene Rechnungen mit Restzeit, offene Angebote mit Restlaufzeit, Umsatz und die letzten Rechnungen – plus Hinweise bei überfälligen Rechnungen und bald ablaufenden Angeboten.
 
 ![Screenshot: Startseite](docs/startseite.png)
 
 **Neue Rechnung:** Kundennamen eintippen und einen Vorschlag übernehmen (oder neue Adresse eingeben). Pro Position einen Rechnungsposten wählen, von/bis eintragen, Lieferdatum und Preis ergänzen. Zahlungsbedingung wählen, dann **PDF-Vorschau** oder **Rechnung speichern & PDF öffnen**.
 
-**Rechnungsposten:** Im gleichen Tab neue Rechnungsposten (z. B. Hochzeit) anlegen. Ohne eigene Text-Vorlage wird `DJ – Tätigkeit <Bezeichnung> – {von} Uhr bis {bis} Uhr` verwendet; `{von}` und `{bis}` werden durch die Uhrzeiten ersetzt.
+**Angebote:** Über **Angebote → Neues Angebot** im selben Editor schreiben – zusätzlich mit **Gültig bis** und freien **Hinweisen** (z. B. Verlängerungsstunde, GEMA). In **Angebote → Angebote** stehen oben die offenen Angebote mit Restlaufzeit, darunter alle Angebote mit Status (offen / angenommen / abgelehnt). **→ Rechnung** macht aus einem Angebot eine neue Rechnung und markiert es als angenommen.
 
-**Alte Rechnungen importieren:** Im Tab **Rechnungen** auf **Alte Rechnungen importieren** klicken und PDFs hineinziehen. Danach auswählen, welche Empfänger, Rechnungsposten und Rechnungen übernommen werden. Erkannt werden PDFs mit echtem Text im Aufbau der Vorlage (Absenderzeile mit „|“, Adresse, „Rechnung Nr.“, Tabelle, „Gesamt“). Eingescannte Rechnungen werden nicht unterstützt.
+![Screenshot: Angebote](docs/angebote.png)
+
+**Rechnungsposten:** Unter **Stammdaten → Rechnungsposten** neue Rechnungsposten (z. B. Hochzeit) anlegen. Ohne eigene Text-Vorlage wird `DJ – Tätigkeit <Bezeichnung> – {von} Uhr bis {bis} Uhr` verwendet; `{von}` und `{bis}` werden durch die Uhrzeiten ersetzt.
+
+**Alte Rechnungen und Angebote importieren:** Unter **Rechnungen** (Archiv) auf **Alte Rechnungen importieren** bzw. unter **Angebote** auf **Alte Angebote importieren** klicken und PDFs hineinziehen – gemischt möglich. Danach auswählen, welche Empfänger, Rechnungsposten, Rechnungen und Angebote übernommen werden. Erkannt werden PDFs mit echtem Text im Aufbau der Vorlage (Absenderzeile mit „|“, Adresse, „Rechnung Nr.“ bzw. „Angebot“, Tabelle, „Gesamt“). Eingescannte Dokumente werden nicht unterstützt.
 
 ## Daten & Backup
 
 | Was | Wo |
 |---|---|
-| Kunden, Rechnungsposten, Zahlungsbedingungen, Rechnungen | SQLite-Datenbank `rechnungen.db` im App-Datenordner (`/data`) |
+| Kunden, Rechnungsposten, Zahlungsbedingungen, Rechnungen, Angebote | SQLite-Datenbank `rechnungen.db` im App-Datenordner (`/data`) |
 | PDF-Kopien | `pdf_ordner`, standardmäßig `/share/rechnungen` (z. B. per Samba erreichbar) |
 
 Beides ist in den normalen Home-Assistant-Backups enthalten.

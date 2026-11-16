@@ -393,3 +393,4 @@ select.status-select.angenommen { border-color: var(--neon); }
 select.status-select.abgelehnt { color: var(--muted); }
 tr.angebot-zu td { opacity: .6; }
 tr.angebot-zu td.btns, tr.angebot-zu td.auswahl-spalte, tr.angebot-zu td:nth-child(7) { opacity: 1; }
+.nowrap { white-space: nowrap; }
