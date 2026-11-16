@@ -53,17 +53,16 @@ Die Absenderdaten erscheinen in der Absenderzeile und in der Fußzeile jeder Rec
 | `kleinunternehmer` | Hinweis „Gem. §19 UStG … nicht umsatzsteuerpflichtig“ drucken | `true` |
 | `pdf_ordner` | Ordner für die PDF-Kopien | `/share/rechnungen` |
 | `startnummer` | Kleinste Rechnungsnummer; danach wird automatisch hochgezählt | `37` |
-| `paperless_url` | Adresse von Paperless-ngx (leer = Paperless-Funktion aus) | `http://192.168.1.10:8000` |
-| `paperless_token` | API-Token aus Paperless (Profil → „API-Auth-Token“) | |
+| `paperless_eingangsordner` | Eingangsordner (consume) von Paperless-ngx; leer = Paperless-Funktion aus | `/share/paperless/consume` |
 
 Solange Name oder IBAN fehlen, zeigt die App oben einen Hinweis.
 
 ### Paperless-ngx
 
-Im Archiv gibt es bei markierten Rechnungen den Button **⇪ An Paperless senden** – er funktioniert, sobald `paperless_url` und `paperless_token` eingetragen sind. Jede Rechnung wird als komplette PDF-Datei (z. B. `Rechnung_037_311026.pdf`) an Paperless übergeben – Titel, Korrespondent, Dokumenttyp, Tags usw. vergibt Paperless anschließend selbst (z. B. über Zuweisungsregeln oder die automatische Zuordnung). Übertragene Rechnungen sind im Archiv mit „Paperless ✓“ gekennzeichnet.
+Im Archiv gibt es bei markierten Rechnungen den Button **⇪ An Paperless senden**. Jede Rechnung wird als komplette PDF-Datei (z. B. `Rechnung_037_311026.pdf`) in den Eingangsordner von Paperless gelegt – Titel, Korrespondent, Dokumenttyp, Tags usw. vergibt Paperless anschließend selbst (z. B. über Zuweisungsregeln oder die automatische Zuordnung). Übertragene Rechnungen sind im Archiv mit „Paperless ✓“ gekennzeichnet.
 
-- **Token**: in Paperless oben rechts auf den Benutzer → *Mein Profil* → *API-Auth-Token* erzeugen und kopieren.
-- **Adresse**: Paperless muss über eine normale Adresse mit Port erreichbar sein, z. B. `http://<IP-von-Home-Assistant>:8000` – dafür in der Paperless-App unter *Netzwerk* einen Port freigeben. Die Ingress-Adresse aus der Seitenleiste funktioniert nicht.
+- `paperless_eingangsordner` muss auf den Eingangsordner (consume) der Paperless-App zeigen – welcher das ist, steht in der Konfiguration der Paperless-App. Der Ordner muss unter `/share` oder `/media` liegen, damit DJ Office Studio darauf zugreifen kann.
+- Existiert der Ordner nicht, meldet die App einen Fehler, statt ihn anzulegen – so landen keine PDFs unbemerkt im falschen Ordner.
 
 ## Bedienung
 

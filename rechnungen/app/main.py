@@ -10,7 +10,6 @@ from flask import Flask, Response, abort, jsonify, request, send_from_directory
 
 import db
 import importer
-import paperless
 from pdf import build_invoice_pdf, pdf_filename
 
 OPTIONS_PATH = os.environ.get("OPTIONS_PATH", "/data/options.json")
@@ -64,7 +63,7 @@ def get_absender():
     a = absender()
     return jsonify({k: a.get(k) for k in ("name", "strasse", "plz_ort", "ort_fuer_datum")}
                    | {"vollstaendig": bool(a.get("name") and a.get("iban")),
-                      "paperless": bool(_paperless_config(a))})
+                      "paperless": bool(_paperless_ordner(a))})
 
 
 # ---------- Stammdaten (Kunden, Textbausteine, Zahlungsbedingungen) ----------
@@ -256,23 +255,39 @@ def invoices_download():
                     headers={"Content-Disposition": f'attachment; filename="{zip_name}"'})
 
 
-# ---------- Paperless-ngx ----------
+# ---------- Paperless-ngx (Eingangsordner) ----------
 
-def _paperless_config(a=None):
+def _paperless_ordner(a=None):
     a = a if a is not None else absender()
-    url, token = (a.get("paperless_url") or "").strip(), (a.get("paperless_token") or "").strip()
-    return (url, token) if url and token else None
+    return (a.get("paperless_eingangsordner") or "").strip()
+
+
+def _in_eingangsordner(ordner, name, pdf_bytes):
+    """PDF in den Eingangsordner legen. Erst als .part schreiben und dann umbenennen,
+    damit Paperless keine halb geschriebene Datei einliest. Gleichnamige Dateien werden nicht überschrieben."""
+    stem, n = name.removesuffix(".pdf"), 2
+    ziel = os.path.join(ordner, name)
+    while os.path.exists(ziel):
+        ziel, n = os.path.join(ordner, f"{stem}_{n}.pdf"), n + 1
+    tmp = ziel + ".part"
+    with open(tmp, "wb") as f:
+        f.write(pdf_bytes)
+    os.replace(tmp, ziel)
+    return os.path.basename(ziel)
 
 
 @app.post("/api/paperless")
 def invoices_to_paperless():
-    """Ausgewählte Rechnungen als PDF an Paperless-ngx schicken: {"ids": [1, 2, 3]}."""
+    """Ausgewählte Rechnungen als PDF in den Eingangsordner von Paperless legen: {"ids": [1, 2, 3]}."""
     a = absender()
-    cfg = _paperless_config(a)
-    if not cfg:
-        return jsonify({"error": "Paperless ist nicht eingerichtet – bitte paperless_url und "
-                                 "paperless_token in der App-Konfiguration eintragen."}), 400
-    client = paperless.Paperless(*cfg)
+    ordner = _paperless_ordner(a)
+    if not ordner:
+        return jsonify({"error": "Paperless ist nicht eingerichtet – bitte paperless_eingangsordner "
+                                 "in der App-Konfiguration eintragen."}), 400
+    if not os.path.isdir(ordner):
+        # Bewusst nicht anlegen: Bei falschem Pfad würden die PDFs sonst unbemerkt liegen bleiben
+        return jsonify({"error": f"Eingangsordner {ordner} nicht gefunden – Pfad in der "
+                                 "App-Konfiguration prüfen (muss unter /share oder /media liegen)."}), 400
 
     ok, fehler = [], []
     for inv_id in dict.fromkeys(request.get_json().get("ids") or []):
@@ -281,11 +296,9 @@ def invoices_to_paperless():
             continue
         name = pdf_filename(inv)
         try:
-            client.upload(build_invoice_pdf(inv, a), name)   # nur die PDF – Rest macht Paperless
-        except paperless.PaperlessError as e:
-            fehler.append({"id": inv_id, "name": name, "error": str(e)})
-            if e.fatal:
-                break   # Verbindungs-/Anmeldeproblem betrifft alle weiteren genauso
+            _in_eingangsordner(ordner, name, build_invoice_pdf(inv, a))
+        except OSError as e:
+            fehler.append({"id": inv_id, "name": name, "error": f"{name} konnte nicht abgelegt werden: {e}"})
             continue
         db.set_paperless(inv_id, datetime.now().isoformat(timespec="seconds"))
         ok.append(inv_id)
