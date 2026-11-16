@@ -88,6 +88,13 @@ function showTab(name) {
 $$("nav button").forEach(b => b.addEventListener("click", () => showTab(b.dataset.tab)));
 $("#logo").addEventListener("click", () => showTab("start"));
 
+// ---------- Hell/Dunkel ----------
+$("#theme-toggle").addEventListener("click", () => {
+  const neu = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+  document.documentElement.dataset.theme = neu;
+  try { localStorage.setItem("theme", neu); } catch (e) {}
+});
+
 // ---------- Stammdaten für den Editor laden ----------
 
 async function loadLookups() {

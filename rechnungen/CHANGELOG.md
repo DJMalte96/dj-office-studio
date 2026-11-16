@@ -2,6 +2,11 @@
 
 Alle Änderungen an DJ Office Studio. Neueste Version oben.
 
+## 0.5.6 – 2026-11-16
+
+### Neu
+- **Hell/Dunkel-Umschalter** oben rechts in der Kopfzeile (Mond-/Sonnen-Symbol). Ohne eigene Wahl folgt die App weiterhin der Systemeinstellung; die gewählte Darstellung wird im Browser gespeichert.
+
 ## 0.5.5 – 2026-11-16
 
 ### Behoben

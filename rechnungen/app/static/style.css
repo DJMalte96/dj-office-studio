@@ -20,14 +20,13 @@
   --shadow: 0 1px 2px rgba(0, 0, 0, .04), 0 4px 16px rgba(0, 0, 0, .06);
   --shadow-lg: 0 12px 32px rgba(0, 0, 0, .18);
 }
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #000000; --card: #0c0c0c; --text: #ffffff; --muted: #9a9a9a; --border: #242424;
-    --input-bg: #050505; --ink: var(--neon); --primary-soft: rgba(74, 222, 128, .13);
-    --chip-bg: var(--neon); --chip-fg: #000000;
-    --danger-soft: rgba(225, 29, 72, .15);
-    --shadow: 0 1px 2px rgba(0, 0, 0, .5), 0 4px 16px rgba(0, 0, 0, .4);
-  }
+[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #000000; --card: #0c0c0c; --text: #ffffff; --muted: #9a9a9a; --border: #242424;
+  --input-bg: #050505; --ink: var(--neon); --primary-soft: rgba(74, 222, 128, .13);
+  --chip-bg: var(--neon); --chip-fg: #000000;
+  --danger-soft: rgba(225, 29, 72, .15);
+  --shadow: 0 1px 2px rgba(0, 0, 0, .5), 0 4px 16px rgba(0, 0, 0, .4);
 }
 
 * { box-sizing: border-box; }
@@ -48,12 +47,22 @@ header {
 }
 h1 { font-size: 18px; font-weight: 750; letter-spacing: -.02em; margin: 0; display: flex; align-items: center; gap: 11px; white-space: nowrap; }
 .logo { width: 36px; height: 36px; flex: none; border-radius: 10px; box-shadow: 0 2px 8px rgba(0, 0, 0, .18); }
-@media (prefers-color-scheme: dark) { .logo { box-shadow: 0 0 0 1px #262626; } }
+[data-theme="dark"] .logo { box-shadow: 0 0 0 1px #262626; }
 .brand em { font-style: normal; font-weight: 500; color: var(--muted); }
 h2 { font-size: 15px; font-weight: 650; letter-spacing: -.01em; margin: 0 0 16px; }
 
 body.auf-start nav { display: none; }
 #logo { cursor: pointer; }
+.theme-toggle {
+  margin-left: auto; display: grid; place-items: center; width: 38px; height: 38px; padding: 0;
+  background: var(--input-bg); color: var(--text); border: 1px solid var(--border); border-radius: 10px;
+  box-shadow: none; cursor: pointer; transition: border-color .15s;
+}
+.theme-toggle:hover { border-color: var(--neon); background: var(--input-bg); }
+.theme-toggle svg { width: 18px; height: 18px; }
+.theme-toggle .icon-sonne { display: none; }
+[data-theme="dark"] .theme-toggle .icon-sonne { display: block; }
+[data-theme="dark"] .theme-toggle .icon-mond { display: none; }
 nav { display: flex; gap: 4px; overflow-x: auto; padding: 4px; background: var(--input-bg); border: 1px solid var(--border); border-radius: 12px; }
 nav button {
   background: none; border: none; color: var(--muted); font-weight: 500;
@@ -217,7 +226,7 @@ input.bezahlt:focus { box-shadow: 0 0 0 4px var(--primary-soft); }
   max-width: 1080px; margin: 16px auto 0; padding: 12px 16px; border-radius: 12px; font-size: 14px;
   background: #fffbeb; color: #92400e; border: 1px solid #fde68a;
 }
-@media (prefers-color-scheme: dark) { .banner { background: rgba(245, 158, 11, .1); color: #fcd34d; border-color: rgba(245, 158, 11, .3); } }
+[data-theme="dark"] .banner { background: rgba(245, 158, 11, .1); color: #fcd34d; border-color: rgba(245, 158, 11, .3); }
 .toast {
   position: fixed; top: 76px; left: 50%; transform: translateX(-50%); z-index: 50;
   background: #000; color: #fff; border: 1px solid var(--neon); padding: 11px 18px; border-radius: 12px; font-weight: 500;
@@ -266,7 +275,7 @@ table.list th[data-sort]::after { content: attr(data-pfeil); margin-left: 5px; f
 
 /* ---------- Offene Rechnungen ---------- */
 :root { --gelb: #d97706; --gelb-soft: rgba(245, 158, 11, .14); }
-@media (prefers-color-scheme: dark) { :root { --gelb: #fbbf24; --gelb-soft: rgba(245, 158, 11, .16); } }
+[data-theme="dark"] { --gelb: #fbbf24; --gelb-soft: rgba(245, 158, 11, .16); }
 .offen-liste { margin-top: 4px; }
 .frist { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 12.5px; font-weight: 600; white-space: nowrap; }
 .frist.gruen { background: var(--primary-soft); color: var(--text); }
@@ -306,7 +315,7 @@ button.aktion .a-titel { font-weight: 700; font-size: 15px; }
 button.aktion small { color: var(--muted); font-size: 12.5px; line-height: 1.35; }
 button.aktion.haupt { background: #0b0b0b; color: #fff; border-color: #0b0b0b; }
 button.aktion.haupt:hover { background: #0b0b0b; border-color: var(--neon); }
-@media (prefers-color-scheme: dark) { button.aktion.haupt { border-color: var(--neon); } }
+[data-theme="dark"] button.aktion.haupt { border-color: var(--neon); }
 button.aktion.haupt .a-icon { background: var(--neon); color: #0b0b0b; }
 button.aktion.haupt small { color: rgba(255,255,255,.7); }
 #start-hinweise { margin-bottom: 14px; }
