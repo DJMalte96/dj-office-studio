@@ -8,8 +8,12 @@ const state = {
   textbausteine: [],
   zahlungsbedingungen: [],
   kundeId: null,      // ID des gewählten Bestandskunden (null = neuer Kunde)
-  editId: null,       // ID der Rechnung, die gerade bearbeitet wird
+  editId: null,       // ID der Rechnung bzw. des Angebots, das gerade bearbeitet wird
   rechnungen: [],
+  angebote: [],
+  modus: "rechnung",  // Editor schreibt eine "rechnung" oder ein "angebot"
+  ausAngebot: null,   // Angebot, aus dem die Rechnung im Editor erzeugt wird
+  gueltigAuto: true,  // „Gültig bis“ folgt dem Angebotsdatum, bis es von Hand geändert wird
 };
 
 // ---------- Hilfsfunktionen ----------
@@ -77,15 +81,59 @@ async function openPdf(loader) {
 // ---------- Tabs ----------
 
 function showTab(name) {
-  $$("nav button").forEach(b => b.classList.toggle("active", b.dataset.tab === name));
+  const navName = name === "neu" && state.modus === "angebot" ? "angebote" : name;
+  $$("nav button").forEach(b => b.classList.toggle("active", b.dataset.tab === navName));
   $$(".tab").forEach(s => s.classList.toggle("active", s.id === "tab-" + name));
   document.body.classList.toggle("auf-start", name === "start");
   if (name === "liste") loadListe();
+  if (name === "angebote") loadAngebote();
   if (name === "start") renderStart();
   const stamm = $(`#tab-${name}[data-stamm]`);
   if (stamm) renderStamm(stamm.dataset.stamm);
 }
-$$("nav button").forEach(b => b.addEventListener("click", () => showTab(b.dataset.tab)));
+$$("nav button").forEach(b => b.addEventListener("click", () =>
+  b.dataset.tab === "neu" ? neueRechnung() : showTab(b.dataset.tab)));
+
+// ---------- Editor-Modus: Rechnung oder Angebot ----------
+
+function setModus(modus) {
+  state.modus = modus;
+  document.body.classList.toggle("modus-angebot", modus === "angebot");
+  fillZahlungSelect();
+}
+
+const istAngebot = () => state.modus === "angebot";
+
+function speichernText() {
+  const art = istAngebot() ? "Angebot" : "Rechnung";
+  $("#btn-speichern").textContent = state.editId
+    ? `${art} ${$("#r-nummer").value} aktualisieren & PDF öffnen`
+    : `${art} speichern & PDF öffnen`;
+}
+
+/* „Neue Rechnung“: Ein angefangenes Rechnungsformular bleibt erhalten, ein Angebot wird verlassen. */
+async function neueRechnung() {
+  if (istAngebot()) { setModus("rechnung"); await resetForm(); }
+  showTab("neu");
+}
+
+async function neuesAngebot() {
+  setModus("angebot");
+  await resetForm();
+  showTab("neu");
+  window.scrollTo(0, 0);
+}
+
+function addDays(iso, n) {
+  const [y, m, d] = iso.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10);
+}
+const gueltigkeitTage = () => Number(state.absender?.angebot_gueltigkeit_tage) || 30;
+
+$("#r-datum").addEventListener("change", e => {
+  if (istAngebot() && state.gueltigAuto && e.target.value) $("#a-gueltig").value = addDays(e.target.value, gueltigkeitTage());
+});
+$("#a-gueltig").addEventListener("input", () => { state.gueltigAuto = false; });
 $("#logo").addEventListener("click", () => showTab("start"));
 
 // ---------- Hell/Dunkel ----------
@@ -108,9 +156,9 @@ async function loadLookups() {
 function fillZahlungSelect() {
   const sel = $("#r-zahlung");
   const current = sel.value;
-  sel.innerHTML = state.zahlungsbedingungen
-    .map(z => `<option value="${esc(z.text)}">${esc(z.titel)}</option>`).join("");
-  if (current && state.zahlungsbedingungen.some(z => z.text === current)) sel.value = current;
+  sel.innerHTML = (istAngebot() ? `<option value="">– keine Angabe im Angebot –</option>` : "") +
+    state.zahlungsbedingungen.map(z => `<option value="${esc(z.text)}">${esc(z.titel)}</option>`).join("");
+  if ([...sel.options].some(o => o.value === current)) sel.value = current;
   updateZahlungText();
 }
 
@@ -270,9 +318,13 @@ function updateTotal() {
 
 function readForm() {
   return {
+    art: state.modus,
     nummer: $("#r-nummer").value.trim(),
     datum: $("#r-datum").value,
     zahlungsbedingung: $("#r-zahlung").value,
+    gueltig_bis: istAngebot() ? $("#a-gueltig").value : undefined,
+    hinweise: istAngebot() ? $("#a-hinweise").value : undefined,
+    angebot_id: !istAngebot() && state.ausAngebot ? state.ausAngebot : undefined,
     kunde: {
       id: state.kundeId,
       name: $("#k-name").value, zusatz: $("#k-zusatz").value, strasse: $("#k-strasse").value,
@@ -293,30 +345,77 @@ function checkPlaceholders(data) {
 
 async function resetForm() {
   state.editId = null;
+  setAusAngebot(null);
   fillKunde({});
   $("#r-datum").value = today();
-  $("#r-nummer").value = (await api("rechnungen/naechste-nummer")).nummer;
+  $("#r-nummer").value = (await api(istAngebot() ? "angebote/naechste-nummer" : "rechnungen/naechste-nummer")).nummer;
   $("#r-zahlung").selectedIndex = 0;
   updateZahlungText();
+  state.gueltigAuto = true;
+  $("#a-gueltig").value = addDays(today(), gueltigkeitTage());
+  $("#a-hinweise").value = "";
   $("#positionen").innerHTML = "";
   addPosition();
-  $("#btn-speichern").textContent = "Rechnung speichern & PDF öffnen";
+  speichernText();
+}
+
+/* Hinweis im Editor, wenn eine Rechnung aus einem Angebot erzeugt wird. */
+function setAusAngebot(a) {
+  state.ausAngebot = a ? a.id : null;
+  $("#aus-angebot").classList.toggle("hidden", !a);
+  $("#aus-angebot").textContent = a
+    ? `Aus Angebot ${a.nummer} übernommen – beim Speichern wird das Angebot als „angenommen“ markiert.` : "";
+}
+
+function setZahlung(text) {
+  const sel = $("#r-zahlung");
+  if (text && ![...sel.options].some(o => o.value === text)) sel.add(new Option("(gespeicherter Text)", text));
+  if (text || istAngebot()) sel.value = text || "";
+  updateZahlungText();
 }
 
 function loadIntoForm(inv) {
+  setModus("rechnung");
+  setAusAngebot(null);
   state.editId = inv.id;
   fillKunde({ ...inv.kunde, id: inv.kunde_id });
   $("#r-nummer").value = inv.nummer;
   $("#r-datum").value = inv.datum;
-  const sel = $("#r-zahlung");
-  if (![...sel.options].some(o => o.value === inv.zahlungsbedingung)) {
-    sel.add(new Option("(gespeicherter Text)", inv.zahlungsbedingung));
-  }
-  sel.value = inv.zahlungsbedingung;
-  updateZahlungText();
+  setZahlung(inv.zahlungsbedingung);
   $("#positionen").innerHTML = "";
   inv.positionen.forEach(p => addPosition(p));
-  $("#btn-speichern").textContent = `Rechnung ${inv.nummer} aktualisieren & PDF öffnen`;
+  speichernText();
+  showTab("neu");
+  window.scrollTo(0, 0);
+}
+
+function loadAngebotIntoForm(a) {
+  setModus("angebot");
+  setAusAngebot(null);
+  state.editId = a.id;
+  fillKunde({ ...a.kunde, id: a.kunde_id });
+  $("#r-nummer").value = a.nummer;
+  $("#r-datum").value = a.datum;
+  state.gueltigAuto = false;
+  $("#a-gueltig").value = a.gueltig_bis || "";
+  $("#a-hinweise").value = a.hinweise || "";
+  setZahlung(a.zahlungsbedingung);
+  $("#positionen").innerHTML = "";
+  a.positionen.forEach(p => addPosition(p));
+  speichernText();
+  showTab("neu");
+  window.scrollTo(0, 0);
+}
+
+/* Angebot → neue Rechnung: Kunde, Positionen und ggf. Zahlungsbedingung übernehmen. */
+async function angebotZuRechnung(a) {
+  setModus("rechnung");
+  await resetForm();
+  fillKunde({ ...a.kunde, id: a.kunde_id });
+  if (a.zahlungsbedingung) setZahlung(a.zahlungsbedingung);
+  $("#positionen").innerHTML = "";
+  a.positionen.forEach(p => addPosition(p));
+  setAusAngebot(a);
   showTab("neu");
   window.scrollTo(0, 0);
 }
@@ -331,15 +430,18 @@ $("#btn-vorschau").addEventListener("click", () => {
 $("#rechnung").addEventListener("submit", e => {
   e.preventDefault();
   const data = readForm();
+  const pfad = istAngebot() ? "angebote" : "rechnungen";
+  const art = istAngebot() ? "Angebot" : "Rechnung";
   openPdf(async () => {
     checkPlaceholders(data);
     const res = state.editId
-      ? await api("rechnungen/" + state.editId, { method: "PUT", body: data })
-      : await api("rechnungen", { method: "POST", body: data });
+      ? await api(`${pfad}/${state.editId}`, { method: "PUT", body: data })
+      : await api(pfad, { method: "POST", body: data });
     state.editId = res.id;
-    $("#btn-speichern").textContent = `Rechnung ${data.nummer} aktualisieren & PDF öffnen`;
-    toast(`Rechnung ${data.nummer} gespeichert` + (res.datei ? ` → ${res.datei.split("/").pop()}` : ""));
-    return api(`rechnungen/${res.id}/pdf`);
+    if (data.angebot_id) setAusAngebot(null);   // Angebot ist jetzt als angenommen markiert
+    speichernText();
+    toast(`${art} ${data.nummer} gespeichert` + (res.datei ? ` → ${res.datei.split("/").pop()}` : ""));
+    return api(`${pfad}/${res.id}/pdf`);
   });
 });
 
@@ -622,6 +724,99 @@ $("#tab-liste").addEventListener("click", async e => {
   } catch (err) { toast(err.message, true); }
 });
 
+// ---------- Angebote ----------
+
+const STATUS_TEXT = { offen: "offen", angenommen: "angenommen", abgelehnt: "abgelehnt" };
+const angebotName = a => a.name || `Angebot_${a.nummer}`;
+
+async function loadAngebote() {
+  try {
+    [state.angebote, state.rechnungen] = await Promise.all([api("angebote"), api("rechnungen")]);
+  } catch (e) { return toast("Laden fehlgeschlagen: " + e.message, true); }
+  renderAngebote();
+}
+
+function gueltigBadge(a) {
+  if (a.status === "angenommen") {
+    const r = a.rechnung_id && state.rechnungen.find(x => x.id === a.rechnung_id);
+    return r ? `<a href="#" class="rlink" data-rechnung="${r.id}" title="Rechnung öffnen">→ ${esc(rechnungsName(r))}</a>`
+             : `<span class="frist gruen">angenommen</span>`;
+  }
+  if (a.status === "abgelehnt") return `<span class="frist neutral">abgelehnt</span>`;
+  if (!a.gueltig_bis) return `<span class="frist neutral">ohne Frist</span>`;
+  const rest = Math.round((isoToUtc(a.gueltig_bis) - heuteUtc()) / TAG_MS);
+  const bis = `title="gültig bis ${fmtDate(a.gueltig_bis)}"`;
+  if (rest < 0) return `<span class="frist rot" ${bis}>abgelaufen</span>`;
+  if (rest === 0) return `<span class="frist gelb" ${bis}>endet heute</span>`;
+  if (rest <= 7) return `<span class="frist gelb" ${bis}>noch ${rest} ${rest === 1 ? "Tag" : "Tage"}</span>`;
+  return `<span class="frist gruen" ${bis}>bis ${fmtDate(a.gueltig_bis)}</span>`;
+}
+
+function renderAngebote() {
+  const q = $("#angebote-suche").value.trim().toLowerCase();
+  const list = state.angebote.filter(a =>
+    !q || [angebotName(a), a.nummer, a.kunde.name, a.kunde.ort, ...a.positionen.map(p => p.beschreibung)]
+      .join(" ").toLowerCase().includes(q));
+  $("#angebote-body").innerHTML = list.map(a => `
+    <tr data-id="${a.id}"${a.status === "offen" ? "" : ' class="angebot-zu"'}>
+      <td>${esc(a.nummer)}</td>
+      <td>${fmtDate(a.datum)}</td>
+      <td>${esc(a.kunde.name)}<br><small>${esc(a.kunde.ort)}</small></td>
+      <td class="num">${fmtEuro(a.gesamt)}</td>
+      <td>${gueltigBadge(a)}</td>
+      <td><select class="status-select ${a.status}" title="Status des Angebots">${Object.entries(STATUS_TEXT)
+        .map(([k, t]) => `<option value="${k}"${k === a.status ? " selected" : ""}>${t}</option>`).join("")}</select></td>
+      <td class="btns">
+        <button class="small secondary" data-act="pdf">PDF</button>
+        <button class="small secondary" data-act="edit">Bearbeiten</button>
+        ${a.rechnung_id ? "" : `<button class="small" data-act="rechnung" title="Rechnung aus diesem Angebot erstellen">→ Rechnung</button>`}
+        <button class="small danger" data-act="del">Löschen</button>
+      </td>
+    </tr>`).join("") ||
+    `<tr><td colspan="7" class="hint">${q ? "Keine Treffer." : "Noch keine Angebote – mit „＋ Neues Angebot“ das erste schreiben."}</td></tr>`;
+  const offen = state.angebote.filter(a => a.status === "offen");
+  $("#angebote-summe").textContent = state.angebote.length
+    ? `${state.angebote.length} Angebot${state.angebote.length === 1 ? "" : "e"} · ${offen.length} offen`
+      + (offen.length ? ` (${fmtEuro(offen.reduce((s, a) => s + a.gesamt, 0))})` : "") : "";
+}
+$("#angebote-suche").addEventListener("input", renderAngebote);
+$("#btn-angebot-neu").addEventListener("click", neuesAngebot);
+
+$("#angebote-body").addEventListener("change", async e => {
+  if (!e.target.classList.contains("status-select")) return;
+  const id = Number(e.target.closest("tr").dataset.id);
+  const a = state.angebote.find(x => x.id === id);
+  try {
+    await api(`angebote/${id}/status`, { method: "PATCH", body: { status: e.target.value } });
+    a.status = e.target.value;
+    renderAngebote();
+    toast(`${angebotName(a)}: ${STATUS_TEXT[a.status]}`);
+  } catch (err) { toast(err.message, true); e.target.value = a.status; }
+});
+
+$("#angebote-body").addEventListener("click", async e => {
+  const link = e.target.closest("a[data-rechnung]");
+  if (link) {
+    e.preventDefault();
+    return loadIntoForm(state.rechnungen.find(r => r.id === Number(link.dataset.rechnung)));
+  }
+  const btn = e.target.closest("button[data-act]");
+  if (!btn) return;
+  const id = Number(btn.closest("tr").dataset.id);
+  const a = state.angebote.find(x => x.id === id);
+  try {
+    if (btn.dataset.act === "pdf") window.open(`api/angebote/${id}/pdf`, "_blank");
+    if (btn.dataset.act === "edit") loadAngebotIntoForm(a);
+    if (btn.dataset.act === "rechnung") await angebotZuRechnung(a);
+    if (btn.dataset.act === "del" && confirm(`${angebotName(a)} wirklich löschen?`)) {
+      await api("angebote/" + id, { method: "DELETE" });
+      if (istAngebot() && state.editId === id) await resetForm();
+      await loadAngebote();
+      toast(`${angebotName(a)} gelöscht`);
+    }
+  } catch (err) { toast(err.message, true); }
+});
+
 // ---------- Stammdaten-Tabs (Kunden, Textbausteine, Zahlungsbedingungen) ----------
 
 const STAMM = {
@@ -837,7 +1032,7 @@ async function uebernehmeImport() {
     $("#import").classList.add("hidden");
     await loadLookups();
     await loadListe();
-    if (!state.editId) $("#r-nummer").value = (await api("rechnungen/naechste-nummer")).nummer;
+    if (!state.editId && !istAngebot()) $("#r-nummer").value = (await api("rechnungen/naechste-nummer")).nummer;
   } catch (e) { toast(e.message, true); }
 }
 
@@ -855,6 +1050,10 @@ $("#tab-start").addEventListener("click", e => {
       showTab("liste");
       $("#import").classList.remove("hidden");
       window.scrollTo(0, 0);
+    } else if (tab === "neu") {
+      neueRechnung();
+    } else if (tab === "angebot-neu") {
+      neuesAngebot();
     } else {
       showTab(tab);
       if (tab === "kunden") setTimeout(() => $("#tab-kunden [name=name]")?.focus(), 100);

@@ -317,8 +317,8 @@ tr.summen-zeile:hover { background: none; }
 .start-kopf { margin: 4px 0 18px; }
 .gruss { font-size: 26px; font-weight: 750; letter-spacing: -.03em; margin: 0; }
 .start-kopf .hint { margin-top: 2px; font-size: 14px; }
-.aktionen { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; margin-bottom: 20px; }
-@media (max-width: 1100px) { .aktionen { grid-template-columns: repeat(3, 1fr); } }
+.aktionen { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
+@media (max-width: 900px) { .aktionen { grid-template-columns: repeat(2, 1fr); } }
 @media (max-width: 560px) { .aktionen { grid-template-columns: repeat(2, 1fr); } }
 button.aktion { display: grid; justify-items: start; align-content: start; gap: 4px; text-align: left;
   padding: 16px; min-height: 112px; border-radius: 14px; background: var(--card); color: var(--text);
@@ -370,3 +370,15 @@ ul.mini-liste .ml-text a { justify-self: start; }
 ul.mini-liste .num { font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
 ul.mini-liste li { flex-wrap: nowrap; }
 .start-spalte .card > .row.between { margin-bottom: 14px; }
+
+/* ---------- Angebote ---------- */
+body:not(.modus-angebot) .nur-angebot { display: none !important; }
+body.modus-angebot .nur-rechnung { display: none !important; }
+#a-hinweise { width: 100%; }
+.aus-angebot { margin: 10px 0 0; padding: 8px 12px; border-radius: 10px; font-size: 13.5px;
+  background: var(--primary-soft); border: 1px solid var(--neon); }
+select.status-select { width: auto; padding: 5px 28px 5px 10px; font-size: 13px; }
+select.status-select.angenommen { border-color: var(--neon); }
+select.status-select.abgelehnt { color: var(--muted); }
+tr.angebot-zu td { opacity: .6; }
+tr.angebot-zu td.btns, tr.angebot-zu td:nth-child(6) { opacity: 1; }

@@ -80,9 +80,19 @@ class InvoicePDF(FPDF):
                 self.cell(0, lh, text or "")
 
 
+def fmt_date_lang(iso):
+    """'2026-10-31' -> '31.10.2026'"""
+    try:
+        return date.fromisoformat(iso).strftime("%d.%m.%Y")
+    except (TypeError, ValueError):
+        return iso or ""
+
+
 def build_invoice_pdf(inv, absender):
     """inv: dict mit nummer, datum, kunde{...}, positionen[{beschreibung, lieferdatum, preis}],
-    zahlungsbedingung. Gibt PDF als bytes zurück."""
+    zahlungsbedingung. Mit art="angebot" (+ gueltig_bis, hinweise) entsteht ein Angebot.
+    Gibt PDF als bytes zurück."""
+    angebot = inv.get("art") == "angebot"
     pdf = InvoicePDF(absender)
     pdf.add_page()
     epw = pdf.epw
@@ -106,7 +116,7 @@ def build_invoice_pdf(inv, absender):
     # Rechnungsnummer + Ort/Datum
     pdf.set_xy(LEFT, 93)
     pdf.set_font("Body", "BU", 13)
-    pdf.cell(epw / 2, 7, f"Rechnung Nr.: {inv['nummer']}")
+    pdf.cell(epw / 2, 7, f"{'Angebot' if angebot else 'Rechnung'} Nr.: {inv['nummer']}")
     pdf.set_font("Body", "", BODY_PT)
     ort = absender.get("ort_fuer_datum") or ""
     datum = fmt_date(inv["datum"])
@@ -116,7 +126,8 @@ def build_invoice_pdf(inv, absender):
 
     # Einleitung
     pdf.set_xy(LEFT, 110)
-    pdf.cell(0, 5, "Gemäß Ihrem Auftrag stelle ich wie folgt in Rechnung:")
+    pdf.cell(0, 5, "Vielen Dank für Ihre Anfrage. Gerne biete ich Ihnen folgende Leistungen an:"
+             if angebot else "Gemäß Ihrem Auftrag stelle ich wie folgt in Rechnung:")
     pdf.set_xy(LEFT, 118)
 
     # Positionstabelle
@@ -126,7 +137,7 @@ def build_invoice_pdf(inv, absender):
                    line_height=5, padding=(1, 2, 1, 2), first_row_as_headings=True,
                    headings_style=bold, borders_layout="ALL", v_align="TOP") as table:
         head = table.row()
-        for h in ("Beschreibung", "Lieferdatum", "Preis"):
+        for h in ("Beschreibung", "Datum" if angebot else "Lieferdatum", "Preis"):
             head.cell(h)
         for p in inv["positionen"]:
             preis = float(p.get("preis") or 0)
@@ -140,12 +151,30 @@ def build_invoice_pdf(inv, absender):
         total.cell("")
         total.cell(fmt_euro(gesamt))
 
-    # Zahlungsbedingung + Gruß
-    pdf.set_font("Body", "B", BODY_PT)
-    pdf.ln(6)
-    pdf.multi_cell(0, 5, inv.get("zahlungsbedingung") or "", align="L", new_x="LMARGIN", new_y="NEXT")
-    pdf.ln(10)
-    pdf.cell(0, 5, "Vielen Dank für Ihren Auftrag!", new_x="LMARGIN", new_y="NEXT")
+    if angebot:
+        # Gültigkeit, Hinweise (z. B. Verlängerung, Anfahrt, GEMA), optional Zahlungsbedingung
+        pdf.ln(6)
+        if inv.get("gueltig_bis"):
+            pdf.set_font("Body", "B", BODY_PT)
+            pdf.multi_cell(0, 5, f"Dieses Angebot ist gültig bis zum {fmt_date_lang(inv['gueltig_bis'])}.",
+                           align="L", new_x="LMARGIN", new_y="NEXT")
+            pdf.ln(3)
+        pdf.set_font("Body", "", BODY_PT)
+        for text in (inv.get("hinweise"), inv.get("zahlungsbedingung")):
+            if text:
+                pdf.multi_cell(0, 5, text, align="L", new_x="LMARGIN", new_y="NEXT")
+                pdf.ln(3)
+        pdf.ln(7)
+        pdf.set_font("Body", "B", BODY_PT)   # Schluss + Gruß fett wie bei der Rechnung
+        pdf.multi_cell(0, 5, "Ich freue mich auf Ihre Rückmeldung und stehe für Rückfragen gerne zur Verfügung.",
+                       align="L", new_x="LMARGIN", new_y="NEXT")
+    else:
+        # Zahlungsbedingung
+        pdf.set_font("Body", "B", BODY_PT)
+        pdf.ln(6)
+        pdf.multi_cell(0, 5, inv.get("zahlungsbedingung") or "", align="L", new_x="LMARGIN", new_y="NEXT")
+        pdf.ln(10)
+        pdf.cell(0, 5, "Vielen Dank für Ihren Auftrag!", new_x="LMARGIN", new_y="NEXT")
     # „Mit freundlichen Grüßen“ + Name immer zusammen: passt der Block (inkl. Abstand)
     # nicht mehr auf die Seite, kommt er komplett auf die nächste.
     gruss_block = 5 + 4 + 5
@@ -161,11 +190,12 @@ def build_invoice_pdf(inv, absender):
 
 
 def pdf_filename(inv):
-    """Rechnung_036_311026.pdf (Lieferdatum der ersten Position, sonst Rechnungsdatum)."""
+    """Rechnung_036_311026.pdf / Angebot_012_311026.pdf (Datum der ersten Position, sonst Belegdatum)."""
     first = next((p.get("lieferdatum") for p in inv["positionen"] if p.get("lieferdatum")), None)
     d = first or inv["datum"]
     try:
         suffix = date.fromisoformat(d).strftime("%d%m%y")
     except (TypeError, ValueError):
         suffix = ""
-    return f"Rechnung_{inv['nummer']}" + (f"_{suffix}" if suffix else "") + ".pdf"
+    art = "Angebot" if inv.get("art") == "angebot" else "Rechnung"
+    return f"{art}_{inv['nummer']}" + (f"_{suffix}" if suffix else "") + ".pdf"

@@ -2,6 +2,19 @@
 
 Alle Änderungen an DJ Office Studio. Neueste Version oben.
 
+## 0.8.0 – 2026-11-16
+
+### Neu
+- **Angebote schreiben**: Neuer Bereich **Angebote** (Menü und Startseite: „Neues Angebot“, „Angebote“). Angebote entstehen im gewohnten Editor – mit Kunden-Autovervollständigung, Rechnungsposten und von/bis-Zeiten.
+- Inhalt eines Angebots: Angebotsnummer (eigener Nummernkreis ab 001), Angebotsdatum, **Gültig bis** (Bindefrist), Positionen mit Datum der Veranstaltung und Preis, Gesamtsumme, optionale Zahlungsbedingung und freie **Hinweise** (z. B. Preis je Verlängerungsstunde, Leistungsumfang, GEMA-Anmeldung). Absender, Bankverbindung, Steuernummer und Kleinunternehmer-Hinweis stehen wie bei der Rechnung in der Fußzeile.
+- PDF im Layout der Rechnung, Dateiname z. B. `Angebot_001_120627.pdf`; eine Kopie landet wie gewohnt im PDF-Ordner.
+- **Angebotsliste** mit Suche, Status (offen / angenommen / abgelehnt) und Restlaufzeit bzw. „abgelaufen“.
+- **→ Rechnung**: Übernimmt Kunde, Positionen und ggf. Zahlungsbedingung in eine neue Rechnung; beim Speichern wird das Angebot automatisch als „angenommen“ markiert und mit der Rechnung verknüpft.
+- Neue Option `angebot_gueltigkeit_tage` (Standard 30) für die vorgeschlagene Bindefrist.
+
+### Geändert
+- Startseite: Kacheln jetzt in zwei Reihen à vier (mit „Neues Angebot“ und „Angebote“).
+
 ## 0.7.2 – 2026-11-16
 
 ### Neu
