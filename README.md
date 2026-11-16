@@ -60,7 +60,7 @@ Solange Name oder IBAN fehlen, zeigt die App oben einen Hinweis.
 
 ### Paperless-ngx
 
-Sind `paperless_url` und `paperless_token` eingetragen, erscheint im Archiv bei markierten Rechnungen der Button **⇪ An Paperless senden**. Jede Rechnung wird als komplette PDF-Datei (z. B. `Rechnung_037_311026.pdf`) an Paperless übergeben – Titel, Korrespondent, Dokumenttyp, Tags usw. vergibt Paperless anschließend selbst (z. B. über Zuweisungsregeln oder die automatische Zuordnung). Übertragene Rechnungen sind im Archiv mit „Paperless ✓“ gekennzeichnet.
+Im Archiv gibt es bei markierten Rechnungen den Button **⇪ An Paperless senden** – er funktioniert, sobald `paperless_url` und `paperless_token` eingetragen sind. Jede Rechnung wird als komplette PDF-Datei (z. B. `Rechnung_037_311026.pdf`) an Paperless übergeben – Titel, Korrespondent, Dokumenttyp, Tags usw. vergibt Paperless anschließend selbst (z. B. über Zuweisungsregeln oder die automatische Zuordnung). Übertragene Rechnungen sind im Archiv mit „Paperless ✓“ gekennzeichnet.
 
 - **Token**: in Paperless oben rechts auf den Benutzer → *Mein Profil* → *API-Auth-Token* erzeugen und kopieren.
 - **Adresse**: Paperless muss über eine normale Adresse mit Port erreichbar sein, z. B. `http://<IP-von-Home-Assistant>:8000` – dafür in der Paperless-App unter *Netzwerk* einen Port freigeben. Die Ingress-Adresse aus der Seitenleiste funktioniert nicht.
