@@ -29,11 +29,13 @@ Eine Home-Assistant-App zum Schreiben von DJ-Rechnungen und -Angeboten. Kunden a
 1. In Home Assistant **Einstellungen → Apps → App-Store** öffnen.
 2. Oben rechts **⋮ → Repositories** wählen und diese URL hinzufügen:
    ```
-   https://github.com/DJMalte96/ha-rechnungen
+   https://github.com/DJMalte96/dj-office-studio
    ```
 3. **DJ Office Studio** im App-Store auswählen und **Installieren**. Beim ersten Mal wird das Image gebaut – das dauert ein paar Minuten.
 4. **Starten** und „In Seitenleiste anzeigen“ aktivieren.
 5. In der App oben rechts auf **⚙** klicken und Absenderdaten, Bankverbindung usw. eintragen (siehe unten).
+
+> Das Repository hieß früher `ha-rechnungen`. Wer es unter der alten Adresse schon in Home Assistant eingetragen hat, lässt es einfach so – GitHub leitet weiter, Updates kommen weiterhin an. Bitte **nicht** entfernen und neu hinzufügen: Home Assistant würde die App sonst als neue App behandeln.
 
 ## Einstellungen
 
