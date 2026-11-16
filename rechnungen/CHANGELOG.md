@@ -2,6 +2,12 @@
 
 Alle Änderungen an DJ Office Studio. Neueste Version oben.
 
+## 0.11.0 – 2026-11-16
+
+### Neu
+- **Desktop-Version: Update-Hinweis** – beim Start fragt die App bei GitHub nach der neuesten Version. Ist eine neuere verfügbar, erscheint oben ein Hinweis mit Link zum Download (lässt sich je Version ausblenden). Unter **⚙ Einstellungen** steht neben der Version „aktuell“ bzw. „Update verfügbar“; dort lässt sich die Prüfung auch abschalten. Es werden keine persönlichen Daten übertragen.
+- In der Home-Assistant-App ändert sich nichts – dort kommen Updates wie gewohnt über Home Assistant.
+
 ## 0.10.1 – 2026-11-16
 
 ### Geändert

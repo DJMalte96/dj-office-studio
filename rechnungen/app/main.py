@@ -6,6 +6,9 @@ import hashlib
 import io
 import json
 import os
+import re
+import time
+import urllib.request
 import zipfile
 from datetime import date, datetime
 
@@ -33,6 +36,7 @@ FELDER = {
     "pdf_ordner": (str, os.environ.get("STANDARD_PDF_ORDNER", "/share/rechnungen")),
     "paperless_installiert": (bool, False),
     "paperless_eingangsordner": (str, "" if DESKTOP else "/share/paperless/consume"),
+    "update_pruefen": (bool, True),   # nur Desktop-Version: beim Start nach neuer Version suchen
 }
 
 
@@ -137,6 +141,40 @@ def settings_put():
     if a["paperless_installiert"] and not os.path.isdir(a["paperless_eingangsordner"] or "-"):
         hinweise.append(f"Paperless-Eingangsordner {a['paperless_eingangsordner'] or '(leer)'} wurde nicht gefunden.")
     return jsonify({"einstellungen": a, "hinweise": hinweise})
+
+
+# ---------- Update-Prüfung (nur Desktop-Version) ----------
+
+UPDATE_URL = os.environ.get("DJOS_UPDATE_URL",
+                            "https://api.github.com/repos/DJMalte96/dj-office-studio/releases/latest")
+_update_cache = {"zeit": 0, "ergebnis": None}
+
+
+def _version_tupel(v):
+    return tuple(int(x) for x in re.findall(r"\d+", v or ""))
+
+
+@app.get("/api/update")
+def update_check():
+    """Neuestes Release auf GitHub mit der installierten Version vergleichen (höchstens alle 6 Stunden)."""
+    if not DESKTOP or not absender()["update_pruefen"]:
+        return jsonify({"aktiv": False})
+    if _update_cache["ergebnis"] and time.time() - _update_cache["zeit"] < 6 * 3600:
+        return jsonify(_update_cache["ergebnis"])
+    try:
+        req = urllib.request.Request(UPDATE_URL, headers={"User-Agent": "DJ-Office-Studio-Desktop",
+                                                          "Accept": "application/vnd.github+json"})
+        with urllib.request.urlopen(req, timeout=5) as r:
+            daten = json.loads(r.read())
+        neueste = re.sub(r"^[^\d]*", "", daten.get("tag_name", ""))   # „desktop-v0.11.0“ → „0.11.0“
+        ergebnis = {"aktiv": True, "installiert": APP_VERSION, "neueste": neueste,
+                    "verfuegbar": _version_tupel(neueste) > _version_tupel(APP_VERSION),
+                    "url": daten.get("html_url")}
+    except Exception as e:   # offline o. Ä. – kein Fehler für den Nutzer, nur kein Hinweis
+        app.logger.info("Update-Prüfung nicht möglich: %s", e)
+        return jsonify({"aktiv": True, "fehler": True, "installiert": APP_VERSION})
+    _update_cache.update(zeit=time.time(), ergebnis=ergebnis)
+    return jsonify(ergebnis)
 
 
 @app.get("/api/absender")

@@ -190,10 +190,33 @@ $("#einstellungen").addEventListener("submit", async e => {
   try {
     const res = await api("einstellungen", { method: "PUT", body: daten });
     await ladeAbsender();
+    pruefeUpdate();
     toast(res.hinweise.length ? `Gespeichert. Hinweis: ${res.hinweise.join(" ")}` : "Einstellungen gespeichert", !!res.hinweise.length);
     // Neue Startnummern sofort im Editor berücksichtigen
     if (!state.editId) $("#r-nummer").value = (await api(istAngebot() ? "angebote/naechste-nummer" : "rechnungen/naechste-nummer")).nummer;
   } catch (err) { toast(err.message, true); }
+});
+
+/* Desktop-Version: nach neuer Version suchen und ggf. Hinweis zeigen (ausgeblendete Version wird gemerkt). */
+async function pruefeUpdate() {
+  if (!state.absender?.desktop) return;
+  let u;
+  try { u = await api("update"); } catch (_) { return; }
+  const status = $("#update-status");
+  status.innerHTML = !u.aktiv ? "" : u.fehler ? `· <span class="hint">Update-Prüfung nicht möglich (offline?)</span>`
+    : u.verfuegbar ? `· <a href="${esc(u.url)}" target="_blank" rel="noopener"><b>Update auf ${esc(u.neueste)} verfügbar ↗</b></a>`
+    : `· <span class="frist gruen">aktuell</span>`;
+  const zeigen = u.aktiv && u.verfuegbar && localStorage.getItem("update-ausgeblendet") !== u.neueste;
+  if (zeigen) {
+    $("#update-version").textContent = u.neueste;
+    $("#update-installiert").textContent = u.installiert;
+    $("#update-link").href = u.url;
+  }
+  $("#update-banner").classList.toggle("hidden", !zeigen);
+}
+$("#update-zu").addEventListener("click", () => {
+  localStorage.setItem("update-ausgeblendet", $("#update-version").textContent);
+  $("#update-banner").classList.add("hidden");
 });
 
 /* Absender-Infos laden und alles aktualisieren, was davon abhängt (Hinweis-Banner, Paperless-Buttons …). */
@@ -1382,6 +1405,7 @@ async function renderStart() {
 (async () => {
   try {
     await ladeAbsender();
+    pruefeUpdate();   // läuft im Hintergrund
     await loadLookups();
     await resetForm();
     await renderStart();

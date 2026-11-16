@@ -408,3 +408,9 @@ tr.angebot-zu td.btns, tr.angebot-zu td.auswahl-spalte, tr.angebot-zu td:nth-chi
 .info-karte { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; }
 body.desktop .nur-ha { display: none; }
 body:not(.desktop) .nur-desktop { display: none; }
+.update-banner { display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  background: var(--primary-soft); color: var(--text); border-color: var(--neon); }
+.update-banner span { flex: 1; }
+.update-banner.hidden { display: none !important; }
+#update-status a { color: var(--text); }
+#tab-einstellungen .update-option { margin: -6px 0 16px; }

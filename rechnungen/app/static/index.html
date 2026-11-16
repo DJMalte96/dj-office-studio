@@ -70,6 +70,11 @@
     Absenderdaten (Name, IBAN …) fehlen noch. Bitte oben rechts unter
     <a href="#" class="zu-einstellungen"><b>⚙ Einstellungen</b></a> eintragen – daraus werden Absenderzeile und Fußzeile erzeugt.
   </div>
+  <div id="update-banner" class="banner update-banner hidden">
+    <span>Neue Version <b id="update-version"></b> von DJ Office Studio verfügbar (installiert: <span id="update-installiert"></span>).</span>
+    <a id="update-link" href="#" target="_blank" rel="noopener"><b>Herunterladen ↗</b></a>
+    <button type="button" id="update-zu" class="icon" title="Ausblenden">✕</button>
+  </div>
   <div id="toast" class="toast hidden"></div>
 
   <main>
@@ -332,9 +337,12 @@
           </div>
         </div>
         <div class="card info-karte">
-          <div><strong>DJ Office Studio</strong> <span class="hint">Version <span id="app-version">–</span></span></div>
+          <div><strong>DJ Office Studio</strong> <span class="hint">Version <span id="app-version">–</span></span>
+            <span id="update-status" class="nur-desktop"></span></div>
           <a href="https://github.com/DJMalte96/dj-office-studio/blob/main/rechnungen/CHANGELOG.md" target="_blank" rel="noopener" class="mehr">Was ist neu? (Changelog) ↗</a>
         </div>
+        <label class="inline nur-desktop update-option"><input type="checkbox" name="update_pruefen">
+          Beim Start nach neuen Versionen suchen (fragt bei GitHub nach – es werden keine Daten übertragen)</label>
         <div class="actions">
           <button type="button" id="einstellungen-verwerfen" class="secondary">Änderungen verwerfen</button>
           <button type="submit">Einstellungen speichern</button>

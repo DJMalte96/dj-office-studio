@@ -3,3 +3,7 @@ __pycache__/
 .DS_Store
 dist/
 build/
+
+# Daten der Desktop-App (liegt bei Malte im selben Ordner wie das Projekt)
+Daten/
+PDFs/
