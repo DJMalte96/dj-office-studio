@@ -578,6 +578,47 @@ function renderOffen() {
 
 // ---------- Archiv (bezahlte Rechnungen) ----------
 
+const plChip = r => ` <button type="button" class="pl-chip" data-act="pl-reset" title="An Paperless übertragen am ${
+  fmtDate(r.paperless_am.slice(0, 10))} – klicken zum Zurücksetzen"><span class="pl-ok">Paperless ✓</span><span class="pl-x">Paperless ✕</span></button>`;
+
+/* Link-Download (Server sendet Content-Disposition: attachment) */
+function ladeHerunter(url) {
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
+/* Markierte Belege in den Paperless-Eingang legen. art: "rechnung" | "angebot" */
+async function anPaperless({ btn, ids, art, belege, name, neuLaden }) {
+  if (!ids.length) return [];
+  const wort = art === "angebot" ? ["Angebot", "Angebote"] : ["Rechnung", "Rechnungen"];
+  const schon = belege.filter(r => ids.includes(r.id) && r.paperless_am);
+  if (schon.length && !confirm(`${schon.length === 1 ? `${name(schon[0])} wurde` : `${schon.length} der ${wort[1]} wurden`}`
+      + " bereits an Paperless übertragen. Trotzdem erneut senden? (Paperless legt dann ein zweites Dokument an.)")) return [];
+  btn.disabled = true;
+  btn.textContent = `Sende ${ids.length} …`;
+  try {
+    const res = await api("paperless", { method: "POST", body: { ids, art } });
+    await neuLaden();
+    if (res.fehler.length) {
+      const nicht = ids.length - res.ok.length;
+      toast(`${res.ok.length ? `${res.ok.length} übertragen, ` : ""}${nicht} nicht übertragen: ${res.fehler[0].error}`, true);
+    } else {
+      toast(`${res.ok.length} ${res.ok.length === 1 ? wort[0] : wort[1]} in den Paperless-Eingang gelegt – Paperless verarbeitet sie jetzt.`);
+    }
+    return res.ok;
+  } catch (err) {
+    toast(err.message, true);
+    return [];
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "⇪ An Paperless senden";
+  }
+}
+
 const auswahl = new Set();   // IDs der im Archiv markierten Rechnungen
 
 function renderListe() {
@@ -597,7 +638,7 @@ function renderListe() {
     <tr data-id="${r.id}"${auswahl.has(r.id) ? ' class="markiert"' : ""}>
       <td class="auswahl-spalte"><input type="checkbox" class="auswahl"${auswahl.has(r.id) ? " checked" : ""} title="Markieren (Herunterladen / Paperless)"></td>
       <td>${esc(r.nummer)}${r.paperless_am
-        ? ` <button type="button" class="pl-chip" data-act="pl-reset" title="An Paperless übertragen am ${fmtDate(r.paperless_am.slice(0, 10))} – klicken zum Zurücksetzen"><span class="pl-ok">Paperless ✓</span><span class="pl-x">Paperless ✕</span></button>` : ""}</td>
+        ? plChip(r) : ""}</td>
       <td>${fmtDate(r.datum)}</td>
       <td>${esc(r.kunde.name)}<br><small>${esc(r.kunde.ort)}</small></td>
       <td class="num">${fmtEuro(r.gesamt)}</td>
@@ -638,43 +679,15 @@ $("#auswahl-alle").addEventListener("change", e => {
 $("#btn-auswahl-aufheben").addEventListener("click", () => { auswahl.clear(); renderListe(); });
 
 $("#btn-auswahl-paperless").addEventListener("click", async e => {
-  const ids = [...auswahl];
-  if (!ids.length) return;
-  const schon = state.rechnungen.filter(r => auswahl.has(r.id) && r.paperless_am);
-  if (schon.length && !confirm(`${schon.length === 1 ? `${rechnungsName(schon[0])} wurde` : `${schon.length} der Rechnungen wurden`}`
-      + " bereits an Paperless übertragen. Trotzdem erneut senden? (Paperless legt dann ein zweites Dokument an.)")) return;
-
-  const btn = e.currentTarget;
-  btn.disabled = true;
-  btn.textContent = `Sende ${ids.length} …`;
-  try {
-    const res = await api("paperless", { method: "POST", body: { ids } });
-    await loadListe();
-    res.ok.forEach(id => auswahl.delete(id));
-    renderListe();
-    if (res.fehler.length) {
-      const nicht = ids.length - res.ok.length;
-      toast(`${res.ok.length ? `${res.ok.length} übertragen, ` : ""}${nicht} nicht übertragen: ${res.fehler[0].error}`, true);
-    } else {
-      toast(`${res.ok.length} Rechnung${res.ok.length === 1 ? "" : "en"} in den Paperless-Eingang gelegt – Paperless verarbeitet sie jetzt.`);
-    }
-  } catch (err) {
-    toast(err.message, true);
-  } finally {
-    btn.disabled = false;
-    btn.textContent = "⇪ An Paperless senden";
-  }
+  const ok = await anPaperless({ btn: e.currentTarget, ids: [...auswahl], art: "rechnung",
+    belege: state.rechnungen, name: rechnungsName, neuLaden: loadListe });
+  ok.forEach(id => auswahl.delete(id));
+  renderListe();
 });
 
 $("#btn-auswahl-download").addEventListener("click", () => {
   if (!auswahl.size) return;
-  // Normaler Link-Download (Server sendet Content-Disposition: attachment)
-  const a = document.createElement("a");
-  a.href = `api/rechnungen/download?ids=${[...auswahl].join(",")}`;
-  a.download = "";
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
+  ladeHerunter(`api/rechnungen/download?ids=${[...auswahl].join(",")}`);
   toast(auswahl.size === 1 ? "PDF wird heruntergeladen …"
                            : `${auswahl.size} Rechnungen werden als ZIP heruntergeladen …`);
 });
@@ -747,6 +760,7 @@ $("#tab-liste").addEventListener("click", async e => {
 // ---------- Angebote ----------
 
 const STATUS_TEXT = { offen: "offen", angenommen: "angenommen", abgelehnt: "abgelehnt" };
+const auswahlA = new Set();   // IDs der markierten Angebote
 const angebotName = a => a.name || `Angebot_${a.nummer}`;
 
 async function loadAngebote() {
@@ -778,8 +792,9 @@ function renderAngebote() {
     !q || [angebotName(a), a.nummer, a.kunde.name, a.kunde.ort, ...a.positionen.map(p => p.beschreibung)]
       .join(" ").toLowerCase().includes(q));
   $("#angebote-body").innerHTML = list.map(a => `
-    <tr data-id="${a.id}"${a.status === "offen" ? "" : ' class="angebot-zu"'}>
-      <td>${esc(a.nummer)}</td>
+    <tr data-id="${a.id}" class="${a.status === "offen" ? "" : "angebot-zu"}${auswahlA.has(a.id) ? " markiert" : ""}">
+      <td class="auswahl-spalte"><input type="checkbox" class="auswahl"${auswahlA.has(a.id) ? " checked" : ""} title="Markieren (Herunterladen / Paperless)"></td>
+      <td>${esc(a.nummer)}${a.paperless_am ? plChip(a) : ""}</td>
       <td>${fmtDate(a.datum)}</td>
       <td>${esc(a.kunde.name)}<br><small>${esc(a.kunde.ort)}</small></td>
       <td class="num">${fmtEuro(a.gesamt)}</td>
@@ -793,16 +808,58 @@ function renderAngebote() {
         <button class="small danger" data-act="del">Löschen</button>
       </td>
     </tr>`).join("") ||
-    `<tr><td colspan="7" class="hint">${q ? "Keine Treffer." : "Noch keine Angebote – mit „＋ Neues Angebot“ das erste schreiben."}</td></tr>`;
+    `<tr><td colspan="8" class="hint">${q ? "Keine Treffer." : "Noch keine Angebote – mit „＋ Neues Angebot“ das erste schreiben."}</td></tr>`;
   const offen = state.angebote.filter(a => a.status === "offen");
   $("#angebote-summe").textContent = state.angebote.length
     ? `${state.angebote.length} Angebot${state.angebote.length === 1 ? "" : "e"} · ${offen.length} offen`
       + (offen.length ? ` (${fmtEuro(offen.reduce((s, a) => s + a.gesamt, 0))})` : "") : "";
+  renderAuswahlA();
 }
+
+function renderAuswahlA() {
+  const vorhanden = new Set(state.angebote.map(a => a.id));
+  [...auswahlA].forEach(id => { if (!vorhanden.has(id)) auswahlA.delete(id); });
+  const n = auswahlA.size;
+  $("#a-auswahl-leiste").classList.toggle("hidden", !n);
+  $("#a-auswahl-anzahl").textContent = `${n} Angebot${n === 1 ? "" : "e"} ausgewählt`;
+  const sichtbar = $$("#angebote-body tr[data-id]").map(tr => Number(tr.dataset.id));
+  const markiert = sichtbar.filter(id => auswahlA.has(id)).length;
+  const alle = $("#a-auswahl-alle");
+  alle.checked = sichtbar.length > 0 && markiert === sichtbar.length;
+  alle.indeterminate = markiert > 0 && markiert < sichtbar.length;
+  alle.disabled = !sichtbar.length;
+}
+
+$("#a-auswahl-alle").addEventListener("change", e => {
+  $$("#angebote-body tr[data-id]").forEach(tr => {
+    const id = Number(tr.dataset.id);
+    if (e.target.checked) auswahlA.add(id); else auswahlA.delete(id);
+  });
+  renderAngebote();
+});
+$("#btn-a-auswahl-aufheben").addEventListener("click", () => { auswahlA.clear(); renderAngebote(); });
+$("#btn-a-auswahl-download").addEventListener("click", () => {
+  if (!auswahlA.size) return;
+  ladeHerunter(`api/angebote/download?ids=${[...auswahlA].join(",")}`);
+  toast(auswahlA.size === 1 ? "PDF wird heruntergeladen …" : `${auswahlA.size} Angebote werden als ZIP heruntergeladen …`);
+});
+$("#btn-a-auswahl-paperless").addEventListener("click", async e => {
+  const ok = await anPaperless({ btn: e.currentTarget, ids: [...auswahlA], art: "angebot",
+    belege: state.angebote, name: angebotName, neuLaden: loadAngebote });
+  ok.forEach(id => auswahlA.delete(id));
+  renderAngebote();
+});
 $("#angebote-suche").addEventListener("input", renderAngebote);
 $("#btn-angebot-neu").addEventListener("click", neuesAngebot);
 
 $("#angebote-body").addEventListener("change", async e => {
+  if (e.target.classList.contains("auswahl")) {   // Markierung
+    const tr = e.target.closest("tr");
+    const id = Number(tr.dataset.id);
+    if (e.target.checked) auswahlA.add(id); else auswahlA.delete(id);
+    tr.classList.toggle("markiert", e.target.checked);
+    return renderAuswahlA();
+  }
   if (!e.target.classList.contains("status-select")) return;
   const id = Number(e.target.closest("tr").dataset.id);
   const a = state.angebote.find(x => x.id === id);
@@ -827,6 +884,14 @@ $("#angebote-body").addEventListener("click", async e => {
   try {
     if (btn.dataset.act === "pdf") window.open(`api/angebote/${id}/pdf`, "_blank");
     if (btn.dataset.act === "edit") loadAngebotIntoForm(a);
+    if (btn.dataset.act === "pl-reset" && confirm(`Paperless-Markierung bei ${angebotName(a)} zurücksetzen?\n\n`
+        + "Das Angebot gilt dann wieder als nicht übertragen und kann erneut an Paperless gesendet werden. "
+        + "Die Datei in Paperless selbst bleibt davon unberührt.")) {
+      await api(`angebote/${id}/paperless`, { method: "DELETE" });
+      a.paperless_am = null;
+      renderAngebote();
+      toast(`Paperless-Markierung bei ${angebotName(a)} zurückgesetzt`);
+    }
     if (btn.dataset.act === "rechnung") await angebotZuRechnung(a);
     if (btn.dataset.act === "del" && confirm(`${angebotName(a)} wirklich löschen?`)) {
       await api("angebote/" + id, { method: "DELETE" });
@@ -1186,7 +1251,7 @@ async function renderStart() {
     const abs = await api("absender");
     state.absender = abs;
     $("#warnung").classList.toggle("hidden", abs.vollstaendig);
-    $("#btn-auswahl-paperless").classList.toggle("hidden", !abs.paperless);   // nur mit paperless_installiert
+    $$(".pl-button").forEach(b => b.classList.toggle("hidden", !abs.paperless));   // nur mit paperless_installiert
     await loadLookups();
     await resetForm();
     await renderStart();
