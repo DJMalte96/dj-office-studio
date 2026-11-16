@@ -52,8 +52,8 @@ h1 { font-size: 18px; font-weight: 750; letter-spacing: -.02em; margin: 0; displ
 h2 { font-size: 15px; font-weight: 650; letter-spacing: -.01em; margin: 0 0 16px; }
 
 #logo { cursor: pointer; }
-.theme-toggle {
-  margin-left: auto; display: grid; place-items: center; width: 38px; height: 38px; padding: 0;
+.header-rechts { margin-left: auto; }
+.theme-toggle { display: grid; place-items: center; width: 38px; height: 38px; padding: 0;
   background: var(--input-bg); color: var(--text); border: 1px solid var(--border); border-radius: 10px;
   box-shadow: none; cursor: pointer; transition: border-color .15s;
 }
@@ -394,3 +394,14 @@ select.status-select.abgelehnt { color: var(--muted); }
 tr.angebot-zu td { opacity: .6; }
 tr.angebot-zu td.btns, tr.angebot-zu td.auswahl-spalte, tr.angebot-zu td:nth-child(7) { opacity: 1; }
 .nowrap { white-space: nowrap; }
+
+/* ---------- Einstellungen ---------- */
+#einstellungen-btn.active { border-color: var(--neon); color: var(--ink); }
+#tab-einstellungen h2.abstand { margin-top: 22px; }
+#tab-einstellungen label.inline { display: flex; gap: 10px; align-items: flex-start; font-weight: 500; margin-top: 6px; }
+#tab-einstellungen label.inline input { margin-top: 3px; }
+.banner a { color: inherit; }
+#tab-einstellungen .grid2 { margin-bottom: 20px; }
+#tab-einstellungen .grid2 > .card { margin: 0; }
+#tab-einstellungen label.inline { margin-bottom: 14px; }
+#tab-einstellungen p.hint { margin: 0 0 14px; }

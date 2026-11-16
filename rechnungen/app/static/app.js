@@ -90,6 +90,8 @@ function showTab(name) {
   document.body.classList.toggle("auf-start", name === "start");
   if (name === "liste") loadListe();
   if (name === "angebote") loadAngebote();
+  if (name === "einstellungen") ladeEinstellungen();
+  $("#einstellungen-btn").classList.toggle("active", name === "einstellungen");
   if (name === "start") renderStart();
   const stamm = $(`#tab-${name}[data-stamm]`);
   if (stamm) renderStamm(stamm.dataset.stamm);
@@ -155,6 +157,53 @@ $("#r-datum").addEventListener("change", e => {
 });
 $("#a-gueltig").addEventListener("input", () => { state.gueltigAuto = false; });
 $("#logo").addEventListener("click", () => showTab("start"));
+
+// ---------- Einstellungen ----------
+
+$("#einstellungen-btn").addEventListener("click", () => showTab("einstellungen"));
+document.addEventListener("click", e => {
+  if (e.target.closest(".zu-einstellungen")) { e.preventDefault(); showTab("einstellungen"); }
+});
+
+async function ladeEinstellungen() {
+  const werte = await api("einstellungen");
+  const form = $("#einstellungen");
+  for (const [k, v] of Object.entries(werte)) {
+    const feld = form.elements[k];
+    if (!feld) continue;
+    if (feld.type === "checkbox") feld.checked = !!v; else feld.value = v ?? "";
+  }
+}
+
+$("#einstellungen-verwerfen").addEventListener("click", () => {
+  ladeEinstellungen();
+  toast("Änderungen verworfen");
+});
+
+$("#einstellungen").addEventListener("submit", async e => {
+  e.preventDefault();
+  const form = e.target;
+  const daten = {};
+  [...form.elements].filter(f => f.name).forEach(f => {
+    daten[f.name] = f.type === "checkbox" ? f.checked : f.value;
+  });
+  try {
+    const res = await api("einstellungen", { method: "PUT", body: daten });
+    await ladeAbsender();
+    toast(res.hinweise.length ? `Gespeichert. Hinweis: ${res.hinweise.join(" ")}` : "Einstellungen gespeichert", !!res.hinweise.length);
+    // Neue Startnummern sofort im Editor berücksichtigen
+    if (!state.editId) $("#r-nummer").value = (await api(istAngebot() ? "angebote/naechste-nummer" : "rechnungen/naechste-nummer")).nummer;
+  } catch (err) { toast(err.message, true); }
+});
+
+/* Absender-Infos laden und alles aktualisieren, was davon abhängt (Hinweis-Banner, Paperless-Buttons …). */
+async function ladeAbsender() {
+  const abs = await api("absender");
+  state.absender = abs;
+  $("#warnung").classList.toggle("hidden", abs.vollstaendig);
+  $$(".pl-button").forEach(b => b.classList.toggle("hidden", !abs.paperless));   // nur mit „Paperless installiert“
+  return abs;
+}
 
 // ---------- Hell/Dunkel ----------
 $("#theme-toggle").addEventListener("click", () => {
@@ -1307,7 +1356,7 @@ async function renderStart() {
   // Hinweise, die die App selbst erkennt
   const hinweise = [];
   if (state.absender && !state.absender.vollstaendig) {
-    hinweise.push(["warn", "Absenderdaten fehlen – in Home Assistant unter Apps → DJ Office Studio → Konfiguration eintragen."]);
+    hinweise.push(["warn", `Absenderdaten fehlen – bitte unter <a href="#" class="zu-einstellungen">⚙ Einstellungen</a> eintragen.`]);
   }
   for (const r of offen.filter(r => r.ziel && r.ziel.rest < 0)) {
     hinweise.push(["rot", `<a href="#" class="start-rlink" data-id="${r.id}">${esc(rechnungsName(r))}</a> ist seit ${-r.ziel.rest} ${-r.ziel.rest === 1 ? "Tag" : "Tagen"} überfällig (${esc(r.kunde.name)}, ${fmtEuro(r.gesamt)}).`]);
@@ -1330,10 +1379,7 @@ async function renderStart() {
 
 (async () => {
   try {
-    const abs = await api("absender");
-    state.absender = abs;
-    $("#warnung").classList.toggle("hidden", abs.vollstaendig);
-    $$(".pl-button").forEach(b => b.classList.toggle("hidden", !abs.paperless));   // nur mit paperless_installiert
+    await ladeAbsender();
     await loadLookups();
     await resetForm();
     await renderStart();

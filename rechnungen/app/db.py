@@ -50,6 +50,10 @@ CREATE TABLE IF NOT EXISTS rechnungen (
     bezahlt INTEGER DEFAULT 0,
     erstellt TEXT DEFAULT CURRENT_TIMESTAMP
 );
+CREATE TABLE IF NOT EXISTS einstellungen (
+    schluessel TEXT PRIMARY KEY,
+    wert TEXT                              -- JSON-Wert
+);
 CREATE TABLE IF NOT EXISTS angebote (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     nummer TEXT NOT NULL UNIQUE,
@@ -308,3 +312,17 @@ def set_offer_status(offer_id, status, rechnung_id=None):
 def delete_offer(offer_id):
     with connect() as con:
         con.execute("DELETE FROM angebote WHERE id = ?", (offer_id,))
+
+
+# ---------- Einstellungen (Absender, Bank, Nummern, Paperless …) ----------
+
+def get_settings():
+    with connect() as con:
+        return {r["schluessel"]: json.loads(r["wert"]) for r in con.execute("SELECT * FROM einstellungen")}
+
+
+def save_settings(werte):
+    with connect() as con:
+        con.executemany("INSERT INTO einstellungen (schluessel, wert) VALUES (?, ?)"
+                        " ON CONFLICT(schluessel) DO UPDATE SET wert = excluded.wert",
+                        [(k, json.dumps(v)) for k, v in werte.items()])
