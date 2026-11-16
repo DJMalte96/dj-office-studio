@@ -2,6 +2,11 @@
 
 Alle Änderungen an DJ Office Studio. Neueste Version oben.
 
+## 0.11.1 – 2026-11-16
+
+### Behoben
+- Desktop-Version (Mac): Die Update-Prüfung meldete „nicht möglich“, weil die gebündelte App die Zertifikate für die sichere Verbindung zu GitHub nicht fand. Die Zertifikate werden jetzt mitgeliefert.
+
 ## 0.11.0 – 2026-11-16
 
 ### Neu
