@@ -193,8 +193,14 @@
             <option value="kunde:desc">Kunde – Z bis A</option>
           </select>
         </div>
+        <div id="auswahl-leiste" class="auswahl-leiste hidden">
+          <span id="auswahl-anzahl"></span>
+          <button type="button" id="btn-auswahl-download" class="small">⇩ Herunterladen</button>
+          <button type="button" id="btn-auswahl-aufheben" class="small secondary">Auswahl aufheben</button>
+        </div>
         <table class="list">
           <thead><tr>
+            <th class="auswahl-spalte"><input type="checkbox" id="auswahl-alle" title="Alle angezeigten Rechnungen auswählen"></th>
             <th data-sort="nummer">Nr.</th><th data-sort="datum">Datum</th><th data-sort="kunde">Kunde</th>
             <th class="num" data-sort="gesamt">Betrag</th><th title="Haken entfernen = zurück zu den offenen Rechnungen">Bezahlt</th><th></th>
           </tr></thead>
