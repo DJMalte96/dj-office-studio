@@ -520,7 +520,7 @@ $("#btn-auswahl-paperless").addEventListener("click", async e => {
   if (!ids.length) return;
   if (!state.absender?.paperless) {
     return toast("Paperless ist noch nicht eingerichtet: In Home Assistant unter Einstellungen → Apps → "
-      + "DJ Office Studio → Konfiguration „paperless_url“ und „paperless_token“ eintragen und die App neu starten.", true);
+      + "DJ Office Studio → Konfiguration „paperless_eingangsordner“ eintragen und die App neu starten.", true);
   }
   const schon = state.rechnungen.filter(r => auswahl.has(r.id) && r.paperless_am);
   if (schon.length && !confirm(`${schon.length === 1 ? `${rechnungsName(schon[0])} wurde` : `${schon.length} der Rechnungen wurden`}`
@@ -538,7 +538,7 @@ $("#btn-auswahl-paperless").addEventListener("click", async e => {
       const nicht = ids.length - res.ok.length;
       toast(`${res.ok.length ? `${res.ok.length} übertragen, ` : ""}${nicht} nicht übertragen: ${res.fehler[0].error}`, true);
     } else {
-      toast(`${res.ok.length} Rechnung${res.ok.length === 1 ? "" : "en"} an Paperless übertragen – Paperless verarbeitet sie jetzt.`);
+      toast(`${res.ok.length} Rechnung${res.ok.length === 1 ? "" : "en"} in den Paperless-Eingang gelegt – Paperless verarbeitet sie jetzt.`);
     }
   } catch (err) {
     toast(err.message, true);

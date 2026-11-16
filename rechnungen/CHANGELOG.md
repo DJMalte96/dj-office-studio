@@ -2,6 +2,12 @@
 
 Alle Änderungen an DJ Office Studio. Neueste Version oben.
 
+## 0.7.0 – 2026-11-16
+
+### Geändert
+- **Paperless über den Eingangsordner**: „An Paperless senden“ legt die PDFs jetzt einfach in den Eingangsordner (consume) von Paperless – keine Adresse, kein API-Token und keine Port-Freigabe mehr nötig. Paperless liest sie von dort automatisch ein.
+- Neue Option `paperless_eingangsordner` (Standard: `/share/paperless/consume`); `paperless_url` und `paperless_token` entfallen.
+
 ## 0.6.2 – 2026-11-16
 
 ### Geändert
