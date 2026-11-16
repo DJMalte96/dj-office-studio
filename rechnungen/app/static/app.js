@@ -475,7 +475,7 @@ function renderListe() {
     <tr data-id="${r.id}"${auswahl.has(r.id) ? ' class="markiert"' : ""}>
       <td class="auswahl-spalte"><input type="checkbox" class="auswahl"${auswahl.has(r.id) ? " checked" : ""} title="Markieren (Herunterladen / Paperless)"></td>
       <td>${esc(r.nummer)}${r.paperless_am
-        ? ` <span class="pl-chip" title="An Paperless übertragen am ${fmtDate(r.paperless_am.slice(0, 10))}">Paperless ✓</span>` : ""}</td>
+        ? ` <button type="button" class="pl-chip" data-act="pl-reset" title="An Paperless übertragen am ${fmtDate(r.paperless_am.slice(0, 10))} – klicken zum Zurücksetzen"><span class="pl-ok">Paperless ✓</span><span class="pl-x">Paperless ✕</span></button>` : ""}</td>
       <td>${fmtDate(r.datum)}</td>
       <td>${esc(r.kunde.name)}<br><small>${esc(r.kunde.ort)}</small></td>
       <td class="num">${fmtEuro(r.gesamt)}</td>
@@ -605,6 +605,14 @@ $("#tab-liste").addEventListener("click", async e => {
   try {
     if (btn.dataset.act === "pdf") window.open(`api/rechnungen/${id}/pdf`, "_blank");
     if (btn.dataset.act === "edit") loadIntoForm(inv);
+    if (btn.dataset.act === "pl-reset" && confirm(`Paperless-Markierung bei ${rechnungsName(inv)} zurücksetzen?\n\n`
+        + "Die Rechnung gilt dann wieder als nicht übertragen und kann erneut an Paperless gesendet werden. "
+        + "Die Datei in Paperless selbst bleibt davon unberührt.")) {
+      await api(`rechnungen/${id}/paperless`, { method: "DELETE" });
+      inv.paperless_am = null;
+      renderListe();
+      toast(`Paperless-Markierung bei ${rechnungsName(inv)} zurückgesetzt`);
+    }
     if (btn.dataset.act === "del" && confirm(`${rechnungsName(inv)} wirklich löschen?`)) {
       await api("rechnungen/" + id, { method: "DELETE" });
       if (state.editId === id) resetForm();

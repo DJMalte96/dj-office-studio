@@ -204,6 +204,13 @@ def invoices_update(inv_id):
     return jsonify({"id": inv_id, "datei": _write_pdf_file(inv)})
 
 
+@app.delete("/api/rechnungen/<int:inv_id>/paperless")
+def invoices_paperless_reset(inv_id):
+    """Markierung „an Paperless übertragen“ zurücksetzen (z. B. weil das Dokument dort gelöscht wurde)."""
+    db.set_paperless(inv_id, None)
+    return "", 204
+
+
 @app.patch("/api/rechnungen/<int:inv_id>/bezahlt")
 def invoices_paid(inv_id):
     db.set_paid(inv_id, request.get_json().get("bezahlt"))
