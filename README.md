@@ -4,7 +4,7 @@
 
 Eine Home-Assistant-App zum Schreiben von DJ-Rechnungen und -Angeboten. Kunden auswählen, Rechnungsposten und Uhrzeiten eintragen, Preis festlegen – fertig ist das PDF im Layout der bisherigen Word-Vorlage.
 
-![Screenshot: Rechnung erstellen](docs/rechnungseditor.png)
+![Screenshot: Rechnung erstellen](docs/bilder/rechnungseditor.png)
 
 ## Funktionen
 
@@ -39,6 +39,8 @@ Eine Home-Assistant-App zum Schreiben von DJ-Rechnungen und -Angeboten. Kunden a
 
 Alle Einstellungen werden **in der App** gemacht: oben rechts auf **⚙** klicken.
 
+![Screenshot: Einstellungen](docs/bilder/einstellungen.png)
+
 | Bereich | Felder |
 |---|---|
 | Absender | Name (Absender, Gruß, Kontoinhaber), Straße, PLZ und Ort, Telefon, Ort vor dem Datum („Musterstadt, den …“) |
@@ -65,13 +67,13 @@ Oben in der Kopfzeile gibt es auf jeder Seite das Menü: **Start**, **Rechnungen
 
 **Start:** Die Startseite öffnet sich beim Aufruf. Über das Menü oder die Kacheln geht es direkt zu jedem Bereich der App (inkl. Import alter Rechnungen und Angebote). Ein Klick auf das Logo führt zurück zur Startseite. Darunter steht der aktuelle Stand: offene Rechnungen mit Restzeit, offene Angebote mit Restlaufzeit, Umsatz und die letzten Rechnungen – plus Hinweise bei überfälligen Rechnungen und bald ablaufenden Angeboten.
 
-![Screenshot: Startseite](docs/startseite.png)
+![Screenshot: Startseite](docs/bilder/startseite.png)
 
 **Neue Rechnung:** Kundennamen eintippen und einen Vorschlag übernehmen (oder neue Adresse eingeben). Pro Position einen Rechnungsposten wählen, von/bis eintragen, Lieferdatum und Preis ergänzen. Zahlungsbedingung wählen, dann **PDF-Vorschau** oder **Rechnung speichern & PDF öffnen**.
 
 **Angebote:** Über **Angebote → Neues Angebot** im selben Editor schreiben – zusätzlich mit **Gültig bis** und freien **Hinweisen** (z. B. Verlängerungsstunde, GEMA). In **Angebote → Angebote** stehen oben die offenen Angebote mit Restlaufzeit, darunter alle Angebote mit Status (offen / angenommen / abgelehnt). **→ Rechnung** macht aus einem Angebot eine neue Rechnung und markiert es als angenommen.
 
-![Screenshot: Angebote](docs/angebote.png)
+![Screenshot: Angebote](docs/bilder/angebote.png)
 
 **Rechnungsposten:** Unter **Stammdaten → Rechnungsposten** neue Rechnungsposten (z. B. Hochzeit) anlegen. Ohne eigene Text-Vorlage wird `DJ – Tätigkeit <Bezeichnung> – {von} Uhr bis {bis} Uhr` verwendet; `{von}` und `{bis}` werden durch die Uhrzeiten ersetzt.
 
