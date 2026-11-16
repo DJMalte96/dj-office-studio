@@ -773,7 +773,7 @@ async function loadAngebote() {
 function gueltigBadge(a) {
   if (a.status === "angenommen") {
     const r = a.rechnung_id && state.rechnungen.find(x => x.id === a.rechnung_id);
-    return r ? `<a href="#" class="rlink" data-rechnung="${r.id}" title="Rechnung öffnen">→ ${esc(rechnungsName(r))}</a>`
+    return r ? `<a href="#" class="rlink nowrap" data-rechnung="${r.id}" title="${esc(rechnungsName(r))} öffnen">→ Rechnung ${esc(r.nummer)}</a>`
              : `<span class="frist gruen">angenommen</span>`;
   }
   if (a.status === "abgelehnt") return `<span class="frist neutral">abgelehnt</span>`;

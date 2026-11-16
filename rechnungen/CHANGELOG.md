@@ -2,6 +2,12 @@
 
 Alle Änderungen an DJ Office Studio. Neueste Version oben.
 
+## 0.8.6 – 2026-11-16
+
+### Geändert
+- Angebotsliste: Bei angenommenen Angeboten steht der Link zur Rechnung jetzt kurz als „→ Rechnung 040“ (voller Name im Tooltip) – vorher konnte der lange Name die Tabelle über den Rand hinausschieben.
+- README: neue Screenshots (Rechnungseditor, Startseite mit offenen Angeboten, Angebotsansicht) und aktualisierte Bedienungshinweise.
+
 ## 0.8.5 – 2026-11-16
 
 ### Neu
