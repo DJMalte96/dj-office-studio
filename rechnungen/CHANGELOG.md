@@ -2,6 +2,11 @@
 
 Alle Änderungen an DJ Office Studio. Neueste Version oben.
 
+## 0.5.5 – 2026-11-16
+
+### Behoben
+- PDF: Bei längeren Rechnungen landete „Mit freundlichen Grüßen“ unten auf Seite 1 und der Name allein auf Seite 2. Gruß und Name bleiben jetzt immer zusammen – passt der Block nicht mehr auf die Seite, kommen beide gemeinsam auf die nächste.
+
 ## 0.5.4 – 2026-11-15
 
 ### Neu

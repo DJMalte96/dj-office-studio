@@ -146,7 +146,13 @@ def build_invoice_pdf(inv, absender):
     pdf.multi_cell(0, 5, inv.get("zahlungsbedingung") or "", align="L", new_x="LMARGIN", new_y="NEXT")
     pdf.ln(10)
     pdf.cell(0, 5, "Vielen Dank für Ihren Auftrag!", new_x="LMARGIN", new_y="NEXT")
-    pdf.ln(22)
+    # „Mit freundlichen Grüßen“ + Name immer zusammen: passt der Block (inkl. Abstand)
+    # nicht mehr auf die Seite, kommt er komplett auf die nächste.
+    gruss_block = 5 + 4 + 5
+    if pdf.will_page_break(22 + gruss_block):
+        pdf.add_page()
+    else:
+        pdf.ln(22)
     pdf.cell(0, 5, "Mit freundlichen Grüßen", new_x="LMARGIN", new_y="NEXT")
     pdf.ln(4)
     pdf.cell(0, 5, absender.get("name") or "", new_x="LMARGIN", new_y="NEXT")
