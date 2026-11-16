@@ -2,9 +2,9 @@
 
 # DJ Office Studio
 
-Eine Home-Assistant-App zum Schreiben von DJ-Rechnungen. Kunden auswählen, Rechnungsposten und Uhrzeiten eintragen, Preis festlegen – fertig ist das PDF im Layout der bisherigen Word-Vorlage.
+Eine Home-Assistant-App zum Schreiben von DJ-Rechnungen und -Angeboten. Kunden auswählen, Rechnungsposten und Uhrzeiten eintragen, Preis festlegen – fertig ist das PDF im Layout der bisherigen Word-Vorlage.
 
-![Screenshot: Rechnung erstellen](docs/screenshot.png)
+![Screenshot: Rechnung erstellen](docs/rechnungseditor.png)
 
 ## Funktionen
 
