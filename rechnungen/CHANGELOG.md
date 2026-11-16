@@ -2,6 +2,15 @@
 
 Alle Änderungen an DJ Office Studio. Neueste Version oben.
 
+## 0.9.0 – 2026-11-16
+
+### Neu
+- **Einstellungen direkt in der App**: Oben rechts gibt es jetzt **⚙ Einstellungen** – Absender (Name, Adresse, Telefon, Ort vor dem Datum), Bankverbindung, Steuernummer und Kleinunternehmer-Hinweis, Startnummern für Rechnungen und Angebote, Gültigkeit neuer Angebote, PDF-Ordner sowie Paperless werden dort eingetragen und sofort wirksam (kein Neustart der App nötig).
+- Der Hinweis „Absenderdaten fehlen“ verlinkt direkt auf die Einstellungen.
+
+### Geändert
+- **Umstieg**: Beim ersten Start übernimmt die App die bisherigen Werte aus der Home-Assistant-Konfiguration automatisch einmalig. Danach gelten nur noch die Einstellungen in der App – Änderungen in der Home-Assistant-Konfiguration haben keine Wirkung mehr. Die alten Felder dort werden in einer späteren Version entfernt.
+
 ## 0.8.6 – 2026-11-16
 
 ### Geändert

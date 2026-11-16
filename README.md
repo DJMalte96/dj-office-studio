@@ -32,40 +32,30 @@ Eine Home-Assistant-App zum Schreiben von DJ-Rechnungen und -Angeboten. Kunden a
    https://github.com/DJMalte96/ha-rechnungen
    ```
 3. **DJ Office Studio** im App-Store auswählen und **Installieren**. Beim ersten Mal wird das Image gebaut – das dauert ein paar Minuten.
-4. Im Tab **Konfiguration** die Absenderdaten eintragen (siehe unten).
-5. **Starten** und „In Seitenleiste anzeigen“ aktivieren.
+4. **Starten** und „In Seitenleiste anzeigen“ aktivieren.
+5. In der App oben rechts auf **⚙** klicken und Absenderdaten, Bankverbindung usw. eintragen (siehe unten).
 
-## Konfiguration
+## Einstellungen
 
-Die Absenderdaten erscheinen in der Absenderzeile und in der Fußzeile jeder Rechnung.
+Alle Einstellungen werden **in der App** gemacht: oben rechts auf **⚙** klicken.
 
-| Option | Beschreibung | Beispiel |
-|---|---|---|
-| `name` | Dein Name (Absender, Gruß, Kontoinhaber) | `Max Beispiel` |
-| `strasse` | Straße und Hausnummer | `Musterweg 1` |
-| `plz_ort` | PLZ und Ort | `12345 Musterstadt` |
-| `telefon` | Telefonnummer für die Fußzeile | `0170/1234567` |
-| `ort_fuer_datum` | Ort vor dem Rechnungsdatum („Musterstadt, den …“) | `Musterstadt` |
-| `bank_name` | Name der Bank | `Sparkasse Musterstadt` |
-| `kontoinhaber` | Abweichender Kontoinhaber (leer = `name`) | |
-| `iban` | IBAN | `DE00 0000 0000 0000 0000 00` |
-| `bic` | BIC | `ABCDEFGHXXX` |
-| `steuernummer` | Steuernummer | `12/345/67890` |
-| `kleinunternehmer` | Hinweis „Gem. §19 UStG … nicht umsatzsteuerpflichtig“ drucken | `true` |
-| `pdf_ordner` | Ordner für die PDF-Kopien | `/share/rechnungen` |
-| `startnummer` | Kleinste Rechnungsnummer; danach wird automatisch hochgezählt | `37` |
-| `angebot_startnummer` | Kleinste Angebotsnummer; danach wird automatisch hochgezählt | `1` |
-| `angebot_gueltigkeit_tage` | Vorgabe für „Gültig bis“ bei neuen Angeboten (Tage ab Angebotsdatum) | `30` |
-| `paperless_installiert` | Paperless-ngx ist installiert – blendet im Archiv den Button „An Paperless senden“ ein | `false` |
-| `paperless_eingangsordner` | Eingangsordner (consume) von Paperless-ngx; leer = Paperless-Funktion aus | `/share/paperless/consume` |
+| Bereich | Felder |
+|---|---|
+| Absender | Name (Absender, Gruß, Kontoinhaber), Straße, PLZ und Ort, Telefon, Ort vor dem Datum („Musterstadt, den …“) |
+| Bankverbindung | Bank, abweichender Kontoinhaber, IBAN, BIC |
+| Steuer | Steuernummer, Kleinunternehmer-Hinweis nach §19 UStG |
+| Nummern & Fristen | Rechnungen ab Nr., Angebote ab Nr. (danach wird automatisch hochgezählt), Gültigkeit neuer Angebote in Tagen |
+| Ablage & Paperless | Ordner für PDF-Kopien (Standard `/share/rechnungen`), „Paperless-ngx ist installiert“, Paperless-Eingangsordner |
 
-Solange Name oder IBAN fehlen, zeigt die App oben einen Hinweis.
+Die Angaben erscheinen in Absenderzeile, Gruß und Fußzeile jeder Rechnung und jedes Angebots. Solange Name oder IBAN fehlen, zeigt die App oben einen Hinweis mit Link zu den Einstellungen.
+
+> **Umstieg von älteren Versionen:** Bis Version 0.8 wurden diese Werte in Home Assistant unter *Einstellungen → Apps → DJ Office Studio → Konfiguration* eingetragen. Beim ersten Start ab Version 0.9 übernimmt die App sie automatisch einmalig in die eigenen Einstellungen; Änderungen in der Home-Assistant-Konfiguration haben danach keine Wirkung mehr.
 
 ### Paperless-ngx
 
-Ist `paperless_installiert` eingeschaltet, gibt es im Archiv bei markierten Rechnungen und in der Angebotsliste bei markierten Angeboten den Button **⇪ An Paperless senden** (sonst ist er ausgeblendet). Jede Rechnung wird als komplette PDF-Datei (z. B. `Rechnung_037_311026.pdf`) in den Eingangsordner von Paperless gelegt – Titel, Korrespondent, Dokumenttyp, Tags usw. vergibt Paperless anschließend selbst (z. B. über Zuweisungsregeln oder die automatische Zuordnung). Übertragene Rechnungen sind im Archiv mit „Paperless ✓“ gekennzeichnet; ein Klick darauf setzt die Markierung zurück (z. B. wenn das Dokument in Paperless gelöscht wurde).
+Ist unter ⚙ Einstellungen „Paperless-ngx ist installiert“ eingeschaltet, gibt es im Archiv bei markierten Rechnungen und in der Angebotsliste bei markierten Angeboten den Button **⇪ An Paperless senden** (sonst ist er ausgeblendet). Jede Rechnung wird als komplette PDF-Datei (z. B. `Rechnung_037_311026.pdf`) in den Eingangsordner von Paperless gelegt – Titel, Korrespondent, Dokumenttyp, Tags usw. vergibt Paperless anschließend selbst (z. B. über Zuweisungsregeln oder die automatische Zuordnung). Übertragene Rechnungen sind im Archiv mit „Paperless ✓“ gekennzeichnet; ein Klick darauf setzt die Markierung zurück (z. B. wenn das Dokument in Paperless gelöscht wurde).
 
-- `paperless_eingangsordner` muss auf den Eingangsordner (consume) der Paperless-App zeigen – welcher das ist, steht in der Konfiguration der Paperless-App. Der Ordner muss unter `/share` oder `/media` liegen, damit DJ Office Studio darauf zugreifen kann.
+- Der Paperless-Eingangsordner muss auf den Eingangsordner (consume) der Paperless-App zeigen – welcher das ist, steht in der Konfiguration der Paperless-App. Der Ordner muss unter `/share` oder `/media` liegen, damit DJ Office Studio darauf zugreifen kann.
 - Existiert der Ordner nicht, meldet die App einen Fehler, statt ihn anzulegen – so landen keine PDFs unbemerkt im falschen Ordner.
 
 ## Bedienung
@@ -91,8 +81,8 @@ Oben in der Kopfzeile gibt es auf jeder Seite das Menü: **Start**, **Rechnungen
 
 | Was | Wo |
 |---|---|
-| Kunden, Rechnungsposten, Zahlungsbedingungen, Rechnungen, Angebote | SQLite-Datenbank `rechnungen.db` im App-Datenordner (`/data`) |
-| PDF-Kopien | `pdf_ordner`, standardmäßig `/share/rechnungen` (z. B. per Samba erreichbar) |
+| Kunden, Rechnungsposten, Zahlungsbedingungen, Rechnungen, Angebote, Einstellungen | SQLite-Datenbank `rechnungen.db` im App-Datenordner (`/data`) |
+| PDF-Kopien | Ordner aus den Einstellungen, standardmäßig `/share/rechnungen` (z. B. per Samba erreichbar) |
 
 Beides ist in den normalen Home-Assistant-Backups enthalten.
 
@@ -110,12 +100,10 @@ python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
 mkdir -p /tmp/djos
-echo '{"name": "Max Beispiel", "iban": "DE00", "ort_fuer_datum": "Musterstadt", "startnummer": 1}' > /tmp/djos/options.json
-
 DATA_DIR=/tmp/djos OPTIONS_PATH=/tmp/djos/options.json python app/main.py
 ```
 
-Die Oberfläche läuft dann unter <http://localhost:8099>. Für die PDFs wird eine TTF-Schrift gesucht (im Container Carlito, lokal z. B. Arial); mit `FONT_REGULAR` und `FONT_BOLD` lässt sich ein eigener Pfad setzen.
+Die Oberfläche läuft dann unter <http://localhost:8099>; Absenderdaten usw. unter ⚙ eintragen. Für die PDFs wird eine TTF-Schrift gesucht (im Container Carlito, lokal z. B. Arial); mit `FONT_REGULAR` und `FONT_BOLD` lässt sich ein eigener Pfad setzen.
 
 ### Aufbau
 

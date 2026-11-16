@@ -19,13 +19,36 @@ app = Flask(__name__, static_folder=None)
 app.config["MAX_CONTENT_LENGTH"] = 100 * 1024 * 1024  # Upload alter Rechnungen
 
 
-def absender():
-    """Absender-/Fußzeilendaten aus der App-Konfiguration in Home Assistant."""
+# Einstellungen der App: Name → (Typ, Standardwert). Gespeichert in der Datenbank, bearbeitbar unter ⚙ Einstellungen.
+FELDER = {
+    "name": (str, ""), "strasse": (str, ""), "plz_ort": (str, ""), "telefon": (str, ""),
+    "ort_fuer_datum": (str, ""),
+    "bank_name": (str, ""), "kontoinhaber": (str, ""), "iban": (str, ""), "bic": (str, ""),
+    "steuernummer": (str, ""), "kleinunternehmer": (bool, True),
+    "startnummer": (int, 1), "angebot_startnummer": (int, 1), "angebot_gueltigkeit_tage": (int, 30),
+    "pdf_ordner": (str, "/share/rechnungen"),
+    "paperless_installiert": (bool, False), "paperless_eingangsordner": (str, "/share/paperless/consume"),
+}
+
+
+def _ha_optionen():
+    """Werte aus der App-Konfiguration in Home Assistant (nur noch für die einmalige Übernahme)."""
     try:
         with open(OPTIONS_PATH, encoding="utf-8") as f:
             return json.load(f)
-    except FileNotFoundError:
+    except (FileNotFoundError, ValueError):
         return {}
+
+
+def absender():
+    """Alle Einstellungen (Absender, Bank, Nummernkreise, Paperless …) mit Standardwerten."""
+    gespeichert = db.get_settings()
+    if "_uebernommen" not in gespeichert:
+        # Erster Start mit Einstellungen in der App: bisherige Home-Assistant-Konfiguration übernehmen
+        ha = _ha_optionen()
+        gespeichert = {k: ha[k] for k in FELDER if ha.get(k) is not None}
+        db.save_settings(gespeichert | {"_uebernommen": True})
+    return {k: gespeichert.get(k, standard) for k, (_, standard) in FELDER.items()}
 
 
 def pdf_dir():
@@ -57,6 +80,42 @@ def static_files(name):
 
 
 # ---------- Einstellungen ----------
+
+@app.get("/api/einstellungen")
+def settings_get():
+    return jsonify(absender())
+
+
+@app.put("/api/einstellungen")
+def settings_put():
+    daten = request.get_json() or {}
+    werte, fehler = {}, []
+    for k, (typ, standard) in FELDER.items():
+        if k not in daten:
+            continue
+        v = daten[k]
+        if typ is bool:
+            werte[k] = bool(v)
+        elif typ is int:
+            try:
+                werte[k] = int(v)
+            except (TypeError, ValueError):
+                fehler.append(f"„{k}“ muss eine Zahl sein")
+                continue
+            if werte[k] < 1:
+                fehler.append(f"„{k}“ muss mindestens 1 sein")
+        else:
+            werte[k] = (v or "").strip()
+    if fehler:
+        return jsonify({"error": "; ".join(fehler)}), 400
+    db.save_settings(werte)
+    a = absender()
+    # Hinweise zu Ordnern (kein Fehler – der Ordner kann z. B. erst später angelegt werden)
+    hinweise = []
+    if a["paperless_installiert"] and not os.path.isdir(a["paperless_eingangsordner"] or "-"):
+        hinweise.append(f"Paperless-Eingangsordner {a['paperless_eingangsordner'] or '(leer)'} wurde nicht gefunden.")
+    return jsonify({"einstellungen": a, "hinweise": hinweise})
+
 
 @app.get("/api/absender")
 def get_absender():
@@ -319,15 +378,15 @@ def invoices_to_paperless():
     laden, table = (db.get_offer, "angebote") if angebot else (db.get_invoice, "rechnungen")
     ordner = _paperless_ordner(a)
     if not a.get("paperless_installiert"):
-        return jsonify({"error": "Paperless ist in der App-Konfiguration nicht aktiviert "
-                                 "(paperless_installiert)."}), 400
+        return jsonify({"error": "Paperless ist nicht aktiviert – unter ⚙ Einstellungen "
+                                 "„Paperless-ngx ist installiert“ einschalten."}), 400
     if not ordner:
-        return jsonify({"error": "Paperless ist nicht eingerichtet – bitte paperless_eingangsordner "
-                                 "in der App-Konfiguration eintragen."}), 400
+        return jsonify({"error": "Paperless ist nicht eingerichtet – bitte unter ⚙ Einstellungen "
+                                 "den Paperless-Eingangsordner eintragen."}), 400
     if not os.path.isdir(ordner):
         # Bewusst nicht anlegen: Bei falschem Pfad würden die PDFs sonst unbemerkt liegen bleiben
-        return jsonify({"error": f"Eingangsordner {ordner} nicht gefunden – Pfad in der "
-                                 "App-Konfiguration prüfen (muss unter /share oder /media liegen)."}), 400
+        return jsonify({"error": f"Eingangsordner {ordner} nicht gefunden – Pfad unter "
+                                 "⚙ Einstellungen prüfen (muss unter /share oder /media liegen)."}), 400
 
     ok, fehler = [], []
     for inv_id in dict.fromkeys(daten.get("ids") or []):
