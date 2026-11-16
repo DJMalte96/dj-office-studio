@@ -2,6 +2,11 @@
 
 Alle Änderungen an DJ Office Studio. Neueste Version oben.
 
+## 0.10.1 – 2026-11-16
+
+### Geändert
+- Das GitHub-Repository heißt jetzt **dj-office-studio** (vorher ha-rechnungen). Links in der App (Changelog unter ⚙ Einstellungen) und in der README zeigen auf die neue Adresse. In Home Assistant muss nichts geändert werden – die alte Adresse wird weitergeleitet.
+
 ## 0.10.0 – 2026-11-16
 
 ### Neu
