@@ -31,6 +31,23 @@ FELDER = {
 }
 
 
+def _app_version():
+    """Version aus config.yaml (im Container nach /app kopiert, lokal eine Ebene höher)."""
+    hier = os.path.dirname(os.path.abspath(__file__))
+    for pfad in (os.path.join(hier, "config.yaml"), os.path.join(hier, "..", "config.yaml")):
+        try:
+            with open(pfad, encoding="utf-8") as f:
+                for zeile in f:
+                    if zeile.startswith("version:"):
+                        return zeile.split(":", 1)[1].strip().strip('"\'')
+        except OSError:
+            continue
+    return "unbekannt"
+
+
+APP_VERSION = _app_version()
+
+
 def _ha_optionen():
     """Werte aus der App-Konfiguration in Home Assistant (nur noch für die einmalige Übernahme)."""
     try:
@@ -123,7 +140,8 @@ def get_absender():
     return jsonify({k: a.get(k) for k in ("name", "strasse", "plz_ort", "ort_fuer_datum")}
                    | {"vollstaendig": bool(a.get("name") and a.get("iban")),
                       "paperless": bool(a.get("paperless_installiert")),
-                      "angebot_gueltigkeit_tage": a.get("angebot_gueltigkeit_tage") or 30})
+                      "angebot_gueltigkeit_tage": a.get("angebot_gueltigkeit_tage") or 30,
+                      "version": APP_VERSION})
 
 
 # ---------- Stammdaten (Kunden, Textbausteine, Zahlungsbedingungen) ----------

@@ -200,6 +200,7 @@ $("#einstellungen").addEventListener("submit", async e => {
 async function ladeAbsender() {
   const abs = await api("absender");
   state.absender = abs;
+  $("#app-version").textContent = abs.version || "–";
   $("#warnung").classList.toggle("hidden", abs.vollstaendig);
   $$(".pl-button").forEach(b => b.classList.toggle("hidden", !abs.paperless));   // nur mit „Paperless installiert“
   return abs;
