@@ -2,6 +2,15 @@
 
 Alle Änderungen an DJ Office Studio. Neueste Version oben.
 
+## 0.10.0 – 2026-11-16
+
+### Neu
+- **Desktop-Version für Windows und macOS** (ohne Home Assistant): eigenständige App zum Herunterladen, gleiche Funktionen und Oberfläche. Daten und PDFs liegen im Dokumente-Ordner unter „DJ Office Studio“. Details in der README, Abschnitt „Ohne Home Assistant (Windows / Mac)“.
+- PDFs nutzen am Desktop – falls vorhanden – Calibri (Schrift der Word-Vorlage), sonst Arial.
+
+### Geändert
+- In der Home-Assistant-App ändert sich nichts; Hinweise wie „unter /share oder /media“ erscheinen nur noch dort.
+
 ## 0.9.2 – 2026-11-16
 
 ### Neu

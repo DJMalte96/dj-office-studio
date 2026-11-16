@@ -1,4 +1,7 @@
-"""Rechnungen – Home Assistant App (Ingress-Weboberfläche + REST-API)."""
+"""DJ Office Studio – Weboberfläche + REST-API.
+
+Läuft als Home-Assistant-App (Ingress) oder als Desktop-App (desktop/start.py setzt DJOS_DESKTOP=1).
+"""
 import hashlib
 import io
 import json
@@ -13,6 +16,7 @@ import importer
 from pdf import build_invoice_pdf, pdf_filename
 
 OPTIONS_PATH = os.environ.get("OPTIONS_PATH", "/data/options.json")
+DESKTOP = os.environ.get("DJOS_DESKTOP") == "1"   # Desktop-Version (Windows/Mac) statt Home Assistant
 STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 
 app = Flask(__name__, static_folder=None)
@@ -26,8 +30,9 @@ FELDER = {
     "bank_name": (str, ""), "kontoinhaber": (str, ""), "iban": (str, ""), "bic": (str, ""),
     "steuernummer": (str, ""), "kleinunternehmer": (bool, True),
     "startnummer": (int, 1), "angebot_startnummer": (int, 1), "angebot_gueltigkeit_tage": (int, 30),
-    "pdf_ordner": (str, "/share/rechnungen"),
-    "paperless_installiert": (bool, False), "paperless_eingangsordner": (str, "/share/paperless/consume"),
+    "pdf_ordner": (str, os.environ.get("STANDARD_PDF_ORDNER", "/share/rechnungen")),
+    "paperless_installiert": (bool, False),
+    "paperless_eingangsordner": (str, "" if DESKTOP else "/share/paperless/consume"),
 }
 
 
@@ -141,7 +146,8 @@ def get_absender():
                    | {"vollstaendig": bool(a.get("name") and a.get("iban")),
                       "paperless": bool(a.get("paperless_installiert")),
                       "angebot_gueltigkeit_tage": a.get("angebot_gueltigkeit_tage") or 30,
-                      "version": APP_VERSION})
+                      "version": APP_VERSION,
+                      "desktop": DESKTOP})
 
 
 # ---------- Stammdaten (Kunden, Textbausteine, Zahlungsbedingungen) ----------
@@ -403,8 +409,8 @@ def invoices_to_paperless():
                                  "den Paperless-Eingangsordner eintragen."}), 400
     if not os.path.isdir(ordner):
         # Bewusst nicht anlegen: Bei falschem Pfad würden die PDFs sonst unbemerkt liegen bleiben
-        return jsonify({"error": f"Eingangsordner {ordner} nicht gefunden – Pfad unter "
-                                 "⚙ Einstellungen prüfen (muss unter /share oder /media liegen)."}), 400
+        return jsonify({"error": f"Eingangsordner {ordner} nicht gefunden – Pfad unter ⚙ Einstellungen prüfen"
+                                 + ("." if DESKTOP else " (muss unter /share oder /media liegen).")}), 400
 
     ok, fehler = [], []
     for inv_id in dict.fromkeys(daten.get("ids") or []):

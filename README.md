@@ -81,6 +81,28 @@ Oben in der Kopfzeile gibt es auf jeder Seite das Menü: **Start**, **Rechnungen
 
 **Alte Rechnungen und Angebote importieren:** Unter **Rechnungen** (Archiv) auf **Alte Rechnungen importieren** bzw. unter **Angebote** auf **Alte Angebote importieren** klicken und PDFs hineinziehen – gemischt möglich. Danach auswählen, welche Empfänger, Rechnungsposten, Rechnungen und Angebote übernommen werden. Erkannt werden PDFs mit echtem Text im Aufbau der Vorlage (Absenderzeile mit „|“, Adresse, „Rechnung Nr.“ bzw. „Angebot“, Tabelle, „Gesamt“). Eingescannte Dokumente werden nicht unterstützt.
 
+## Ohne Home Assistant (Windows / Mac)
+
+DJ Office Studio gibt es auch als eigenständige App für **Windows** und **macOS** – ohne Home Assistant, ohne Python, ohne Docker. Funktionen und Oberfläche sind dieselben.
+
+**Herunterladen:** Auf der GitHub-Seite unter **Releases** die passende ZIP-Datei laden:
+
+| System | Datei |
+|---|---|
+| Windows 10/11 | `DJ-Office-Studio-…-Windows.zip` |
+| Mac mit Apple-Chip (M1 und neuer) | `DJ-Office-Studio-…-macOS-AppleSilicon.zip` |
+| Mac mit Intel-Prozessor | `DJ-Office-Studio-…-macOS-Intel.zip` |
+
+**Windows:** ZIP entpacken (Rechtsklick → *Alle extrahieren*), im Ordner `DJ Office Studio` die Datei **DJ Office Studio.exe** starten. Beim ersten Start warnt Windows ggf. („Der Computer wurde durch Windows geschützt“) – auf **Weitere Informationen → Trotzdem ausführen** klicken. Die App ist nicht kostenpflichtig signiert, daher die Warnung.
+
+**Mac:** ZIP per Doppelklick entpacken und **DJ Office Studio** in den Ordner *Programme* ziehen. Beim ersten Öffnen meldet macOS, dass der Entwickler nicht verifiziert werden kann: dann unter *Systemeinstellungen → Datenschutz & Sicherheit* ganz unten auf **Dennoch öffnen** klicken (einmalig).
+
+**Benutzung:** Nach dem Start öffnet sich die Oberfläche im Browser, dazu ein kleines Fenster „DJ Office Studio läuft“. Solange dieses Fenster offen ist, läuft die App; Schließen beendet sie. Alles Weitere – Absender, Bankverbindung usw. – unter **⚙ Einstellungen**.
+
+**Daten:** Alles liegt im Dokumente-Ordner unter `DJ Office Studio` – `Daten` (Datenbank mit Kunden, Rechnungen, Angeboten, Einstellungen) und `PDFs` (Kopien aller Rechnungen und Angebote). Für ein Backup einfach diesen Ordner sichern. Die App ist nur auf dem eigenen Rechner erreichbar.
+
+**Update:** Neue ZIP herunterladen und die alte App ersetzen – die Daten im Dokumente-Ordner bleiben erhalten.
+
 ## Daten & Backup
 
 | Was | Wo |
@@ -107,14 +129,23 @@ mkdir -p /tmp/djos
 DATA_DIR=/tmp/djos OPTIONS_PATH=/tmp/djos/options.json python app/main.py
 ```
 
-Die Oberfläche läuft dann unter <http://localhost:8099>; Absenderdaten usw. unter ⚙ eintragen. Für die PDFs wird eine TTF-Schrift gesucht (im Container Carlito, lokal z. B. Arial); mit `FONT_REGULAR` und `FONT_BOLD` lässt sich ein eigener Pfad setzen.
+Die Oberfläche läuft dann unter <http://localhost:8099>; Absenderdaten usw. unter ⚙ eintragen.
+
+Desktop-Version lokal starten bzw. bauen (Ergebnis in `dist/`):
+
+```bash
+python desktop/start.py                       # aus dem Quellcode starten
+pip install pyinstaller pillow && python desktop/build.py   # App bauen (auf dem jeweiligen System)
+```
+
+Die fertigen Windows- und Mac-Versionen baut GitHub Actions (`.github/workflows/desktop.yml`); ein Tag `desktop-v…` erzeugt daraus ein Release. Für die PDFs wird eine TTF-Schrift gesucht (im Container Carlito, lokal z. B. Arial); mit `FONT_REGULAR` und `FONT_BOLD` lässt sich ein eigener Pfad setzen.
 
 ### Aufbau
 
 ```
 repository.yaml          Home-Assistant-Repository
 rechnungen/
-  config.yaml            App-Definition (Name, Version, Optionen)
+  config.yaml            App-Definition (Name, Version)
   icon.png, logo.png     Symbol und Logo für den App-Store in Home Assistant
   CHANGELOG.md           Änderungen je Version
   Dockerfile             Python 3.12 (Debian) + Carlito-Schrift
@@ -122,12 +153,17 @@ rechnungen/
     main.py              Flask-App: REST-API und Auslieferung der Oberfläche
     db.py                SQLite-Datenhaltung
     pdf.py               PDF-Erzeugung (fpdf2)
-    importer.py          Auslesen alter Rechnungs-PDFs (pypdf)
+    importer.py          Auslesen alter Rechnungs- und Angebots-PDFs (pypdf)
     static/              Oberfläche (HTML, CSS, JavaScript)
+desktop/
+  start.py               Starter der Desktop-Version (Server + Statusfenster, Daten im Dokumente-Ordner)
+  build.py               Baut die Desktop-App mit PyInstaller
+.github/workflows/
+  desktop.yml            Baut Windows- und Mac-Version, bei Tag „desktop-v…“ als Release
 ```
 
 ### Neue Version veröffentlichen
 
-`version` in `rechnungen/config.yaml` erhöhen, einen Eintrag in `rechnungen/CHANGELOG.md` ergänzen, committen und pushen. Home Assistant bietet das Update dann unter **Apps → App-Store → ⋮ → Nach Updates suchen** an.
+`version` in `rechnungen/config.yaml` erhöhen, einen Eintrag in `rechnungen/CHANGELOG.md` ergänzen, committen und pushen. Home Assistant bietet das Update dann unter **Apps → App-Store → ⋮ → Nach Updates suchen** an. Für die Desktop-Version zusätzlich einen Tag `desktop-v<Version>` pushen – GitHub Actions baut dann die Windows- und Mac-Pakete und veröffentlicht sie als Release.
 
 > Hinweis: Das Basis-Image ist im `Dockerfile` fest vorgegeben. Eine `build.yaml` wird vom Supervisor nicht beachtet – er würde sonst sein Alpine-Image verwenden, in dem `apt-get` fehlt.

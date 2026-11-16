@@ -406,3 +406,5 @@ tr.angebot-zu td.btns, tr.angebot-zu td.auswahl-spalte, tr.angebot-zu td:nth-chi
 #tab-einstellungen label.inline { margin-bottom: 14px; }
 #tab-einstellungen p.hint { margin: 0 0 14px; }
 .info-karte { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; }
+body.desktop .nur-ha { display: none; }
+body:not(.desktop) .nur-desktop { display: none; }
