@@ -7,6 +7,7 @@ import io
 import json
 import os
 import re
+import ssl
 import time
 import urllib.request
 import zipfile
@@ -154,6 +155,15 @@ def _version_tupel(v):
     return tuple(int(x) for x in re.findall(r"\d+", v or ""))
 
 
+def _ssl_kontext():
+    """Zertifikate aus certifi: Die gebündelte Desktop-App findet die System-Zertifikate sonst nicht."""
+    try:
+        import certifi
+        return ssl.create_default_context(cafile=certifi.where())
+    except ImportError:
+        return ssl.create_default_context()
+
+
 @app.get("/api/update")
 def update_check():
     """Neuestes Release auf GitHub mit der installierten Version vergleichen (höchstens alle 6 Stunden)."""
@@ -164,14 +174,14 @@ def update_check():
     try:
         req = urllib.request.Request(UPDATE_URL, headers={"User-Agent": "DJ-Office-Studio-Desktop",
                                                           "Accept": "application/vnd.github+json"})
-        with urllib.request.urlopen(req, timeout=5) as r:
+        with urllib.request.urlopen(req, timeout=5, context=_ssl_kontext()) as r:
             daten = json.loads(r.read())
         neueste = re.sub(r"^[^\d]*", "", daten.get("tag_name", ""))   # „desktop-v0.11.0“ → „0.11.0“
         ergebnis = {"aktiv": True, "installiert": APP_VERSION, "neueste": neueste,
                     "verfuegbar": _version_tupel(neueste) > _version_tupel(APP_VERSION),
                     "url": daten.get("html_url")}
     except Exception as e:   # offline o. Ä. – kein Fehler für den Nutzer, nur kein Hinweis
-        app.logger.info("Update-Prüfung nicht möglich: %s", e)
+        app.logger.warning("Update-Prüfung nicht möglich: %s", e)
         return jsonify({"aktiv": True, "fehler": True, "installiert": APP_VERSION})
     _update_cache.update(zeit=time.time(), ergebnis=ergebnis)
     return jsonify(ergebnis)
