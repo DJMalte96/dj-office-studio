@@ -344,7 +344,7 @@ button.aktion.haupt:hover { background: #0b0b0b; border-color: var(--neon); }
 [data-theme="dark"] button.aktion.haupt { border-color: var(--neon); }
 button.aktion.haupt .a-icon { background: var(--neon); color: #0b0b0b; }
 button.aktion.haupt small { color: rgba(255,255,255,.7); }
-#start-hinweise { margin-bottom: 14px; }
+#start-hinweise, #start-ang-hinweise { margin-bottom: 14px; }
 .start-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: start; }
 @media (max-width: 900px) { .start-grid { grid-template-columns: 1fr; } }
 .start-spalte > .card:last-child { margin-bottom: 0; }
