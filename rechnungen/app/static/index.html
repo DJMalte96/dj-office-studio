@@ -76,7 +76,7 @@
           <span class="a-icon">❐</span><span class="a-titel">Angebote</span><small>Status &amp; in Rechnung umwandeln</small>
         </button>
         <button type="button" class="aktion" data-goto="import">
-          <span class="a-icon">⇪</span><span class="a-titel">Importieren</span><small>Alte Rechnungen hochladen</small>
+          <span class="a-icon">⇪</span><span class="a-titel">Importieren</span><small>Alte Rechnungen &amp; Angebote hochladen</small>
         </button>
         <button type="button" class="aktion" data-goto="kunden">
           <span class="a-icon">◉</span><span class="a-titel">Kunden</span><small>Adressen verwalten</small>
@@ -176,11 +176,12 @@
     <section id="tab-liste" class="tab">
       <div id="import" class="card hidden">
         <div class="row between">
-          <h2>Alte Rechnungen importieren</h2>
+          <h2>Alte Rechnungen &amp; Angebote importieren</h2>
           <button type="button" id="import-zu" class="icon" title="Schließen">✕</button>
         </div>
-        <p class="hint">PDFs deiner bisherigen Rechnungen hochladen. Daraus werden Empfänger und
-          Vorschläge für Rechnungsposten erkannt – du entscheidest danach, was übernommen wird.</p>
+        <p class="hint">PDFs deiner bisherigen Rechnungen und Angebote hochladen – gerne gemischt, die App erkennt
+          selbst, was was ist. Daraus werden Empfänger, Vorschläge für Rechnungsposten sowie die Rechnungen
+          und Angebote selbst erkannt – du entscheidest danach, was übernommen wird.</p>
         <label class="dropzone" id="dropzone">
           <input type="file" id="import-dateien" accept=".pdf,application/pdf" multiple>
           <strong>PDFs hierher ziehen</strong> oder klicken zum Auswählen
@@ -232,7 +233,10 @@
       <div class="card">
         <div class="row between">
           <h2>Angebote</h2>
-          <button type="button" id="btn-angebot-neu">＋ Neues Angebot</button>
+          <div class="row">
+            <button type="button" id="btn-angebot-import" class="secondary">⇪ Alte Angebote importieren</button>
+            <button type="button" id="btn-angebot-neu">＋ Neues Angebot</button>
+          </div>
         </div>
         <div class="liste-tools">
           <input id="angebote-suche" class="search" placeholder="Angebote durchsuchen …">

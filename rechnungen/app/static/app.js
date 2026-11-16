@@ -908,7 +908,7 @@ async function renderStamm(table) {
   });
 }
 
-// ---------- Import alter Rechnungen ----------
+// ---------- Import alter Rechnungen & Angebote ----------
 
 const imp = { daten: null };
 
@@ -917,6 +917,14 @@ $("#btn-import").addEventListener("click", () => {
   window.scrollTo(0, 0);
 });
 $("#import-zu").addEventListener("click", () => $("#import").classList.add("hidden"));
+
+// Import-Bereich liegt im Tab „Rechnungen“ – aus den Angeboten dorthin springen und öffnen
+function oeffneImport() {
+  showTab("liste");
+  $("#import").classList.remove("hidden");
+  window.scrollTo(0, 0);
+}
+$("#btn-angebot-import").addEventListener("click", oeffneImport);
 
 $("#import-dateien").addEventListener("change", e => analyseImport(e.target.files));
 const dz = $("#dropzone");
@@ -939,8 +947,9 @@ async function analyseImport(files) {
     const res = await fetch("api/import/analyse", { method: "POST", body: fd });
     if (!res.ok) throw new Error(`Fehler ${res.status}`);
     imp.daten = await res.json();
-    $("#import-status").textContent =
-      `${imp.daten.rechnungen.length} von ${files.length} Datei(en) erkannt.`;
+    const nR = imp.daten.rechnungen.length, nA = imp.daten.angebote.length;
+    $("#import-status").textContent = `${nR + nA} von ${files.length} Datei(en) erkannt`
+      + ` (${nR} Rechnung${nR === 1 ? "" : "en"}, ${nA} Angebot${nA === 1 ? "" : "e"}).`;
     renderImport();
   } catch (e) {
     $("#import-status").textContent = "";
@@ -985,7 +994,7 @@ function renderImport() {
         </div>`).join("") || `<p class="hint">Keine neuen Rechnungsposten – alle gibt es schon.</p>`}
     </div>
 
-    <div class="import-block">
+    ${d.rechnungen.length ? `<div class="import-block">
       <h3>Rechnungen in die Liste übernehmen <span class="badge">${d.rechnungen.length}</span></h3>
       <p class="hint">Optional: alte Rechnungen als Archiv in der Rechnungsliste anzeigen.
         Bereits vorhandene Nummern werden übersprungen.</p>
@@ -996,7 +1005,24 @@ function renderImport() {
           <td class="num">${fmtEuro(r.gesamt)}${r.nummer_vorhanden ? `<br><span class="tag">Nr. vorhanden</span>` : ""}</td></tr>`).join("")}
       </tbody></table>
       <label class="inline"><input type="checkbox" id="import-bezahlt" checked> als bezahlt markieren</label>
-    </div>
+    </div>` : ""}
+
+    ${d.angebote.length ? `<div class="import-block">
+      <h3>Angebote in die Angebotsliste übernehmen <span class="badge">${d.angebote.length}</span></h3>
+      <p class="hint">Bereits vorhandene Angebotsnummern werden übersprungen. Angebote ohne Nummer bekommen beim
+        Übernehmen die nächste freie Nummer.</p>
+      <table class="list"><tbody>
+        ${d.angebote.map((a, i) => `<tr><td class="chk">${check("angebote", i, !a.nummer_vorhanden)}</td>
+          <td>${a.nummer ? esc(a.nummer) : `<span class="tag neu">neue Nr.</span>`}</td><td>${fmtDate(a.datum)}</td>
+          <td>${esc(a.kunde.name)}<br><small>${esc(a.datei)}${a.gueltig_bis ? ` · gültig bis ${fmtDate(a.gueltig_bis)}` : ""}</small></td>
+          <td class="num">${fmtEuro(a.gesamt)}${a.nummer_vorhanden ? `<br><span class="tag">Nr. vorhanden</span>` : ""}</td></tr>`).join("")}
+      </tbody></table>
+      <label class="inline">Status der übernommenen Angebote:
+        <select id="import-angebot-status" class="status-select">
+          <option value="offen">offen</option><option value="angenommen">angenommen</option><option value="abgelehnt">abgelehnt</option>
+        </select>
+      </label>
+    </div>` : ""}
 
     <div class="actions">
       <button type="button" class="secondary" id="import-abbrechen">Verwerfen</button>
@@ -1021,18 +1047,22 @@ async function uebernehmeImport() {
       text: $(`.tb-text[data-i="${i}"]`).value,
     })),
     rechnungen: sel("rechnungen").map(i => d.rechnungen[i]),
-    bezahlt: $("#import-bezahlt").checked,
+    bezahlt: $("#import-bezahlt")?.checked ?? true,
+    angebote: sel("angebote").map(i => d.angebote[i]),
+    angebot_status: $("#import-angebot-status")?.value || "offen",
   };
   try {
     const r = await api("import/uebernehmen", { method: "POST", body });
-    toast(`Übernommen: ${r.kunden} Empfänger, ${r.textbausteine} Rechnungsposten, ${r.rechnungen} Rechnungen`);
+    toast(`Übernommen: ${r.kunden} Empfänger, ${r.textbausteine} Rechnungsposten, ${r.rechnungen} Rechnungen, ${r.angebote} Angebote`);
     imp.daten = null;
     $("#import-ergebnis").innerHTML = "";
     $("#import-status").textContent = "";
     $("#import").classList.add("hidden");
     await loadLookups();
     await loadListe();
-    if (!state.editId && !istAngebot()) $("#r-nummer").value = (await api("rechnungen/naechste-nummer")).nummer;
+    state.angebote = await api("angebote");
+    if (!state.editId) $("#r-nummer").value = (await api(istAngebot() ? "angebote/naechste-nummer" : "rechnungen/naechste-nummer")).nummer;
+    if (r.angebote && !r.rechnungen) showTab("angebote");   // nur Angebote übernommen → gleich dorthin
   } catch (e) { toast(e.message, true); }
 }
 
@@ -1047,9 +1077,7 @@ $("#tab-start").addEventListener("click", e => {
     e.preventDefault();
     const tab = ziel.dataset.goto;
     if (tab === "import") {
-      showTab("liste");
-      $("#import").classList.remove("hidden");
-      window.scrollTo(0, 0);
+      oeffneImport();
     } else if (tab === "neu") {
       neueRechnung();
     } else if (tab === "angebot-neu") {

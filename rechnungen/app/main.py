@@ -396,16 +396,20 @@ def _norm_key(s):
 
 @app.post("/api/import/analyse")
 def import_analyse():
-    """PDFs auslesen und Vorschläge liefern – speichert noch nichts."""
-    rechnungen, fehler = [], []
+    """PDFs (Rechnungen und Angebote gemischt) auslesen und Vorschläge liefern – speichert noch nichts."""
+    rechnungen, angebote, fehler = [], [], []
     for f in request.files.getlist("dateien"):
         try:
-            inv = importer.parse_invoice(importer.pdf_text(f.read()))
-            if not inv["kunde"].get("name") or not inv["positionen"]:
+            doc = importer.parse_document(importer.pdf_text(f.read()))
+            if not doc["kunde"].get("name") or not doc["positionen"]:
                 raise ValueError("Empfänger oder Positionen nicht erkannt")
-            inv["datei"] = f.filename
-            inv["nummer_vorhanden"] = db.number_taken(inv["nummer"])
-            rechnungen.append(inv)
+            doc["datei"] = f.filename
+            if doc["art"] == "angebot":
+                doc["nummer_vorhanden"] = bool(doc["nummer"]) and db.number_taken(doc["nummer"], table="angebote")
+                angebote.append(doc)
+            else:
+                doc["nummer_vorhanden"] = db.number_taken(doc["nummer"])
+                rechnungen.append(doc)
         except ValueError as e:
             fehler.append({"datei": f.filename, "fehler": str(e)})
         except Exception:  # defekte/fremde PDFs sollen den Rest nicht aufhalten
@@ -415,7 +419,7 @@ def import_analyse():
     # Empfänger (einmalig je Name+Ort)
     bekannte = {(_norm_key(k["name"]), _norm_key(k["ort"])) for k in db.list_items("kunden")}
     kunden, seen = [], set()
-    for inv in sorted(rechnungen, key=lambda r: r["datum"], reverse=True):  # neueste Adresse gewinnt
+    for inv in sorted(rechnungen + angebote, key=lambda r: r["datum"], reverse=True):  # neueste Adresse gewinnt
         k = inv["kunde"]
         key = (_norm_key(k["name"]), _norm_key(k["ort"]))
         if key not in seen:
@@ -426,7 +430,7 @@ def import_analyse():
     vorhandene = db.list_items("textbausteine")
     vorhandene_tb = {_norm_key(t["text"]) for t in vorhandene} | {_norm_key(t["titel"]) for t in vorhandene}
     vorschlaege = {}
-    for inv in rechnungen:
+    for inv in rechnungen + angebote:
         for p in inv["positionen"]:
             v = importer.textbaustein_vorschlag(p["beschreibung"])
             key = _norm_key(v["text"])
@@ -436,14 +440,15 @@ def import_analyse():
     textbausteine = sorted(vorschlaege.values(), key=lambda v: -v["anzahl"])
 
     rechnungen.sort(key=lambda r: r["nummer"])
-    return jsonify({"rechnungen": rechnungen, "kunden": kunden,
+    angebote.sort(key=lambda r: (r["datum"], r["nummer"]))
+    return jsonify({"rechnungen": rechnungen, "angebote": angebote, "kunden": kunden,
                     "textbausteine": textbausteine, "fehler": fehler})
 
 
 @app.post("/api/import/uebernehmen")
 def import_uebernehmen():
     data = request.get_json() or {}
-    n_kunden = n_tb = n_rech = 0
+    n_kunden = n_tb = n_rech = n_ang = 0
     for k in data.get("kunden") or []:
         if (k.get("name") or "").strip():
             db.upsert_customer(k)
@@ -466,7 +471,23 @@ def import_uebernehmen():
             "bezahlt": bool(data.get("bezahlt")),
         })
         n_rech += 1
-    return jsonify({"kunden": n_kunden, "textbausteine": n_tb, "rechnungen": n_rech})
+    status = data.get("angebot_status") if data.get("angebot_status") in db.STATUS else "offen"
+    for a in data.get("angebote") or []:
+        nummer = (a.get("nummer") or "").strip() or db.next_number(1, "angebote")  # ohne Nummer → nächste freie
+        if db.number_taken(nummer, table="angebote") or not a.get("positionen"):
+            continue
+        kunde = {k: (a["kunde"].get(k) or "").strip() for k in db.TABLES["kunden"]}
+        offer_id = db.save_offer({
+            "nummer": nummer, "datum": a.get("datum") or date.today().isoformat(),
+            "gueltig_bis": a.get("gueltig_bis") or "",
+            "kunde": kunde, "kunde_id": db.upsert_customer(kunde),
+            "positionen": a["positionen"], "zahlungsbedingung": "", "hinweise": a.get("hinweise") or "",
+            "gesamt": round(sum(float(p.get("preis") or 0) for p in a["positionen"]), 2),
+        })
+        if status != "offen":
+            db.set_offer_status(offer_id, status)
+        n_ang += 1
+    return jsonify({"kunden": n_kunden, "textbausteine": n_tb, "rechnungen": n_rech, "angebote": n_ang})
 
 
 if __name__ == "__main__":

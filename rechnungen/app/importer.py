@@ -1,8 +1,10 @@
-"""Import alter Rechnungs-PDFs: Text auslesen und Empfänger, Positionen usw. herausziehen.
+"""Import alter Rechnungs- und Angebots-PDFs: Text auslesen und Empfänger, Positionen usw. herausziehen.
 
 Das Parsen orientiert sich am Aufbau der bisherigen Vorlage:
   Absenderzeile (mit " | ") → Empfängeradresse → "Rechnung Nr.: …  Ort, den TT.MM.JJ"
   → Tabelle "Beschreibung | Lieferdatum | Preis" → "Gesamt" → Zahlungsbedingung → "Vielen Dank …"
+Angebote sind gleich aufgebaut ("Angebot Nr.: …"); nach der Tabelle folgen dort
+„gültig bis …“ und Hinweise statt der Zahlungsbedingung.
 """
 import io
 import re
@@ -17,7 +19,13 @@ PRICE = re.compile(
 )
 DATE = re.compile(r"\b(\d{1,2})\.(\d{1,2})\.(\d{4}|\d{2})\b")
 PLZ_LINE = re.compile(r"^(\d{5})\s+(.+)$")
-NUMMER = re.compile(r"Rechnung\s*-?\s*Nr\.?\s*:?\s*([A-Za-z0-9][A-Za-z0-9\-/]*)", re.I)
+NUMMER = re.compile(r"(Rechnung|Angebot)\s*-?\s*(?:Nr\.?|Nummer)\s*:?\s*([A-Za-z0-9][A-Za-z0-9\-/]*)", re.I)
+ANGEBOT_TITEL = re.compile(r"^Angebot\b", re.I)          # Angebot ohne Nummer, z. B. „Angebot Hochzeit …“
+GUELTIG = re.compile(r"(gültig|Gültigkeit|Bindefrist|bindend)", re.I)
+GUELTIG_DAUER = re.compile(r"(\d+)\s*(Tage|Wochen|Monate)", re.I)
+TABELLENKOPF = re.compile(r"(Beschreibung|Leistung|Position|Bezeichnung).*(Preis|Betrag)", re.I)
+SCHLUSS = re.compile(r"^(Vielen Dank|Mit freundlichen|Ich freue mich|Wir freuen uns|Für Rückfragen|"
+                     r"Bei Fragen|Über eine (positive )?Rückmeldung)", re.I)
 PRICE_PAREN = re.compile(r"\s*\([^)]*\d\s*€[^)]*\)")  # "(750€ für 6 Stunden, …)"
 TIMES = re.compile(r"(\d{1,2}[:.]\d{2})(\s*Uhr\s*(?:bis|-|–)\s*)(\d{1,2}[:.]\d{2})(\s*Uhr)?")
 
@@ -53,16 +61,35 @@ def _norm(s):
     return " ".join(s.split())
 
 
-def parse_invoice(text):
-    """Gibt dict mit nummer, datum, kunde, positionen, zahlungsbedingung, gesamt zurück."""
-    lines = [_norm(l) for l in text.splitlines() if l.strip()]
-    out = {"nummer": "", "datum": "", "kunde": {}, "positionen": [], "zahlungsbedingung": "", "gesamt": 0.0}
+def _add_days(iso, n, einheit):
+    from datetime import timedelta
+    tage = n * {"tage": 1, "wochen": 7, "monate": 30}[einheit.lower()]
+    try:
+        return (date.fromisoformat(iso) + timedelta(days=tage)).isoformat()
+    except ValueError:
+        return ""
 
-    # --- Rechnungsnummer + Datum ---
+
+def parse_document(text):
+    """Gibt dict mit art ("rechnung"/"angebot"), nummer, datum, kunde, positionen, zahlungsbedingung,
+    gesamt zurück – bei Angeboten zusätzlich gueltig_bis und hinweise."""
+    lines = [_norm(l) for l in text.splitlines() if l.strip()]
+    out = {"art": "rechnung", "nummer": "", "datum": "", "kunde": {}, "positionen": [],
+           "zahlungsbedingung": "", "gesamt": 0.0}
+
+    # --- Art + Nummer + Datum ---
     idx_nr = next((i for i, l in enumerate(lines) if NUMMER.search(l)), None)
-    if idx_nr is None:
-        raise ValueError("Keine „Rechnung Nr.“ gefunden – ist das eine Rechnung im Vorlagen-Layout?")
-    out["nummer"] = NUMMER.search(lines[idx_nr]).group(1)
+    if idx_nr is not None:
+        m = NUMMER.search(lines[idx_nr])
+        out["art"] = "angebot" if m.group(1).lower() == "angebot" else "rechnung"
+        out["nummer"] = m.group(2)
+    else:
+        # Angebote haben in alten Vorlagen nicht immer eine Nummer – dann vergibt die App eine
+        idx_nr = next((i for i, l in enumerate(lines) if ANGEBOT_TITEL.match(l)), None)
+        if idx_nr is None:
+            raise ValueError("Weder „Rechnung Nr.“ noch „Angebot“ gefunden – ist das ein Dokument im Vorlagen-Layout?")
+        out["art"] = "angebot"
+    angebot = out["art"] == "angebot"
     for l in lines[idx_nr:idx_nr + 3]:
         m = re.search(r"den\s+" + DATE.pattern, l) or DATE.search(l)
         if m:
@@ -87,9 +114,9 @@ def parse_invoice(text):
 
     # --- Positionen: zwischen Tabellenkopf und "Gesamt" ---
     rest = lines[idx_nr + 1:]
-    h = next((i for i, l in enumerate(rest) if "Beschreibung" in l and "Preis" in l), None)
+    h = next((i for i, l in enumerate(rest) if TABELLENKOPF.search(l)), None)
     if h is None:
-        h = next((i for i, l in enumerate(rest) if "in Rechnung" in l), -1)
+        h = next((i for i, l in enumerate(rest) if re.search(r"in Rechnung|Anfrage|anbieten|Angebot", l)), -1)
     g = next((i for i, l in enumerate(rest) if i > h and re.match(r"^Gesamt\b", l, re.I)), len(rest))
     # Tabellenzeilen: Eine Zeile mit Preis beginnt eine neue Position (Datum + Preis stehen oben
     # in der Zeile), Zeilen ohne Preis setzen die Beschreibung fort. Zeilen vor dem ersten Preis
@@ -114,14 +141,35 @@ def parse_invoice(text):
                                       "preis": row["preis"]})
     out["gesamt"] = round(sum(p["preis"] for p in out["positionen"]), 2)
 
-    # --- Zahlungsbedingung: nach "Gesamt"-Zeile bis "Vielen Dank"/"Mit freundlichen" ---
-    zb = []
+    # --- Text nach der "Gesamt"-Zeile bis zum Schluss ("Vielen Dank", "Mit freundlichen" …) ---
+    nach = []
     for l in rest[g + 1:]:
-        if re.match(r"^(Vielen Dank|Mit freundlichen)", l, re.I):
+        if SCHLUSS.match(l):
             break
-        zb.append(l)
-    out["zahlungsbedingung"] = _norm(" ".join(zb))
+        nach.append(l)
+
+    if not angebot:
+        out["zahlungsbedingung"] = _norm(" ".join(nach))
+        return out
+
+    # Angebot: Zeile mit „gültig bis …“ / „Bindefrist …“ auswerten, der Rest sind Hinweise
+    out["gueltig_bis"], hinweise = "", []
+    for l in nach:
+        if GUELTIG.search(l) and not out["gueltig_bis"]:
+            dm = DATE.search(l)
+            dauer = GUELTIG_DAUER.search(l)
+            if dm:
+                out["gueltig_bis"] = _iso(dm)
+                continue
+            if dauer and out["datum"]:
+                out["gueltig_bis"] = _add_days(out["datum"], int(dauer.group(1)), dauer.group(2))
+                continue
+        hinweise.append(l)
+    out["hinweise"] = "\n".join(hinweise)
     return out
+
+
+parse_invoice = parse_document   # alter Name
 
 
 def textbaustein_vorschlag(beschreibung):

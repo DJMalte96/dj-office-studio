@@ -2,6 +2,13 @@
 
 Alle Änderungen an DJ Office Studio. Neueste Version oben.
 
+## 0.8.1 – 2026-11-16
+
+### Neu
+- **Alte Angebote importieren**: Der Import nimmt jetzt auch Angebots-PDFs an – gemischt mit Rechnungen, die App erkennt selbst, was was ist. Erkannt werden Angebotsnummer, Datum, Empfänger, Positionen, **gültig bis** (als Datum oder z. B. „14 Tage gültig“) und die **Hinweise**. Angebote ohne Nummer bekommen beim Übernehmen die nächste freie Nummer.
+- Beim Übernehmen lässt sich der Status der importierten Angebote wählen (offen / angenommen / abgelehnt).
+- In der Angebotsliste gibt es dafür den Button **⇪ Alte Angebote importieren**; die Startseiten-Kachel „Importieren“ gilt für beides.
+
 ## 0.8.0 – 2026-11-16
 
 ### Neu
