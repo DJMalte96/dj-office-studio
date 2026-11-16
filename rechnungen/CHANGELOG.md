@@ -2,6 +2,11 @@
 
 Alle Änderungen an DJ Office Studio. Neueste Version oben.
 
+## 0.9.2 – 2026-11-16
+
+### Neu
+- Unter **⚙ Einstellungen** steht jetzt die installierte **Version** der App, mit Link zum Changelog („Was ist neu?“).
+
 ## 0.9.1 – 2026-11-16
 
 ### Entfernt

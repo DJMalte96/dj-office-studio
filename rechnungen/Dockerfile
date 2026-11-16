@@ -11,6 +11,8 @@ COPY requirements.txt /tmp/requirements.txt
 RUN pip install --no-cache-dir -r /tmp/requirements.txt
 
 COPY app /app
+# Für die Versionsanzeige in den Einstellungen
+COPY config.yaml /app/
 WORKDIR /app
 
 ENV DATA_DIR=/data \
