@@ -55,15 +55,12 @@ Die Absenderdaten erscheinen in der Absenderzeile und in der Fußzeile jeder Rec
 | `startnummer` | Kleinste Rechnungsnummer; danach wird automatisch hochgezählt | `37` |
 | `paperless_url` | Adresse von Paperless-ngx (leer = Paperless-Funktion aus) | `http://192.168.1.10:8000` |
 | `paperless_token` | API-Token aus Paperless (Profil → „API-Auth-Token“) | |
-| `paperless_dokumenttyp` | Dokumenttyp in Paperless (wird bei Bedarf angelegt) | `Rechnung` |
-| `paperless_tags` | Tags, kommagetrennt (werden bei Bedarf angelegt) | `Ausgangsrechnung` |
-| `paperless_kunde_als_korrespondent` | Kunde als Korrespondent setzen (wird bei Bedarf angelegt) | `true` |
 
 Solange Name oder IBAN fehlen, zeigt die App oben einen Hinweis.
 
 ### Paperless-ngx
 
-Sind `paperless_url` und `paperless_token` eingetragen, erscheint im Archiv bei markierten Rechnungen der Button **⇪ An Paperless senden**. Jede Rechnung wird als PDF hochgeladen – mit Titel (z. B. `Rechnung_037_311026`), Rechnungsdatum, Kunde als Korrespondent, Dokumenttyp und Tags. Übertragene Rechnungen sind im Archiv mit „Paperless ✓“ gekennzeichnet.
+Sind `paperless_url` und `paperless_token` eingetragen, erscheint im Archiv bei markierten Rechnungen der Button **⇪ An Paperless senden**. Jede Rechnung wird als komplette PDF-Datei (z. B. `Rechnung_037_311026.pdf`) an Paperless übergeben – Titel, Korrespondent, Dokumenttyp, Tags usw. vergibt Paperless anschließend selbst (z. B. über Zuweisungsregeln oder die automatische Zuordnung). Übertragene Rechnungen sind im Archiv mit „Paperless ✓“ gekennzeichnet.
 
 - **Token**: in Paperless oben rechts auf den Benutzer → *Mein Profil* → *API-Auth-Token* erzeugen und kopieren.
 - **Adresse**: Paperless muss über eine normale Adresse mit Port erreichbar sein, z. B. `http://<IP-von-Home-Assistant>:8000` – dafür in der Paperless-App unter *Netzwerk* einen Port freigeben. Die Ingress-Adresse aus der Seitenleiste funktioniert nicht.

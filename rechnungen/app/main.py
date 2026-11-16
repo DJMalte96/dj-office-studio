@@ -273,9 +273,6 @@ def invoices_to_paperless():
         return jsonify({"error": "Paperless ist nicht eingerichtet – bitte paperless_url und "
                                  "paperless_token in der App-Konfiguration eintragen."}), 400
     client = paperless.Paperless(*cfg)
-    tags = [t.strip() for t in (a.get("paperless_tags") or "").split(",") if t.strip()]
-    doc_type = a.get("paperless_dokumenttyp") or ""
-    mit_kunde = a.get("paperless_kunde_als_korrespondent", True)
 
     ok, fehler = [], []
     for inv_id in dict.fromkeys(request.get_json().get("ids") or []):
@@ -284,10 +281,7 @@ def invoices_to_paperless():
             continue
         name = pdf_filename(inv)
         try:
-            client.upload(build_invoice_pdf(inv, a), name, title=name.removesuffix(".pdf"),
-                          created=inv["datum"],
-                          correspondent=inv["kunde"].get("name") if mit_kunde else None,
-                          document_type=doc_type, tags=tags)
+            client.upload(build_invoice_pdf(inv, a), name)   # nur die PDF – Rest macht Paperless
         except paperless.PaperlessError as e:
             fehler.append({"id": inv_id, "name": name, "error": str(e)})
             if e.fatal:

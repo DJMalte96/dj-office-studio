@@ -2,6 +2,12 @@
 
 Alle Änderungen an DJ Office Studio. Neueste Version oben.
 
+## 0.6.1 – 2026-11-16
+
+### Geändert
+- **Paperless**: Es wird nur noch die komplette PDF-Datei übertragen – ohne Titel, Datum, Korrespondent, Dokumenttyp oder Tags. Die weitere Verarbeitung übernimmt Paperless selbst.
+- Die Optionen `paperless_dokumenttyp`, `paperless_tags` und `paperless_kunde_als_korrespondent` entfallen; es bleiben `paperless_url` und `paperless_token`.
+
 ## 0.6.0 – 2026-11-16
 
 ### Neu
