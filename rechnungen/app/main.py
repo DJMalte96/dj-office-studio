@@ -342,7 +342,7 @@ def offers_list():
 
 @app.get("/api/angebote/naechste-nummer")
 def offers_next():
-    return jsonify({"nummer": db.next_number(1, "angebote")})
+    return jsonify({"nummer": db.next_number(absender().get("angebot_startnummer") or 1, "angebote")})
 
 
 @app.get("/api/angebote/<int:offer_id>")
@@ -473,7 +473,7 @@ def import_uebernehmen():
         n_rech += 1
     status = data.get("angebot_status") if data.get("angebot_status") in db.STATUS else "offen"
     for a in data.get("angebote") or []:
-        nummer = (a.get("nummer") or "").strip() or db.next_number(1, "angebote")  # ohne Nummer → nächste freie
+        nummer = (a.get("nummer") or "").strip() or db.next_number(absender().get("angebot_startnummer") or 1, "angebote")  # ohne Nummer → nächste freie
         if db.number_taken(nummer, table="angebote") or not a.get("positionen"):
             continue
         kunde = {k: (a["kunde"].get(k) or "").strip() for k in db.TABLES["kunden"]}
