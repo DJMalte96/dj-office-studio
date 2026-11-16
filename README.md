@@ -53,13 +53,14 @@ Die Absenderdaten erscheinen in der Absenderzeile und in der Fußzeile jeder Rec
 | `kleinunternehmer` | Hinweis „Gem. §19 UStG … nicht umsatzsteuerpflichtig“ drucken | `true` |
 | `pdf_ordner` | Ordner für die PDF-Kopien | `/share/rechnungen` |
 | `startnummer` | Kleinste Rechnungsnummer; danach wird automatisch hochgezählt | `37` |
+| `paperless_installiert` | Paperless-ngx ist installiert – blendet im Archiv den Button „An Paperless senden“ ein | `false` |
 | `paperless_eingangsordner` | Eingangsordner (consume) von Paperless-ngx; leer = Paperless-Funktion aus | `/share/paperless/consume` |
 
 Solange Name oder IBAN fehlen, zeigt die App oben einen Hinweis.
 
 ### Paperless-ngx
 
-Im Archiv gibt es bei markierten Rechnungen den Button **⇪ An Paperless senden**. Jede Rechnung wird als komplette PDF-Datei (z. B. `Rechnung_037_311026.pdf`) in den Eingangsordner von Paperless gelegt – Titel, Korrespondent, Dokumenttyp, Tags usw. vergibt Paperless anschließend selbst (z. B. über Zuweisungsregeln oder die automatische Zuordnung). Übertragene Rechnungen sind im Archiv mit „Paperless ✓“ gekennzeichnet.
+Ist `paperless_installiert` eingeschaltet, gibt es im Archiv bei markierten Rechnungen den Button **⇪ An Paperless senden** (sonst ist er ausgeblendet). Jede Rechnung wird als komplette PDF-Datei (z. B. `Rechnung_037_311026.pdf`) in den Eingangsordner von Paperless gelegt – Titel, Korrespondent, Dokumenttyp, Tags usw. vergibt Paperless anschließend selbst (z. B. über Zuweisungsregeln oder die automatische Zuordnung). Übertragene Rechnungen sind im Archiv mit „Paperless ✓“ gekennzeichnet.
 
 - `paperless_eingangsordner` muss auf den Eingangsordner (consume) der Paperless-App zeigen – welcher das ist, steht in der Konfiguration der Paperless-App. Der Ordner muss unter `/share` oder `/media` liegen, damit DJ Office Studio darauf zugreifen kann.
 - Existiert der Ordner nicht, meldet die App einen Fehler, statt ihn anzulegen – so landen keine PDFs unbemerkt im falschen Ordner.
