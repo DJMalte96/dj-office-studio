@@ -2,6 +2,11 @@
 
 Alle Änderungen an DJ Office Studio. Neueste Version oben.
 
+## 0.9.1 – 2026-11-16
+
+### Entfernt
+- Die alten Felder in der Home-Assistant-Konfiguration (*Einstellungen → Apps → DJ Office Studio → Konfiguration*) sind weg – alle Einstellungen werden nur noch in der App unter **⚙** gemacht. Die Werte wurden mit 0.9.0 bereits in die App übernommen.
+
 ## 0.9.0 – 2026-11-16
 
 ### Neu
