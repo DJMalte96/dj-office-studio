@@ -40,7 +40,8 @@ jobs:
         run: pip install -r rechnungen/requirements.txt pyinstaller pillow
 
       - name: Version
-        run: echo "VERSION=$(grep '^version:' rechnungen/config.yaml | sed 's/version: *//; s/\"//g')" >> "$GITHUB_ENV"
+        run: |
+          echo "VERSION=$(grep '^version:' rechnungen/config.yaml | cut -d '"' -f 2)" >> "$GITHUB_ENV"
 
       - name: Bauen
         run: python desktop/build.py
