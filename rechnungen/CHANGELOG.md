@@ -2,6 +2,15 @@
 
 Alle Änderungen an DJ Office Studio. Neueste Version oben.
 
+## 0.8.5 – 2026-11-16
+
+### Neu
+- **Offene Angebote** oben in der Angebotsansicht: alle Angebote mit Status „offen“ mit Angebotsdatum, Betrag und Restlaufzeit („noch 12 Tage“, „endet heute“, „seit 3 Tagen abgelaufen“) – bald ablaufende zuerst, abgelaufene am Ende. Summenzeile mit Anzahl, Gesamtbetrag der noch gültigen Angebote und nächstem Ablauf; direkt **→ Rechnung** möglich.
+- **Startseite**: neue Karte „Offene Angebote“ mit Summe und den nächsten vier Angeboten, außerdem ein Hinweis, wenn ein Angebot in den nächsten 3 Tagen abläuft.
+
+### Geändert
+- Die bisherige Angebotsliste heißt jetzt „Alle Angebote“.
+
 ## 0.8.4 – 2026-11-16
 
 ### Neu

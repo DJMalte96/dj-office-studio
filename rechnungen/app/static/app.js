@@ -786,7 +786,63 @@ function gueltigBadge(a) {
   return `<span class="frist gruen" ${bis}>bis ${fmtDate(a.gueltig_bis)}</span>`;
 }
 
+/* Offene Angebote mit Restlaufzeit: noch gültige zuerst (bald ablaufende oben), dann ohne Frist,
+   dann abgelaufene (zuletzt abgelaufene oben). */
+function offeneAngebote() {
+  const rang = a => a.rest === null ? 1 : a.rest < 0 ? 2 : 0;
+  return state.angebote.filter(a => a.status === "offen")
+    .map(a => ({ ...a, rest: a.gueltig_bis ? Math.round((isoToUtc(a.gueltig_bis) - heuteUtc()) / TAG_MS) : null }))
+    .sort((a, b) => rang(a) - rang(b) || (rang(a) === 2 ? b.rest - a.rest : (a.rest ?? 0) - (b.rest ?? 0))
+      || b.datum.localeCompare(a.datum));
+}
+
+function restBadge(a) {
+  const bis = a.gueltig_bis ? `title="gültig bis ${fmtDate(a.gueltig_bis)}"` : "";
+  if (a.rest === null) return `<span class="frist neutral">ohne Frist</span>`;
+  if (a.rest < 0) return `<span class="frist rot" ${bis}>seit ${-a.rest} ${-a.rest === 1 ? "Tag" : "Tagen"} abgelaufen</span>`;
+  if (a.rest === 0) return `<span class="frist gelb" ${bis}>endet heute</span>`;
+  return `<span class="frist ${a.rest <= 7 ? "gelb" : "gruen"}" ${bis}>noch ${a.rest} ${a.rest === 1 ? "Tag" : "Tage"}</span>`;
+}
+
+function renderAngeboteOffen() {
+  const offen = offeneAngebote();
+  const gueltig = offen.filter(a => a.rest === null || a.rest >= 0);
+  const summe = gueltig.reduce((s, a) => s + a.gesamt, 0);
+  $("#angebote-offen").innerHTML = `
+    <h2>Offene Angebote</h2>
+    ${offen.length ? `<table class="list offen-liste">
+      <thead><tr><th>Angebot</th><th>Angeboten am</th><th class="num">Betrag</th><th>Gültigkeit</th><th></th></tr></thead>
+      <tbody>
+      <tr class="summen-zeile">
+        <td>${gueltig.length} noch gültige${offen.length > gueltig.length ? ` · ${offen.length - gueltig.length} abgelaufen` : ""}</td>
+        <td></td>
+        <td class="num">${fmtEuro(summe)}</td>
+        <td>${gueltig.length ? `<span class="naechste">nächster Ablauf:</span> ${restBadge(gueltig[0])}` : ""}</td>
+        <td></td>
+      </tr>
+      ${offen.map(a => `<tr data-id="${a.id}">
+        <td><a href="#" class="rlink" title="Im Editor öffnen">${esc(angebotName(a))}</a><br><small>${esc(a.kunde.name)}</small></td>
+        <td>${fmtDate(a.datum)}</td>
+        <td class="num">${fmtEuro(a.gesamt)}</td>
+        <td>${restBadge(a)}</td>
+        <td class="btns"><button class="small" data-act="rechnung" title="Rechnung aus diesem Angebot erstellen">→ Rechnung</button></td>
+      </tr>`).join("")}
+      </tbody></table>`
+    : `<p class="hint alles-bezahlt">Keine offenen Angebote.</p>`}`;
+}
+
+$("#angebote-offen").addEventListener("click", async e => {
+  const tr = e.target.closest("tr[data-id]");
+  if (!tr) return;
+  const a = state.angebote.find(x => x.id === Number(tr.dataset.id));
+  if (e.target.closest("a.rlink")) { e.preventDefault(); loadAngebotIntoForm(a); }
+  if (e.target.closest("button[data-act='rechnung']")) {
+    try { await angebotZuRechnung(a); } catch (err) { toast(err.message, true); }
+  }
+});
+
 function renderAngebote() {
+  renderAngeboteOffen();
   const q = $("#angebote-suche").value.trim().toLowerCase();
   const list = state.angebote.filter(a =>
     !q || [angebotName(a), a.nummer, a.kunde.name, a.kunde.ort, ...a.positionen.map(p => p.beschreibung)]
@@ -1173,6 +1229,11 @@ $("#tab-start").addEventListener("click", e => {
     }
     return;
   }
+  const al = e.target.closest("a.start-alink");
+  if (al) {
+    e.preventDefault();
+    return loadAngebotIntoForm(state.angebote.find(a => a.id === Number(al.dataset.id)));
+  }
   const rl = e.target.closest("a.start-rlink");
   if (rl) {
     e.preventDefault();
@@ -1190,9 +1251,23 @@ async function renderStart() {
     { weekday: "long", day: "numeric", month: "long", year: "numeric" });
 
   try {
-    state.rechnungen = await api("rechnungen");
+    [state.rechnungen, state.angebote] = await Promise.all([api("rechnungen"), api("angebote")]);
   } catch (e) { return toast("Laden fehlgeschlagen: " + e.message, true); }
   const alle = state.rechnungen;
+
+  // Offene Angebote (Kurzfassung)
+  const offeneAng = offeneAngebote();
+  const gueltigeAng = offeneAng.filter(a => a.rest === null || a.rest >= 0);
+  $("#start-angebote").innerHTML = offeneAng.length ? `
+    <div class="stat-gross">${fmtEuro(gueltigeAng.reduce((s, a) => s + a.gesamt, 0))}<small>${gueltigeAng.length} noch gültige${
+      gueltigeAng.length === 1 ? "s Angebot" : " Angebote"}${offeneAng.length > gueltigeAng.length
+      ? ` · ${offeneAng.length - gueltigeAng.length} abgelaufen` : ""}</small></div>
+    <ul class="mini-liste">${offeneAng.slice(0, 4).map(a => `<li>
+      <div class="ml-text"><a href="#" class="start-alink" data-id="${a.id}">${esc(angebotName(a))}</a>
+        <small>${esc(a.kunde.name)} · angeboten am ${fmtDate(a.datum)}</small></div>
+      <span class="num">${fmtEuro(a.gesamt)}</span>${restBadge(a)}</li>`).join("")}</ul>
+    ${offeneAng.length > 4 ? `<p class="hint">+ ${offeneAng.length - 4} weitere</p>` : ""}`
+    : `<p class="hint">Keine offenen Angebote.</p>`;
 
   // Offene Rechnungen (Kurzfassung)
   const offen = alle.filter(r => !r.bezahlt).map(r => ({ ...r, ziel: zahlungsziel(r) }))
@@ -1240,8 +1315,15 @@ async function renderStart() {
   for (const r of offen.filter(r => r.ziel && r.ziel.rest === 0)) {
     hinweise.push(["gelb", `<a href="#" class="start-rlink" data-id="${r.id}">${esc(rechnungsName(r))}</a> ist heute fällig.`]);
   }
+  const angHinweise = [];
+  for (const a of offeneAng.filter(a => a.rest !== null && a.rest >= 0 && a.rest <= 3)) {
+    angHinweise.push(["gelb", `Angebot <a href="#" class="start-alink" data-id="${a.id}">${esc(angebotName(a))}</a> (${esc(a.kunde.name)}) `
+      + (a.rest === 0 ? "läuft heute ab." : `läuft in ${a.rest} ${a.rest === 1 ? "Tag" : "Tagen"} ab.`)]);
+  }
   $("#start-hinweise").innerHTML = hinweise.map(([art, text]) => `<li class="${art}">${text}</li>`).join("");
   $("#start-hinweise").classList.toggle("hidden", !hinweise.length);
+  $("#start-ang-hinweise").innerHTML = angHinweise.map(([art, text]) => `<li class="${art}">${text}</li>`).join("");
+  $("#start-ang-hinweise").classList.toggle("hidden", !angHinweise.length);
 }
 
 // ---------- Start ----------
