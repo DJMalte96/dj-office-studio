@@ -50,6 +50,21 @@ CREATE TABLE IF NOT EXISTS rechnungen (
     bezahlt INTEGER DEFAULT 0,
     erstellt TEXT DEFAULT CURRENT_TIMESTAMP
 );
+CREATE TABLE IF NOT EXISTS angebote (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nummer TEXT NOT NULL UNIQUE,
+    datum TEXT NOT NULL,
+    gueltig_bis TEXT DEFAULT '',
+    kunde_id INTEGER REFERENCES kunden(id) ON DELETE SET NULL,
+    kunde_json TEXT NOT NULL,
+    positionen_json TEXT NOT NULL,
+    zahlungsbedingung TEXT DEFAULT '',
+    hinweise TEXT DEFAULT '',
+    gesamt REAL NOT NULL,
+    status TEXT DEFAULT 'offen',          -- offen | angenommen | abgelehnt
+    rechnung_id INTEGER REFERENCES rechnungen(id) ON DELETE SET NULL,
+    erstellt TEXT DEFAULT CURRENT_TIMESTAMP
+);
 """
 
 DEFAULT_ZAHLUNGSBEDINGUNGEN = [
@@ -179,18 +194,18 @@ def get_invoice(inv_id):
         return _invoice_from_row(r) if r else None
 
 
-def next_number(start=1):
-    """Höchste numerische Rechnungsnummer + 1 (mindestens `start`), dreistellig mit führenden Nullen."""
+def next_number(start=1, table="rechnungen"):
+    """Höchste numerische Nummer + 1 (mindestens `start`), dreistellig mit führenden Nullen."""
     with connect() as con:
-        nums = [r[0] for r in con.execute("SELECT nummer FROM rechnungen")]
+        nums = [r[0] for r in con.execute(f"SELECT nummer FROM {table}")]
     highest = max((int(n) for n in nums if n.isdigit()), default=0)
     width = max([3] + [len(n) for n in nums if n.isdigit()])
     return str(max(highest + 1, int(start or 1))).zfill(width)
 
 
-def number_taken(nummer, exclude_id=None):
+def number_taken(nummer, exclude_id=None, table="rechnungen"):
     with connect() as con:
-        r = con.execute("SELECT id FROM rechnungen WHERE nummer = ? AND id IS NOT ?",
+        r = con.execute(f"SELECT id FROM {table} WHERE nummer = ? AND id IS NOT ?",
                         (nummer, exclude_id)).fetchone()
         return r is not None
 
@@ -237,3 +252,57 @@ def set_paperless(inv_id, zeitpunkt):
 def delete_invoice(inv_id):
     with connect() as con:
         con.execute("DELETE FROM rechnungen WHERE id = ?", (inv_id,))
+
+
+# ---------- Angebote ----------
+
+STATUS = ("offen", "angenommen", "abgelehnt")
+
+
+def _offer_from_row(r):
+    d = dict(r)
+    d["kunde"] = json.loads(d.pop("kunde_json"))
+    d["positionen"] = json.loads(d.pop("positionen_json"))
+    d["art"] = "angebot"
+    return d
+
+
+def list_offers():
+    with connect() as con:
+        return [_offer_from_row(r) for r in con.execute(
+            "SELECT * FROM angebote ORDER BY datum DESC, nummer DESC")]
+
+
+def get_offer(offer_id):
+    with connect() as con:
+        r = con.execute("SELECT * FROM angebote WHERE id = ?", (offer_id,)).fetchone()
+        return _offer_from_row(r) if r else None
+
+
+def save_offer(a, offer_id=None):
+    vals = (a["nummer"], a["datum"], a["gueltig_bis"], a.get("kunde_id"), json.dumps(a["kunde"]),
+            json.dumps(a["positionen"]), a["zahlungsbedingung"], a["hinweise"], a["gesamt"])
+    with connect() as con:
+        if offer_id:
+            con.execute(
+                "UPDATE angebote SET nummer=?, datum=?, gueltig_bis=?, kunde_id=?, kunde_json=?,"
+                " positionen_json=?, zahlungsbedingung=?, hinweise=?, gesamt=? WHERE id=?",
+                vals + (offer_id,))
+            return offer_id
+        return con.execute(
+            "INSERT INTO angebote (nummer, datum, gueltig_bis, kunde_id, kunde_json, positionen_json,"
+            " zahlungsbedingung, hinweise, gesamt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", vals).lastrowid
+
+
+def set_offer_status(offer_id, status, rechnung_id=None):
+    with connect() as con:
+        if rechnung_id:
+            con.execute("UPDATE angebote SET status = ?, rechnung_id = ? WHERE id = ?",
+                        (status, rechnung_id, offer_id))
+        else:
+            con.execute("UPDATE angebote SET status = ? WHERE id = ?", (status, offer_id))
+
+
+def delete_offer(offer_id):
+    with connect() as con:
+        con.execute("DELETE FROM angebote WHERE id = ?", (offer_id,))

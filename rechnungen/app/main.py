@@ -63,7 +63,8 @@ def get_absender():
     a = absender()
     return jsonify({k: a.get(k) for k in ("name", "strasse", "plz_ort", "ort_fuer_datum")}
                    | {"vollstaendig": bool(a.get("name") and a.get("iban")),
-                      "paperless": bool(a.get("paperless_installiert"))})
+                      "paperless": bool(a.get("paperless_installiert")),
+                      "angebot_gueltigkeit_tage": a.get("angebot_gueltigkeit_tage") or 30})
 
 
 # ---------- Stammdaten (Kunden, Textbausteine, Zahlungsbedingungen) ----------
@@ -120,16 +121,18 @@ for _t in db.TABLES:
 
 # ---------- Rechnungen ----------
 
-def _validate_invoice(data, inv_id=None, check_number=True):
+def _validate_invoice(data, inv_id=None, check_number=True, art="rechnung"):
+    angebot = art == "angebot"
+    wort = "Angebotsnummer" if angebot else "Rechnungsnummer"
     errors = []
     kunde = data.get("kunde") or {}
     if not (kunde.get("name") or "").strip():
         errors.append("Kundenname fehlt")
     nummer = (data.get("nummer") or "").strip()
     if not nummer:
-        errors.append("Rechnungsnummer fehlt")
-    elif check_number and db.number_taken(nummer, inv_id):
-        errors.append(f"Rechnungsnummer {nummer} ist bereits vergeben")
+        errors.append(f"{wort} fehlt")
+    elif check_number and db.number_taken(nummer, inv_id, "angebote" if angebot else "rechnungen"):
+        errors.append(f"{wort} {nummer} ist bereits vergeben")
     positionen = [p for p in data.get("positionen") or [] if (p.get("beschreibung") or "").strip()]
     if not positionen:
         errors.append("Mindestens eine Position mit Beschreibung angeben")
@@ -138,11 +141,11 @@ def _validate_invoice(data, inv_id=None, check_number=True):
             p["preis"] = round(float(p.get("preis") or 0), 2)
         except (TypeError, ValueError):
             errors.append(f"Ungültiger Preis bei '{p['beschreibung'][:30]}'")
-    if not (data.get("zahlungsbedingung") or "").strip():
+    if not angebot and not (data.get("zahlungsbedingung") or "").strip():
         errors.append("Zahlungsbedingung fehlt")
     if errors:
         abort(Response(json.dumps({"error": "; ".join(errors)}), 400, mimetype="application/json"))
-    return {
+    doc = {
         "nummer": nummer,
         "datum": data.get("datum") or date.today().isoformat(),
         "kunde": {k: (kunde.get(k) or "").strip() for k in db.TABLES["kunden"]},
@@ -150,10 +153,15 @@ def _validate_invoice(data, inv_id=None, check_number=True):
         "positionen": [{"beschreibung": p["beschreibung"].strip(),
                         "lieferdatum": p.get("lieferdatum") or "",
                         "preis": p["preis"]} for p in positionen],
-        "zahlungsbedingung": data["zahlungsbedingung"].strip(),
+        "zahlungsbedingung": (data.get("zahlungsbedingung") or "").strip(),
         "gesamt": round(sum(p["preis"] for p in positionen), 2),
-        "bezahlt": bool(data.get("bezahlt")),
     }
+    if angebot:
+        doc |= {"art": "angebot", "gueltig_bis": data.get("gueltig_bis") or "",
+                "hinweise": (data.get("hinweise") or "").strip()}
+    else:
+        doc["bezahlt"] = bool(data.get("bezahlt"))
+    return doc
 
 
 def _write_pdf_file(inv):
@@ -192,6 +200,9 @@ def invoices_create():
     inv = _validate_invoice(request.get_json())
     inv["kunde_id"] = db.upsert_customer({**inv["kunde"], "id": inv["kunde_id"]})
     inv_id = db.save_invoice(inv)
+    angebot_id = (request.get_json() or {}).get("angebot_id")
+    if angebot_id and db.get_offer(angebot_id):
+        db.set_offer_status(angebot_id, "angenommen", inv_id)
     return jsonify({"id": inv_id, "datei": _write_pdf_file(inv)}), 201
 
 
@@ -319,7 +330,62 @@ def invoices_to_paperless():
 def invoices_preview():
     data = request.get_json()
     data["nummer"] = (data.get("nummer") or "").strip() or "VORSCHAU"
-    return _pdf_response(_validate_invoice(data, check_number=False))
+    return _pdf_response(_validate_invoice(data, check_number=False, art=data.get("art") or "rechnung"))
+
+
+# ---------- Angebote ----------
+
+@app.get("/api/angebote")
+def offers_list():
+    return jsonify([a | {"name": pdf_filename(a).removesuffix(".pdf")} for a in db.list_offers()])
+
+
+@app.get("/api/angebote/naechste-nummer")
+def offers_next():
+    return jsonify({"nummer": db.next_number(1, "angebote")})
+
+
+@app.get("/api/angebote/<int:offer_id>")
+def offers_get(offer_id):
+    return jsonify(db.get_offer(offer_id) or abort(404))
+
+
+def _save_offer(offer_id=None):
+    a = _validate_invoice(request.get_json(), offer_id, art="angebot")
+    a["kunde_id"] = db.upsert_customer({**a["kunde"], "id": a["kunde_id"]})
+    offer_id = db.save_offer(a, offer_id)
+    return {"id": offer_id, "datei": _write_pdf_file(a)}
+
+
+@app.post("/api/angebote")
+def offers_create():
+    return jsonify(_save_offer()), 201
+
+
+@app.put("/api/angebote/<int:offer_id>")
+def offers_update(offer_id):
+    db.get_offer(offer_id) or abort(404)
+    return jsonify(_save_offer(offer_id))
+
+
+@app.patch("/api/angebote/<int:offer_id>/status")
+def offers_status(offer_id):
+    status = (request.get_json() or {}).get("status")
+    if status not in db.STATUS:
+        abort(400)
+    db.set_offer_status(offer_id, status)
+    return "", 204
+
+
+@app.delete("/api/angebote/<int:offer_id>")
+def offers_delete(offer_id):
+    db.delete_offer(offer_id)
+    return "", 204
+
+
+@app.get("/api/angebote/<int:offer_id>/pdf")
+def offers_pdf(offer_id):
+    return _pdf_response(db.get_offer(offer_id) or abort(404))
 
 
 # ---------- Import alter Rechnungen ----------

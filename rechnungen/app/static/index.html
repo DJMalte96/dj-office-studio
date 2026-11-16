@@ -36,6 +36,7 @@
       <button data-tab="start" class="active">Start</button>
       <button data-tab="neu">Neue Rechnung</button>
       <button data-tab="liste">Rechnungen</button>
+      <button data-tab="angebote">Angebote</button>
       <button data-tab="kunden">Kunden</button>
       <button data-tab="textbausteine">Rechnungsposten</button>
       <button data-tab="zahlungsbedingungen">Zahlungsbedingungen</button>
@@ -67,6 +68,12 @@
         </button>
         <button type="button" class="aktion" data-goto="liste">
           <span class="a-icon">☰</span><span class="a-titel">Rechnungen</span><small>Offene Rechnungen &amp; Archiv</small>
+        </button>
+        <button type="button" class="aktion" data-goto="angebot-neu">
+          <span class="a-icon">✎</span><span class="a-titel">Neues Angebot</span><small>Angebot schreiben &amp; PDF erzeugen</small>
+        </button>
+        <button type="button" class="aktion" data-goto="angebote">
+          <span class="a-icon">❐</span><span class="a-titel">Angebote</span><small>Status &amp; in Rechnung umwandeln</small>
         </button>
         <button type="button" class="aktion" data-goto="import">
           <span class="a-icon">⇪</span><span class="a-titel">Importieren</span><small>Alte Rechnungen hochladen</small>
@@ -129,15 +136,19 @@
           </div>
 
           <div class="card">
-            <h2>Rechnung</h2>
+            <h2><span class="nur-rechnung">Rechnung</span><span class="nur-angebot">Angebot</span></h2>
             <div class="row">
-              <label>Rechnungs-Nr. <input id="r-nummer" required></label>
-              <label>Rechnungsdatum <input id="r-datum" type="date" required></label>
+              <label><span class="nur-rechnung">Rechnungs-Nr.</span><span class="nur-angebot">Angebots-Nr.</span> <input id="r-nummer" required></label>
+              <label><span class="nur-rechnung">Rechnungsdatum</span><span class="nur-angebot">Angebotsdatum</span> <input id="r-datum" type="date" required></label>
             </div>
-            <label>Zahlungsbedingung
+            <label class="nur-angebot">Gültig bis <span class="opt">(Bindefrist des Angebots)</span>
+              <input id="a-gueltig" type="date">
+            </label>
+            <label>Zahlungsbedingung <span class="opt nur-angebot">(optional)</span>
               <select id="r-zahlung"></select>
             </label>
             <p id="r-zahlung-text" class="hint"></p>
+            <p id="aus-angebot" class="aus-angebot hidden"></p>
           </div>
         </div>
 
@@ -148,10 +159,15 @@
           <div class="total">Gesamt: <span id="gesamt">0,- Euro</span></div>
         </div>
 
+        <div class="card nur-angebot">
+          <h2>Hinweise <span class="h2-sub">erscheinen im Angebot unter der Tabelle (optional)</span></h2>
+          <textarea id="a-hinweise" rows="4" placeholder="z. B.&#10;Jede weitere angefangene Stunde wird mit 80,- Euro berechnet.&#10;Inklusive Musik- und Lichtanlage sowie Auf- und Abbau.&#10;Die GEMA-Anmeldung erfolgt durch den Veranstalter."></textarea>
+        </div>
+
         <div class="actions">
           <button type="button" id="btn-neu" class="secondary">Formular leeren</button>
           <button type="button" id="btn-vorschau" class="secondary">PDF-Vorschau</button>
-          <button type="submit" id="btn-speichern">Rechnung speichern &amp; PDF öffnen</button>
+          <button type="submit" id="btn-speichern">Speichern &amp; PDF öffnen</button>
         </div>
       </form>
     </section>
@@ -211,6 +227,26 @@
       </div>
     </section>
 
+    <!-- ================= Angebote ================= -->
+    <section id="tab-angebote" class="tab">
+      <div class="card">
+        <div class="row between">
+          <h2>Angebote</h2>
+          <button type="button" id="btn-angebot-neu">＋ Neues Angebot</button>
+        </div>
+        <div class="liste-tools">
+          <input id="angebote-suche" class="search" placeholder="Angebote durchsuchen …">
+        </div>
+        <table class="list">
+          <thead><tr>
+            <th>Nr.</th><th>Datum</th><th>Kunde</th><th class="num">Betrag</th><th>Gültigkeit</th><th>Status</th><th></th>
+          </tr></thead>
+          <tbody id="angebote-body"></tbody>
+        </table>
+        <p id="angebote-summe" class="hint"></p>
+      </div>
+    </section>
+
     <!-- ================= Stammdaten (generisch) ================= -->
     <section id="tab-kunden" class="tab" data-stamm="kunden"></section>
     <section id="tab-textbausteine" class="tab" data-stamm="textbausteine"></section>
@@ -226,11 +262,11 @@
         <label class="zeit calc">bis <input type="time" class="bis"></label>
         <span class="stunden calc"></span>
       </div>
-      <label class="text-label">Text auf der Rechnung <span class="opt text-hinweis"></span>
+      <label class="text-label"><span class="nur-rechnung">Text auf der Rechnung</span><span class="nur-angebot">Text im Angebot</span> <span class="opt text-hinweis"></span>
         <textarea class="beschreibung" rows="2" placeholder="Rechnungsposten wählen und Zeiten eintragen – oder eigenen Text schreiben"></textarea>
       </label>
       <div class="pos-foot">
-        <label>Lieferdatum <input type="date" class="lieferdatum"></label>
+        <label><span class="nur-rechnung">Lieferdatum</span><span class="nur-angebot">Datum der Veranstaltung</span> <input type="date" class="lieferdatum"></label>
         <label>Preis (€) <input type="number" step="0.01" min="0" class="preis"></label>
       </div>
     </div>

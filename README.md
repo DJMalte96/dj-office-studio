@@ -19,6 +19,7 @@ Eine Home-Assistant-App zum Schreiben von DJ-Rechnungen. Kunden auswählen, Rech
 - **PDF** im A4-Layout mit Absenderzeile, Adressfeld, Positionstabelle und Fußzeile (Bankverbindung, Steuernummer, Kleinunternehmer-Hinweis nach §19 UStG). Vorschau vor dem Speichern; beim Speichern wird eine Kopie im Ordner `/share/rechnungen` abgelegt.
 - **Offene Rechnungen** auf einen Blick: eine Summenzeile mit Anzahl, Gesamtbetrag und nächster Frist; darunter je Rechnung Rechnungsname (z. B. `Rechnung_037_311026`), Betrag, verbleibende Zeit („noch 5 Tage“, „3 Tage überfällig“) , ein Haken zum Abhaken, wenn bezahlt wurde, und ein ✕ zum direkten Löschen. Das Zahlungsziel wird aus der Zahlungsbedingung gelesen (z. B. „innerhalb der nächsten 8 Tage“) und ab dem Rechnungsdatum gerechnet.
 - **Archiv** für bezahlte Rechnungen: Wird eine offene Rechnung abgehakt, wandert sie ins Archiv – mit Suche und Sortierung nach Nummer, Datum, Betrag oder Kunde. Rechnungen lassen sich jederzeit bearbeiten oder wieder auf „offen“ setzen. Mehrere Rechnungen markieren und **als ZIP herunterladen** oder **an Paperless-ngx senden**.
+- **Angebote**: Im selben Editor wie Rechnungen (Kunde, Rechnungsposten mit von/bis-Zeiten, Preise) – mit eigenem Nummernkreis, Angebotsdatum, **Gültig bis** (Bindefrist, Standard 30 Tage), optionaler Zahlungsbedingung und freien **Hinweisen** (z. B. Verlängerungsstunde, Leistungsumfang, GEMA). Das PDF hat dasselbe Layout wie die Rechnung (`Angebot_001_120627.pdf`). In der Angebotsliste: Status (offen / angenommen / abgelehnt), Restlaufzeit bzw. „abgelaufen“ und **→ Rechnung**, das Kunde und Positionen in eine neue Rechnung übernimmt und das Angebot als angenommen markiert.
 - **Import alter Rechnungen**: Bisherige Rechnungs-PDFs hochladen – Empfänger, Positionen und Vorschläge für Rechnungsposten werden erkannt und können übernommen werden, optional auch die Rechnungen selbst als Archiv.
 - **Stammdaten** für Kunden, Rechnungsposten und Zahlungsbedingungen.
 - Helles und dunkles Design (folgt der Geräteeinstellung).
@@ -53,6 +54,7 @@ Die Absenderdaten erscheinen in der Absenderzeile und in der Fußzeile jeder Rec
 | `kleinunternehmer` | Hinweis „Gem. §19 UStG … nicht umsatzsteuerpflichtig“ drucken | `true` |
 | `pdf_ordner` | Ordner für die PDF-Kopien | `/share/rechnungen` |
 | `startnummer` | Kleinste Rechnungsnummer; danach wird automatisch hochgezählt | `37` |
+| `angebot_gueltigkeit_tage` | Vorgabe für „Gültig bis“ bei neuen Angeboten (Tage ab Angebotsdatum) | `30` |
 | `paperless_installiert` | Paperless-ngx ist installiert – blendet im Archiv den Button „An Paperless senden“ ein | `false` |
 | `paperless_eingangsordner` | Eingangsordner (consume) von Paperless-ngx; leer = Paperless-Funktion aus | `/share/paperless/consume` |
 
