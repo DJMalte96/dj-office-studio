@@ -518,10 +518,6 @@ $("#btn-auswahl-aufheben").addEventListener("click", () => { auswahl.clear(); re
 $("#btn-auswahl-paperless").addEventListener("click", async e => {
   const ids = [...auswahl];
   if (!ids.length) return;
-  if (!state.absender?.paperless) {
-    return toast("Paperless ist noch nicht eingerichtet: In Home Assistant unter Einstellungen → Apps → "
-      + "DJ Office Studio → Konfiguration „paperless_eingangsordner“ eintragen und die App neu starten.", true);
-  }
   const schon = state.rechnungen.filter(r => auswahl.has(r.id) && r.paperless_am);
   if (schon.length && !confirm(`${schon.length === 1 ? `${rechnungsName(schon[0])} wurde` : `${schon.length} der Rechnungen wurden`}`
       + " bereits an Paperless übertragen. Trotzdem erneut senden? (Paperless legt dann ein zweites Dokument an.)")) return;
@@ -935,6 +931,7 @@ async function renderStart() {
     const abs = await api("absender");
     state.absender = abs;
     $("#warnung").classList.toggle("hidden", abs.vollstaendig);
+    $("#btn-auswahl-paperless").classList.toggle("hidden", !abs.paperless);   // nur mit paperless_installiert
     await loadLookups();
     await resetForm();
     await renderStart();

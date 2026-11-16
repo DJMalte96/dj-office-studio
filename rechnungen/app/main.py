@@ -63,7 +63,7 @@ def get_absender():
     a = absender()
     return jsonify({k: a.get(k) for k in ("name", "strasse", "plz_ort", "ort_fuer_datum")}
                    | {"vollstaendig": bool(a.get("name") and a.get("iban")),
-                      "paperless": bool(_paperless_ordner(a))})
+                      "paperless": bool(a.get("paperless_installiert"))})
 
 
 # ---------- Stammdaten (Kunden, Textbausteine, Zahlungsbedingungen) ----------
@@ -281,6 +281,9 @@ def invoices_to_paperless():
     """Ausgewählte Rechnungen als PDF in den Eingangsordner von Paperless legen: {"ids": [1, 2, 3]}."""
     a = absender()
     ordner = _paperless_ordner(a)
+    if not a.get("paperless_installiert"):
+        return jsonify({"error": "Paperless ist in der App-Konfiguration nicht aktiviert "
+                                 "(paperless_installiert)."}), 400
     if not ordner:
         return jsonify({"error": "Paperless ist nicht eingerichtet – bitte paperless_eingangsordner "
                                  "in der App-Konfiguration eintragen."}), 400

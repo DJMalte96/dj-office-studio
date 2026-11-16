@@ -1,5 +1,5 @@
 name: DJ Office Studio
-version: "0.7.0"
+version: "0.7.1"
 slug: rechnungen
 description: DJ Office Studio – Rechnungen schreiben, Kunden und Anlässe verwalten
 url: https://github.com/DJMalte96/ha-rechnungen
@@ -30,6 +30,7 @@ options:
   kleinunternehmer: true
   pdf_ordner: /share/rechnungen
   startnummer: 37
+  paperless_installiert: false
   paperless_eingangsordner: /share/paperless/consume
 schema:
   name: str
@@ -45,4 +46,5 @@ schema:
   kleinunternehmer: bool
   pdf_ordner: str
   startnummer: int?
+  paperless_installiert: bool?
   paperless_eingangsordner: str?

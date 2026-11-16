@@ -2,6 +2,11 @@
 
 Alle Änderungen an DJ Office Studio. Neueste Version oben.
 
+## 0.7.1 – 2026-11-16
+
+### Neu
+- Neue Option **`paperless_installiert`** (Standard: aus). Nur wenn sie eingeschaltet ist, erscheint im Archiv der Button **⇪ An Paperless senden** – wer Paperless nicht nutzt, sieht ihn nicht.
+
 ## 0.7.0 – 2026-11-16
 
 ### Geändert
