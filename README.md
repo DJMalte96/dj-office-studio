@@ -69,6 +69,9 @@ Ist `paperless_installiert` eingeschaltet, gibt es im Archiv bei markierten Rech
 
 ## Bedienung
 
+Oben in der Kopfzeile gibt es auf jeder Seite das Menü: **Start**, **Rechnungen** (Neue Rechnung, Rechnungen), **Angebote** (Neues Angebot, Angebote) und **Stammdaten** (Kunden, Rechnungsposten, Zahlungsbedingungen).
+
+
 **Start:** Die Startseite öffnet sich beim Aufruf. Über die Kacheln geht es direkt zu jedem Bereich der App (inkl. Import alter Rechnungen); die Navigationsleiste erscheint erst auf den anderen Seiten. Ein Klick auf das Logo führt zurück zur Startseite. Darunter steht der Status der Rechnungen: was offen ist, wie lange noch Zeit ist, Umsatz und die letzten Rechnungen.
 
 ![Screenshot: Startseite](docs/startseite.png)

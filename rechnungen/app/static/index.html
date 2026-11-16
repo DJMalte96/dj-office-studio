@@ -33,13 +33,29 @@
       <span class="brand">DJ Office <em>Studio</em></span>
     </h1>
     <nav>
-      <button data-tab="start" class="active">Start</button>
-      <button data-tab="neu">Neue Rechnung</button>
-      <button data-tab="liste">Rechnungen</button>
-      <button data-tab="angebote">Angebote</button>
-      <button data-tab="kunden">Kunden</button>
-      <button data-tab="textbausteine">Rechnungsposten</button>
-      <button data-tab="zahlungsbedingungen">Zahlungsbedingungen</button>
+      <button type="button" data-tab="start" class="active">Start</button>
+      <div class="menu">
+        <button type="button" class="menu-kopf" aria-haspopup="true">Rechnungen <span class="pfeil">▾</span></button>
+        <div class="menu-liste">
+          <button type="button" data-tab="neu">＋ Neue Rechnung</button>
+          <button type="button" data-tab="liste">☰ Rechnungen</button>
+        </div>
+      </div>
+      <div class="menu">
+        <button type="button" class="menu-kopf" aria-haspopup="true">Angebote <span class="pfeil">▾</span></button>
+        <div class="menu-liste">
+          <button type="button" data-tab="angebot-neu">✎ Neues Angebot</button>
+          <button type="button" data-tab="angebote">❐ Angebote</button>
+        </div>
+      </div>
+      <div class="menu">
+        <button type="button" class="menu-kopf" aria-haspopup="true">Stammdaten <span class="pfeil">▾</span></button>
+        <div class="menu-liste">
+          <button type="button" data-tab="kunden">◉ Kunden</button>
+          <button type="button" data-tab="textbausteine">♪ Rechnungsposten</button>
+          <button type="button" data-tab="zahlungsbedingungen">€ Zahlungsbedingungen</button>
+        </div>
+      </div>
     </nav>
     <button type="button" id="theme-toggle" class="theme-toggle" title="Hell/Dunkel umschalten" aria-label="Hell/Dunkel umschalten">
       <svg class="icon-mond" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
@@ -49,7 +65,7 @@
 
   <div id="warnung" class="banner hidden">
     Absenderdaten (Name, IBAN …) fehlen noch. Bitte in Home Assistant unter
-    <b>Einstellungen → Apps → Rechnungen → Konfiguration</b> eintragen – daraus wird die Fußzeile erzeugt.
+    <b>Einstellungen → Apps → DJ Office Studio → Konfiguration</b> eintragen – daraus wird die Fußzeile erzeugt.
   </div>
   <div id="toast" class="toast hidden"></div>
 

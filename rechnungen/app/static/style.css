@@ -51,7 +51,6 @@ h1 { font-size: 18px; font-weight: 750; letter-spacing: -.02em; margin: 0; displ
 .brand em { font-style: normal; font-weight: 500; color: var(--muted); }
 h2 { font-size: 15px; font-weight: 650; letter-spacing: -.01em; margin: 0 0 16px; }
 
-body.auf-start nav { display: none; }
 #logo { cursor: pointer; }
 .theme-toggle {
   margin-left: auto; display: grid; place-items: center; width: 38px; height: 38px; padding: 0;
@@ -63,13 +62,25 @@ body.auf-start nav { display: none; }
 .theme-toggle .icon-sonne { display: none; }
 [data-theme="dark"] .theme-toggle .icon-sonne { display: block; }
 [data-theme="dark"] .theme-toggle .icon-mond { display: none; }
-nav { display: flex; gap: 4px; overflow-x: auto; padding: 4px; background: var(--input-bg); border: 1px solid var(--border); border-radius: 12px; }
+nav { display: flex; flex-wrap: wrap; gap: 4px; padding: 4px; background: var(--input-bg); border: 1px solid var(--border); border-radius: 12px; }
 nav button {
   background: none; border: none; color: var(--muted); font-weight: 500;
   padding: 7px 14px; border-radius: 9px; white-space: nowrap; transition: background .15s, color .15s;
 }
 nav button:hover { background: var(--primary-soft); color: var(--text); }
 nav button.active { background: var(--chip-bg); color: var(--chip-fg); box-shadow: var(--shadow); }
+
+/* Untermenüs (Rechnungen / Angebote / Stammdaten) */
+.menu { position: relative; }
+.menu-kopf .pfeil { display: inline-block; margin-left: 2px; font-size: 11px; transition: transform .15s; }
+.menu.offen .menu-kopf .pfeil { transform: rotate(180deg); }
+.menu-liste {
+  display: none; position: absolute; top: calc(100% + 8px); left: 0; z-index: 30; min-width: 220px;
+  padding: 6px; background: var(--card); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow-lg);
+}
+.menu.offen .menu-liste { display: grid; gap: 2px; animation: fade .15s ease; }
+.menu-liste button { text-align: left; width: 100%; color: var(--text); }
+.menu-liste button.active { background: var(--primary-soft); color: var(--text); box-shadow: none; font-weight: 650; }
 
 main { max-width: 1120px; margin: 0 auto; padding: 24px 20px 120px; }
 .tab { display: none; animation: fade .2s ease; }

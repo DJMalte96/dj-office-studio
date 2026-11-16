@@ -2,6 +2,12 @@
 
 Alle Änderungen an DJ Office Studio. Neueste Version oben.
 
+## 0.8.2 – 2026-11-16
+
+### Geändert
+- **Neues Menü** in der Kopfzeile – jetzt auch auf der Startseite: **Rechnungen** (Neue Rechnung, Rechnungen), **Angebote** (Neues Angebot, Angebote) und **Stammdaten** (Kunden, Rechnungsposten, Zahlungsbedingungen) als aufklappbare Untermenüs.
+- Hinweis zu fehlenden Absenderdaten nennt jetzt den richtigen App-Namen („Apps → DJ Office Studio → Konfiguration“).
+
 ## 0.8.1 – 2026-11-16
 
 ### Neu
