@@ -97,7 +97,13 @@ DJ Office Studio gibt es auch als eigenständige App für **Windows** und **macO
 
 **Windows:** ZIP entpacken (Rechtsklick → *Alle extrahieren*), im Ordner `DJ Office Studio` die Datei **DJ Office Studio.exe** starten. Beim ersten Start warnt Windows ggf. („Der Computer wurde durch Windows geschützt“) – auf **Weitere Informationen → Trotzdem ausführen** klicken. Die App ist nicht kostenpflichtig signiert, daher die Warnung.
 
-**Mac:** ZIP per Doppelklick entpacken und **DJ Office Studio** in den Ordner *Programme* ziehen. Beim ersten Öffnen meldet macOS, dass der Entwickler nicht verifiziert werden kann: dann unter *Systemeinstellungen → Datenschutz & Sicherheit* ganz unten auf **Dennoch öffnen** klicken (einmalig).
+**Mac:** ZIP per Doppelklick entpacken und **DJ Office Studio** in den Ordner *Programme* ziehen. Beim ersten Öffnen meldet macOS „*DJ Office Studio* nicht geöffnet – Apple konnte nicht überprüfen, ob … frei von Schadsoftware ist“. Das liegt nur daran, dass die App nicht bei Apple notarisiert ist (kostenpflichtiger Entwickler-Account). So geht es einmalig trotzdem:
+
+1. **Fertig** klicken – *nicht* „In den Papierkorb legen“.
+2. *Systemeinstellungen → Datenschutz & Sicherheit* öffnen und ganz nach unten scrollen.
+3. Bei „DJ Office Studio wurde blockiert …“ auf **Dennoch öffnen** klicken und mit Passwort/Touch ID bestätigen.
+
+Alternativ im Terminal: `xattr -dr com.apple.quarantine "/Applications/DJ Office Studio.app"` – danach startet die App normal.
 
 **Benutzung:** Nach dem Start öffnet sich die Oberfläche im Browser, dazu ein kleines Fenster „DJ Office Studio läuft“. Solange dieses Fenster offen ist, läuft die App; Schließen beendet sie. Alles Weitere – Absender, Bankverbindung usw. – unter **⚙ Einstellungen**.
 
