@@ -1,0 +1,92 @@
+# Baut DJ Office Studio als Desktop-App für Windows und macOS (ohne Home Assistant).
+# - Bei Änderungen an App/Desktop-Code: Build + Kurztest, Ergebnis als Artefakt am Workflow-Lauf
+# - Bei einem Tag „desktop-v…“: zusätzlich GitHub-Release mit den ZIP-Dateien zum Herunterladen
+name: Desktop-App
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ["rechnungen/app/**", "rechnungen/config.yaml", "rechnungen/requirements.txt", "desktop/**", ".github/workflows/desktop.yml"]
+    tags: ["desktop-v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            name: Windows
+          - os: macos-14
+            name: macOS-AppleSilicon
+          - os: macos-15-intel
+            name: macOS-Intel
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Abhängigkeiten
+        run: pip install -r rechnungen/requirements.txt pyinstaller pillow
+
+      - name: Version
+        run: echo "VERSION=$(grep '^version:' rechnungen/config.yaml | sed 's/version: *//; s/\"//g')" >> "$GITHUB_ENV"
+
+      - name: Bauen
+        run: python desktop/build.py
+
+      - name: Kurztest (App starten, API und PDF prüfen)
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then EXE="dist/DJ Office Studio/DJ Office Studio.exe"; else EXE="dist/DJ Office Studio.app/Contents/MacOS/DJ Office Studio"; fi
+          export DJOS_TEST=1 DJOS_BASIS="$RUNNER_TEMP/djos-test"
+          "$EXE" &
+          for i in $(seq 1 60); do curl -sf http://127.0.0.1:8765/api/absender && break; sleep 1; done
+          curl -sf http://127.0.0.1:8765/api/absender | grep '"desktop":true'
+          curl -sf -X PUT -H "Content-Type: application/json" -d '{"name":"Test","iban":"DE00"}' http://127.0.0.1:8765/api/einstellungen > /dev/null
+          curl -sf -X POST -H "Content-Type: application/json" \
+            -d '{"nummer":"001","datum":"2026-01-01","kunde":{"name":"Test"},"zahlungsbedingung":"8 Tage","positionen":[{"beschreibung":"DJ","preis":100}]}' \
+            http://127.0.0.1:8765/api/rechnungen
+          curl -sf http://127.0.0.1:8765/api/rechnungen/1/pdf | head -c 5 | grep -q "%PDF"
+          ls "$DJOS_BASIS/PDFs"
+          kill %1 || true
+
+      - name: Packen (macOS)
+        if: runner.os == 'macOS'
+        run: ditto -c -k --keepParent "dist/DJ Office Studio.app" "DJ-Office-Studio-${VERSION}-${{ matrix.name }}.zip"
+
+      - name: Packen (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: Compress-Archive -Path "dist/DJ Office Studio" -DestinationPath "DJ-Office-Studio-$env:VERSION-${{ matrix.name }}.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DJ-Office-Studio-${{ matrix.name }}
+          path: DJ-Office-Studio-*.zip
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/desktop-v')
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: pakete
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          name: DJ Office Studio Desktop ${{ github.ref_name }}
+          files: pakete/*.zip
+          body: |
+            DJ Office Studio für Windows und macOS – ohne Home Assistant.
+            Installation und Hinweise: siehe README, Abschnitt „Ohne Home Assistant (Windows / Mac)“.

@@ -201,6 +201,7 @@ async function ladeAbsender() {
   const abs = await api("absender");
   state.absender = abs;
   $("#app-version").textContent = abs.version || "–";
+  document.body.classList.toggle("desktop", !!abs.desktop);   // Desktop-Version: HA-spezifische Hinweise ausblenden
   $("#warnung").classList.toggle("hidden", abs.vollstaendig);
   $$(".pl-button").forEach(b => b.classList.toggle("hidden", !abs.paperless));   // nur mit „Paperless installiert“
   return abs;
