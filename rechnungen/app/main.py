@@ -4,12 +4,13 @@ import io
 import json
 import os
 import zipfile
-from datetime import date
+from datetime import date, datetime
 
 from flask import Flask, Response, abort, jsonify, request, send_from_directory
 
 import db
 import importer
+import paperless
 from pdf import build_invoice_pdf, pdf_filename
 
 OPTIONS_PATH = os.environ.get("OPTIONS_PATH", "/data/options.json")
@@ -62,7 +63,8 @@ def static_files(name):
 def get_absender():
     a = absender()
     return jsonify({k: a.get(k) for k in ("name", "strasse", "plz_ort", "ort_fuer_datum")}
-                   | {"vollstaendig": bool(a.get("name") and a.get("iban"))})
+                   | {"vollstaendig": bool(a.get("name") and a.get("iban")),
+                      "paperless": bool(_paperless_config(a))})
 
 
 # ---------- Stammdaten (Kunden, Textbausteine, Zahlungsbedingungen) ----------
@@ -252,6 +254,48 @@ def invoices_download():
     zip_name = f"Rechnungen_{date.today():%Y-%m-%d}.zip"
     return Response(buf.getvalue(), mimetype="application/zip",
                     headers={"Content-Disposition": f'attachment; filename="{zip_name}"'})
+
+
+# ---------- Paperless-ngx ----------
+
+def _paperless_config(a=None):
+    a = a if a is not None else absender()
+    url, token = (a.get("paperless_url") or "").strip(), (a.get("paperless_token") or "").strip()
+    return (url, token) if url and token else None
+
+
+@app.post("/api/paperless")
+def invoices_to_paperless():
+    """Ausgewählte Rechnungen als PDF an Paperless-ngx schicken: {"ids": [1, 2, 3]}."""
+    a = absender()
+    cfg = _paperless_config(a)
+    if not cfg:
+        return jsonify({"error": "Paperless ist nicht eingerichtet – bitte paperless_url und "
+                                 "paperless_token in der App-Konfiguration eintragen."}), 400
+    client = paperless.Paperless(*cfg)
+    tags = [t.strip() for t in (a.get("paperless_tags") or "").split(",") if t.strip()]
+    doc_type = a.get("paperless_dokumenttyp") or ""
+    mit_kunde = a.get("paperless_kunde_als_korrespondent", True)
+
+    ok, fehler = [], []
+    for inv_id in dict.fromkeys(request.get_json().get("ids") or []):
+        inv = db.get_invoice(inv_id)
+        if not inv:
+            continue
+        name = pdf_filename(inv)
+        try:
+            client.upload(build_invoice_pdf(inv, a), name, title=name.removesuffix(".pdf"),
+                          created=inv["datum"],
+                          correspondent=inv["kunde"].get("name") if mit_kunde else None,
+                          document_type=doc_type, tags=tags)
+        except paperless.PaperlessError as e:
+            fehler.append({"id": inv_id, "name": name, "error": str(e)})
+            if e.fatal:
+                break   # Verbindungs-/Anmeldeproblem betrifft alle weiteren genauso
+            continue
+        db.set_paperless(inv_id, datetime.now().isoformat(timespec="seconds"))
+        ok.append(inv_id)
+    return jsonify({"ok": ok, "fehler": fehler})
 
 
 @app.post("/api/vorschau")

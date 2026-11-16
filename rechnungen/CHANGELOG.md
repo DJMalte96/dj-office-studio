@@ -2,6 +2,13 @@
 
 Alle Änderungen an DJ Office Studio. Neueste Version oben.
 
+## 0.6.0 – 2026-11-16
+
+### Neu
+- **An Paperless-ngx senden**: Markierte Rechnungen im Archiv lassen sich mit **⇪ An Paperless senden** direkt an Paperless übertragen – mit Titel, Rechnungsdatum, Kunde als Korrespondent, Dokumenttyp und Tags (fehlende werden in Paperless automatisch angelegt).
+- Bereits übertragene Rechnungen sind im Archiv mit **„Paperless ✓“** markiert; vor einem erneuten Senden fragt die App nach, damit keine Dubletten entstehen.
+- Neue Optionen in der Konfiguration: `paperless_url`, `paperless_token`, `paperless_dokumenttyp`, `paperless_tags`, `paperless_kunde_als_korrespondent`. Ohne URL und Token bleibt der Button ausgeblendet.
+
 ## 0.5.7 – 2026-11-16
 
 ### Neu
