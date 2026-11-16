@@ -54,6 +54,7 @@ Die Absenderdaten erscheinen in der Absenderzeile und in der Fußzeile jeder Rec
 | `kleinunternehmer` | Hinweis „Gem. §19 UStG … nicht umsatzsteuerpflichtig“ drucken | `true` |
 | `pdf_ordner` | Ordner für die PDF-Kopien | `/share/rechnungen` |
 | `startnummer` | Kleinste Rechnungsnummer; danach wird automatisch hochgezählt | `37` |
+| `angebot_startnummer` | Kleinste Angebotsnummer; danach wird automatisch hochgezählt | `1` |
 | `angebot_gueltigkeit_tage` | Vorgabe für „Gültig bis“ bei neuen Angeboten (Tage ab Angebotsdatum) | `30` |
 | `paperless_installiert` | Paperless-ngx ist installiert – blendet im Archiv den Button „An Paperless senden“ ein | `false` |
 | `paperless_eingangsordner` | Eingangsordner (consume) von Paperless-ngx; leer = Paperless-Funktion aus | `/share/paperless/consume` |

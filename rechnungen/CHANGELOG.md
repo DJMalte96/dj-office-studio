@@ -2,6 +2,11 @@
 
 Alle Änderungen an DJ Office Studio. Neueste Version oben.
 
+## 0.8.3 – 2026-11-16
+
+### Neu
+- Neue Option **`angebot_startnummer`** (Standard: 1): Ab dieser Nummer zählen die Angebote. Wie bei Rechnungen gilt: Gibt es schon höhere Angebotsnummern, wird ab der höchsten weitergezählt.
+
 ## 0.8.2 – 2026-11-16
 
 ### Geändert
