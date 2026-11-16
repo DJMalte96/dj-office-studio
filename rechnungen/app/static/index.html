@@ -229,7 +229,7 @@
         <div id="auswahl-leiste" class="auswahl-leiste hidden">
           <span id="auswahl-anzahl"></span>
           <button type="button" id="btn-auswahl-download" class="small">⇩ Herunterladen</button>
-          <button type="button" id="btn-auswahl-paperless" class="small secondary hidden">⇪ An Paperless senden</button>
+          <button type="button" id="btn-auswahl-paperless" class="small secondary pl-button hidden">⇪ An Paperless senden</button>
           <button type="button" id="btn-auswahl-aufheben" class="small secondary">Auswahl aufheben</button>
         </div>
         <table class="list">
@@ -257,8 +257,15 @@
         <div class="liste-tools">
           <input id="angebote-suche" class="search" placeholder="Angebote durchsuchen …">
         </div>
+        <div id="a-auswahl-leiste" class="auswahl-leiste hidden">
+          <span id="a-auswahl-anzahl"></span>
+          <button type="button" id="btn-a-auswahl-download" class="small">⇩ Herunterladen</button>
+          <button type="button" id="btn-a-auswahl-paperless" class="small secondary pl-button hidden">⇪ An Paperless senden</button>
+          <button type="button" id="btn-a-auswahl-aufheben" class="small secondary">Auswahl aufheben</button>
+        </div>
         <table class="list">
           <thead><tr>
+            <th class="auswahl-spalte"><input type="checkbox" id="a-auswahl-alle" title="Alle angezeigten Angebote auswählen"></th>
             <th>Nr.</th><th>Datum</th><th>Kunde</th><th class="num">Betrag</th><th>Gültigkeit</th><th>Status</th><th></th>
           </tr></thead>
           <tbody id="angebote-body"></tbody>

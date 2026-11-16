@@ -222,6 +222,12 @@ def invoices_paperless_reset(inv_id):
     return "", 204
 
 
+@app.delete("/api/angebote/<int:offer_id>/paperless")
+def offers_paperless_reset(offer_id):
+    db.set_paperless(offer_id, None, "angebote")
+    return "", 204
+
+
 @app.patch("/api/rechnungen/<int:inv_id>/bezahlt")
 def invoices_paid(inv_id):
     db.set_paid(inv_id, request.get_json().get("bezahlt"))
@@ -245,14 +251,13 @@ def invoices_pdf(inv_id):
     return _pdf_response(db.get_invoice(inv_id) or abort(404))
 
 
-@app.get("/api/rechnungen/download")
-def invoices_download():
-    """Mehrere Rechnungen auf einmal: ?ids=1,2,3 → ZIP (bei genau einer Rechnung direkt das PDF)."""
+def _download(laden, zip_praefix):
+    """Mehrere Belege auf einmal: ?ids=1,2,3 → ZIP (bei genau einem Beleg direkt das PDF)."""
     try:
         ids = [int(x) for x in request.args.get("ids", "").split(",") if x.strip()]
     except ValueError:
         abort(400)
-    invoices = [inv for inv in (db.get_invoice(i) for i in dict.fromkeys(ids)) if inv]
+    invoices = [inv for inv in (laden(i) for i in dict.fromkeys(ids)) if inv]
     if not invoices:
         abort(404)
     if len(invoices) == 1:
@@ -268,9 +273,19 @@ def invoices_download():
                 name, n = f"{stem}_{n}.pdf", n + 1
             used.add(name)
             zf.writestr(name, build_invoice_pdf(inv, absender()))
-    zip_name = f"Rechnungen_{date.today():%Y-%m-%d}.zip"
+    zip_name = f"{zip_praefix}_{date.today():%Y-%m-%d}.zip"
     return Response(buf.getvalue(), mimetype="application/zip",
                     headers={"Content-Disposition": f'attachment; filename="{zip_name}"'})
+
+
+@app.get("/api/rechnungen/download")
+def invoices_download():
+    return _download(db.get_invoice, "Rechnungen")
+
+
+@app.get("/api/angebote/download")
+def offers_download():
+    return _download(db.get_offer, "Angebote")
 
 
 # ---------- Paperless-ngx (Eingangsordner) ----------
@@ -296,8 +311,12 @@ def _in_eingangsordner(ordner, name, pdf_bytes):
 
 @app.post("/api/paperless")
 def invoices_to_paperless():
-    """Ausgewählte Rechnungen als PDF in den Eingangsordner von Paperless legen: {"ids": [1, 2, 3]}."""
+    """Ausgewählte Rechnungen oder Angebote als PDF in den Eingangsordner von Paperless legen:
+    {"ids": [1, 2, 3], "art": "rechnung" | "angebot"}."""
     a = absender()
+    daten = request.get_json() or {}
+    angebot = daten.get("art") == "angebot"
+    laden, table = (db.get_offer, "angebote") if angebot else (db.get_invoice, "rechnungen")
     ordner = _paperless_ordner(a)
     if not a.get("paperless_installiert"):
         return jsonify({"error": "Paperless ist in der App-Konfiguration nicht aktiviert "
@@ -311,8 +330,8 @@ def invoices_to_paperless():
                                  "App-Konfiguration prüfen (muss unter /share oder /media liegen)."}), 400
 
     ok, fehler = [], []
-    for inv_id in dict.fromkeys(request.get_json().get("ids") or []):
-        inv = db.get_invoice(inv_id)
+    for inv_id in dict.fromkeys(daten.get("ids") or []):
+        inv = laden(inv_id)
         if not inv:
             continue
         name = pdf_filename(inv)
@@ -321,7 +340,7 @@ def invoices_to_paperless():
         except OSError as e:
             fehler.append({"id": inv_id, "name": name, "error": f"{name} konnte nicht abgelegt werden: {e}"})
             continue
-        db.set_paperless(inv_id, datetime.now().isoformat(timespec="seconds"))
+        db.set_paperless(inv_id, datetime.now().isoformat(timespec="seconds"), table)
         ok.append(inv_id)
     return jsonify({"ok": ok, "fehler": fehler})
 

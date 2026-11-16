@@ -116,6 +116,8 @@ def init():
         spalten = {r["name"] for r in con.execute("PRAGMA table_info(rechnungen)")}
         if "paperless_am" not in spalten:   # seit 0.6.0: Zeitpunkt der Übertragung an Paperless
             con.execute("ALTER TABLE rechnungen ADD COLUMN paperless_am TEXT")
+        if "paperless_am" not in {r["name"] for r in con.execute("PRAGMA table_info(angebote)")}:
+            con.execute("ALTER TABLE angebote ADD COLUMN paperless_am TEXT")   # seit 0.8.4
         for (titel, text), anlass in LEGACY_TEXTBAUSTEINE.items():
             con.execute("UPDATE textbausteine SET titel = ?, text = ?, preis = NULL, grundpreis = NULL,"
                         " grundstunden = NULL, stundensatz = NULL WHERE titel = ? AND text = ?",
@@ -244,9 +246,9 @@ def set_paid(inv_id, paid):
         con.execute("UPDATE rechnungen SET bezahlt = ? WHERE id = ?", (int(bool(paid)), inv_id))
 
 
-def set_paperless(inv_id, zeitpunkt):
+def set_paperless(inv_id, zeitpunkt, table="rechnungen"):
     with connect() as con:
-        con.execute("UPDATE rechnungen SET paperless_am = ? WHERE id = ?", (zeitpunkt, inv_id))
+        con.execute(f"UPDATE {table} SET paperless_am = ? WHERE id = ?", (zeitpunkt, inv_id))
 
 
 def delete_invoice(inv_id):

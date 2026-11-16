@@ -2,6 +2,13 @@
 
 Alle Änderungen an DJ Office Studio. Neueste Version oben.
 
+## 0.8.4 – 2026-11-16
+
+### Neu
+- **Angebote an Paperless senden**: In der Angebotsliste lassen sich Angebote jetzt markieren (einzeln oder „alle“) und mit **⇪ An Paperless senden** in den Paperless-Eingang legen – genau wie Rechnungen im Archiv (sichtbar bei eingeschaltetem `paperless_installiert`).
+- Übertragene Angebote sind mit **„Paperless ✓“** markiert; ein Klick setzt die Markierung zurück.
+- Markierte Angebote lassen sich außerdem **herunterladen** (mehrere als ZIP, eines direkt als PDF).
+
 ## 0.8.3 – 2026-11-16
 
 ### Neu
