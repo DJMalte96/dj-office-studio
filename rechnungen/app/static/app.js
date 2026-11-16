@@ -81,8 +81,11 @@ async function openPdf(loader) {
 // ---------- Tabs ----------
 
 function showTab(name) {
-  const navName = name === "neu" && state.modus === "angebot" ? "angebote" : name;
-  $$("nav button").forEach(b => b.classList.toggle("active", b.dataset.tab === navName));
+  const navName = name === "neu" && state.modus === "angebot" ? "angebot-neu" : name;
+  $$("nav [data-tab]").forEach(b => b.classList.toggle("active", b.dataset.tab === navName));
+  // Hauptpunkt (Rechnungen / Angebote / Stammdaten) markieren, wenn ein Unterpunkt aktiv ist
+  $$("nav .menu").forEach(m => $(".menu-kopf", m).classList.toggle("active", !!$("[data-tab].active", m)));
+  schliesseMenues();
   $$(".tab").forEach(s => s.classList.toggle("active", s.id === "tab-" + name));
   document.body.classList.toggle("auf-start", name === "start");
   if (name === "liste") loadListe();
@@ -91,8 +94,25 @@ function showTab(name) {
   const stamm = $(`#tab-${name}[data-stamm]`);
   if (stamm) renderStamm(stamm.dataset.stamm);
 }
-$$("nav button").forEach(b => b.addEventListener("click", () =>
-  b.dataset.tab === "neu" ? neueRechnung() : showTab(b.dataset.tab)));
+$$("nav [data-tab]").forEach(b => b.addEventListener("click", () => {
+  const tab = b.dataset.tab;
+  if (tab === "neu") neueRechnung();
+  else if (tab === "angebot-neu") neuesAngebot();
+  else showTab(tab);
+}));
+
+// Untermenüs: Klick auf den Hauptpunkt öffnet/schließt, Klick daneben oder Esc schließt
+function schliesseMenues(ausser) {
+  $$("nav .menu").forEach(m => { if (m !== ausser) m.classList.remove("offen"); });
+}
+$$("nav .menu-kopf").forEach(k => k.addEventListener("click", e => {
+  e.stopPropagation();
+  const menu = k.closest(".menu");
+  schliesseMenues(menu);
+  menu.classList.toggle("offen");
+}));
+document.addEventListener("click", e => { if (!e.target.closest("nav .menu")) schliesseMenues(); });
+document.addEventListener("keydown", e => { if (e.key === "Escape") schliesseMenues(); });
 
 // ---------- Editor-Modus: Rechnung oder Angebot ----------
 
