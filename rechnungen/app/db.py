@@ -98,6 +98,9 @@ def init():
         if con.execute("SELECT COUNT(*) FROM textbausteine").fetchone()[0] == 0:
             con.executemany("INSERT INTO textbausteine (titel, text) VALUES (?, ?)",
                             list(DEFAULT_ANLAESSE.items()))
+        spalten = {r["name"] for r in con.execute("PRAGMA table_info(rechnungen)")}
+        if "paperless_am" not in spalten:   # seit 0.6.0: Zeitpunkt der Übertragung an Paperless
+            con.execute("ALTER TABLE rechnungen ADD COLUMN paperless_am TEXT")
         for (titel, text), anlass in LEGACY_TEXTBAUSTEINE.items():
             con.execute("UPDATE textbausteine SET titel = ?, text = ?, preis = NULL, grundpreis = NULL,"
                         " grundstunden = NULL, stundensatz = NULL WHERE titel = ? AND text = ?",
@@ -224,6 +227,11 @@ def save_invoice(inv, inv_id=None):
 def set_paid(inv_id, paid):
     with connect() as con:
         con.execute("UPDATE rechnungen SET bezahlt = ? WHERE id = ?", (int(bool(paid)), inv_id))
+
+
+def set_paperless(inv_id, zeitpunkt):
+    with connect() as con:
+        con.execute("UPDATE rechnungen SET paperless_am = ? WHERE id = ?", (zeitpunkt, inv_id))
 
 
 def delete_invoice(inv_id):

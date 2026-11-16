@@ -18,7 +18,7 @@ Eine Home-Assistant-App zum Schreiben von DJ-Rechnungen. Kunden auswählen, Rech
   - Fortlaufende Rechnungsnummer (dreistellig, Startwert einstellbar)
 - **PDF** im A4-Layout mit Absenderzeile, Adressfeld, Positionstabelle und Fußzeile (Bankverbindung, Steuernummer, Kleinunternehmer-Hinweis nach §19 UStG). Vorschau vor dem Speichern; beim Speichern wird eine Kopie im Ordner `/share/rechnungen` abgelegt.
 - **Offene Rechnungen** auf einen Blick: eine Summenzeile mit Anzahl, Gesamtbetrag und nächster Frist; darunter je Rechnung Rechnungsname (z. B. `Rechnung_037_311026`), Betrag, verbleibende Zeit („noch 5 Tage“, „3 Tage überfällig“) , ein Haken zum Abhaken, wenn bezahlt wurde, und ein ✕ zum direkten Löschen. Das Zahlungsziel wird aus der Zahlungsbedingung gelesen (z. B. „innerhalb der nächsten 8 Tage“) und ab dem Rechnungsdatum gerechnet.
-- **Archiv** für bezahlte Rechnungen: Wird eine offene Rechnung abgehakt, wandert sie ins Archiv – mit Suche und Sortierung nach Nummer, Datum, Betrag oder Kunde. Rechnungen lassen sich jederzeit bearbeiten oder wieder auf „offen“ setzen.
+- **Archiv** für bezahlte Rechnungen: Wird eine offene Rechnung abgehakt, wandert sie ins Archiv – mit Suche und Sortierung nach Nummer, Datum, Betrag oder Kunde. Rechnungen lassen sich jederzeit bearbeiten oder wieder auf „offen“ setzen. Mehrere Rechnungen markieren und **als ZIP herunterladen** oder **an Paperless-ngx senden**.
 - **Import alter Rechnungen**: Bisherige Rechnungs-PDFs hochladen – Empfänger, Positionen und Vorschläge für Rechnungsposten werden erkannt und können übernommen werden, optional auch die Rechnungen selbst als Archiv.
 - **Stammdaten** für Kunden, Rechnungsposten und Zahlungsbedingungen.
 - Helles und dunkles Design (folgt der Geräteeinstellung).
@@ -53,8 +53,20 @@ Die Absenderdaten erscheinen in der Absenderzeile und in der Fußzeile jeder Rec
 | `kleinunternehmer` | Hinweis „Gem. §19 UStG … nicht umsatzsteuerpflichtig“ drucken | `true` |
 | `pdf_ordner` | Ordner für die PDF-Kopien | `/share/rechnungen` |
 | `startnummer` | Kleinste Rechnungsnummer; danach wird automatisch hochgezählt | `37` |
+| `paperless_url` | Adresse von Paperless-ngx (leer = Paperless-Funktion aus) | `http://192.168.1.10:8000` |
+| `paperless_token` | API-Token aus Paperless (Profil → „API-Auth-Token“) | |
+| `paperless_dokumenttyp` | Dokumenttyp in Paperless (wird bei Bedarf angelegt) | `Rechnung` |
+| `paperless_tags` | Tags, kommagetrennt (werden bei Bedarf angelegt) | `Ausgangsrechnung` |
+| `paperless_kunde_als_korrespondent` | Kunde als Korrespondent setzen (wird bei Bedarf angelegt) | `true` |
 
 Solange Name oder IBAN fehlen, zeigt die App oben einen Hinweis.
+
+### Paperless-ngx
+
+Sind `paperless_url` und `paperless_token` eingetragen, erscheint im Archiv bei markierten Rechnungen der Button **⇪ An Paperless senden**. Jede Rechnung wird als PDF hochgeladen – mit Titel (z. B. `Rechnung_037_311026`), Rechnungsdatum, Kunde als Korrespondent, Dokumenttyp und Tags. Übertragene Rechnungen sind im Archiv mit „Paperless ✓“ gekennzeichnet.
+
+- **Token**: in Paperless oben rechts auf den Benutzer → *Mein Profil* → *API-Auth-Token* erzeugen und kopieren.
+- **Adresse**: Paperless muss über eine normale Adresse mit Port erreichbar sein, z. B. `http://<IP-von-Home-Assistant>:8000` – dafür in der Paperless-App unter *Netzwerk* einen Port freigeben. Die Ingress-Adresse aus der Seitenleiste funktioniert nicht.
 
 ## Bedienung
 

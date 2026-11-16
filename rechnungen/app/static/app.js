@@ -473,8 +473,9 @@ function renderListe() {
   });
   $("#liste-body").innerHTML = list.map(r => `
     <tr data-id="${r.id}"${auswahl.has(r.id) ? ' class="markiert"' : ""}>
-      <td class="auswahl-spalte"><input type="checkbox" class="auswahl"${auswahl.has(r.id) ? " checked" : ""} title="Zum Herunterladen markieren"></td>
-      <td>${esc(r.nummer)}</td>
+      <td class="auswahl-spalte"><input type="checkbox" class="auswahl"${auswahl.has(r.id) ? " checked" : ""} title="Markieren (Herunterladen / Paperless)"></td>
+      <td>${esc(r.nummer)}${r.paperless_am
+        ? ` <span class="pl-chip" title="An Paperless übertragen am ${fmtDate(r.paperless_am.slice(0, 10))}">Paperless ✓</span>` : ""}</td>
       <td>${fmtDate(r.datum)}</td>
       <td>${esc(r.kunde.name)}<br><small>${esc(r.kunde.ort)}</small></td>
       <td class="num">${fmtEuro(r.gesamt)}</td>
@@ -513,6 +514,35 @@ $("#auswahl-alle").addEventListener("change", e => {
 });
 
 $("#btn-auswahl-aufheben").addEventListener("click", () => { auswahl.clear(); renderListe(); });
+
+$("#btn-auswahl-paperless").addEventListener("click", async e => {
+  const ids = [...auswahl];
+  if (!ids.length) return;
+  const schon = state.rechnungen.filter(r => auswahl.has(r.id) && r.paperless_am);
+  if (schon.length && !confirm(`${schon.length === 1 ? `${rechnungsName(schon[0])} wurde` : `${schon.length} der Rechnungen wurden`}`
+      + " bereits an Paperless übertragen. Trotzdem erneut senden? (Paperless legt dann ein zweites Dokument an.)")) return;
+
+  const btn = e.currentTarget;
+  btn.disabled = true;
+  btn.textContent = `Sende ${ids.length} …`;
+  try {
+    const res = await api("paperless", { method: "POST", body: { ids } });
+    await loadListe();
+    res.ok.forEach(id => auswahl.delete(id));
+    renderListe();
+    if (res.fehler.length) {
+      const nicht = ids.length - res.ok.length;
+      toast(`${res.ok.length ? `${res.ok.length} übertragen, ` : ""}${nicht} nicht übertragen: ${res.fehler[0].error}`, true);
+    } else {
+      toast(`${res.ok.length} Rechnung${res.ok.length === 1 ? "" : "en"} an Paperless übertragen – Paperless verarbeitet sie jetzt.`);
+    }
+  } catch (err) {
+    toast(err.message, true);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "⇪ An Paperless senden";
+  }
+});
 
 $("#btn-auswahl-download").addEventListener("click", () => {
   if (!auswahl.size) return;
@@ -901,6 +931,7 @@ async function renderStart() {
     const abs = await api("absender");
     state.absender = abs;
     $("#warnung").classList.toggle("hidden", abs.vollstaendig);
+    $("#btn-auswahl-paperless").classList.toggle("hidden", !abs.paperless);
     await loadLookups();
     await resetForm();
     await renderStart();
