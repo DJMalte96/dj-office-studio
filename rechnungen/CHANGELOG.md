@@ -2,6 +2,11 @@
 
 Alle Änderungen an DJ Office Studio. Neueste Version oben.
 
+## 0.15.1 – 2026-11-17
+
+### Behoben
+- Der QR-Code auf Rechnungen und Mahnungen wurde in manchen PDF-Programmen als unlesbares Streifenmuster angezeigt. Er wird jetzt direkt als Vektorgrafik gezeichnet statt als eingebettetes Bild – das sieht in jedem Programm gleich aus und ist beim Drucken gestochen scharf. Ein automatischer Test liest den Code jetzt bei jeder Änderung mit einem echten QR-Decoder aus dem fertigen PDF.
+
 ## 0.15.0 – 2026-11-17
 
 ### Neu
