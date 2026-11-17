@@ -70,7 +70,7 @@ jobs:
           curl -sf http://127.0.0.1:8765/api/absender | grep '"desktop":true'
           curl -sf -X PUT -H "Content-Type: application/json" -d '{"name":"Test","iban":"DE00"}' http://127.0.0.1:8765/api/einstellungen > /dev/null
           curl -sf -X POST -H "Content-Type: application/json" \
-            -d '{"nummer":"001","datum":"2026-01-01","kunde":{"name":"Test"},"zahlungsbedingung":"8 Tage","positionen":[{"beschreibung":"DJ","preis":100}]}' \
+            -d '{"nummer":"001","datum":"2026-01-01","kunde":{"name":"Test","strasse":"Testweg 1","plz":"12345","ort":"Teststadt"},"zahlungsbedingung":"8 Tage","positionen":[{"beschreibung":"DJ","lieferdatum":"2026-01-01","preis":100}]}' \
             http://127.0.0.1:8765/api/rechnungen
           curl -sf http://127.0.0.1:8765/api/rechnungen/1/pdf | head -c 5 | grep -q "%PDF"
           ls "$DJOS_BASIS/PDFs"
