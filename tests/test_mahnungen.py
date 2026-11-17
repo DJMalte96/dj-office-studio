@@ -15,7 +15,7 @@ def test_drei_stufen(client, tmp_path):
         text = pdf_text(client.get(f"/api/mahnungen/{r.get_json()['id']}/pdf").data)
         assert titel in text and "Rechnung Nr. 037" in text and "960,- Euro" in text
         frist = (date.today() + timedelta(days=7)).strftime("%d.%m.%Y")
-        assert f"bis spätestens {frist}" in text
+        assert f"bis spätestens {frist}" in " ".join(text.split())   # Text bricht neben dem QR-Code um
         assert "fällig seit 09.10.26" in text   # Rechnungsdatum + 8 Tage aus der Zahlungsbedingung
     assert "letzte Mahnung" in text
     assert client.post(f"/api/rechnungen/{inv_id}/mahnung").status_code == 400   # mehr als 3 Stufen

@@ -2,6 +2,12 @@
 
 Alle Änderungen an DJ Office Studio. Neueste Version oben.
 
+## 0.15.0 – 2026-11-17
+
+### Neu
+- **QR-Code zum Bezahlen (GiroCode)** auf Rechnungen, Zahlungserinnerungen und Mahnungen, rechts neben der Zahlungsbedingung. Der Kunde scannt ihn mit seiner Banking-App, und Empfänger, IBAN, BIC, Betrag und Verwendungszweck („Rechnung 037“) sind schon ausgefüllt. Kein QR-Code auf Angeboten, Stornorechnungen und bei Zahlungsbedingungen wie „Bar erhalten“ oder „Bereits bezahlt“. Abschaltbar unter ⚙ Einstellungen → Bankverbindung.
+- **QR-Code anzeigen**: Das neue QR-Symbol bei offenen Rechnungen zeigt den Code groß auf dem Bildschirm, zusammen mit Empfänger, IBAN, Betrag und Verwendungszweck – praktisch, wenn der Kunde direkt nach der Feier bezahlt. Mit „Als bezahlt markieren“ geht die Rechnung danach direkt ins Archiv.
+
 ## 0.14.1 – 2026-11-17
 
 ### Behoben

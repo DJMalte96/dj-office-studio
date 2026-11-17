@@ -478,3 +478,11 @@ button svg.ico { vertical-align: -3px; }
 .sicherung-karte .hint { margin-top: 10px; }
 #tab-einstellungen .sicherung label.erinnerung { margin: 14px 0 0; }
 #tab-einstellungen .sicherung label.erinnerung input { width: 110px; display: block; }
+
+/* ---------- QR-Code zum Bezahlen ---------- */
+.qr-dialog { width: min(440px, calc(100vw - 24px)); }
+.qr-bild { display: flex; justify-content: center; margin: 14px 0; }
+.qr-bild img { width: min(300px, 70vw); height: auto; background: #fff; padding: 8px; border-radius: 12px; image-rendering: pixelated; }
+.qr-daten { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; margin: 0 0 18px; font-size: 14px; }
+.qr-daten dt { color: var(--muted); }
+.qr-daten dd { margin: 0; font-weight: 600; word-break: break-word; }
