@@ -51,7 +51,9 @@ def test_hinweis19_ab_stichtag(client):
     m = client.post(f"/api/rechnungen/{alt}/mahnung").get_json()
     erwartet = pdf.hinweis19(date.today().isoformat())[0]
     assert erwartet in " ".join(pdf_text(client.get(f"/api/mahnungen/{m['id']}/pdf").data).split())
-    # ohne Kleinunternehmer: kein Hinweis
-    client.put("/api/einstellungen", json={"kleinunternehmer": False})
-    text = pdf_text(client.get(f"/api/rechnungen/{neu}/pdf").data)
+    # Umschalten ändert gespeicherte Rechnungen nicht – neue Rechnungen ohne Kleinunternehmer haben keinen Hinweis
+    client.put("/api/einstellungen", json={"kleinunternehmer": False, "steuernummer": "12/345/67890"})
+    assert "Steuerbefreiung" in " ".join(pdf_text(client.get(f"/api/rechnungen/{neu}/pdf").data).split())
+    neuer = neue_rechnung(client, nummer="038", datum=pdf.HINWEIS19_STICHTAG)
+    text = pdf_text(client.get(f"/api/rechnungen/{neuer}/pdf").data)
     assert "§ 19" not in text and "§19" not in text

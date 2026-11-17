@@ -148,6 +148,12 @@ def init():
                 con.execute(f"ALTER TABLE rechnungen ADD COLUMN {spalte} {typ}")
         if "paperless_am" not in {r["name"] for r in con.execute("PRAGMA table_info(angebote)")}:
             con.execute("ALTER TABLE angebote ADD COLUMN paperless_am TEXT")   # seit 0.8.4
+        # seit 0.18.0: Steuer je Beleg festhalten (NULL = älterer Beleg → wie bisher nach aktueller Einstellung, ohne USt.)
+        for tabelle in ("rechnungen", "angebote"):
+            vorhanden = {r["name"] for r in con.execute(f"PRAGMA table_info({tabelle})")}
+            for spalte, typ in (("kleinunternehmer", "INTEGER"), ("ust_satz", "REAL")):
+                if spalte not in vorhanden:
+                    con.execute(f"ALTER TABLE {tabelle} ADD COLUMN {spalte} {typ}")
         for (titel, text), anlass in LEGACY_TEXTBAUSTEINE.items():
             con.execute("UPDATE textbausteine SET titel = ?, text = ?, preis = NULL, grundpreis = NULL,"
                         " grundstunden = NULL, stundensatz = NULL WHERE titel = ? AND text = ?",
@@ -280,17 +286,22 @@ def save_invoice(inv, inv_id=None):
             json.dumps(inv["positionen"]), inv["zahlungsbedingung"], inv["gesamt"],
             int(bool(inv.get("bezahlt"))))
     with connect() as con:
+        steuer = (_ku(inv.get("kleinunternehmer")), inv.get("ust_satz"))
         if inv_id:
             con.execute(
                 "UPDATE rechnungen SET nummer=?, datum=?, kunde_id=?, kunde_json=?,"
-                " positionen_json=?, zahlungsbedingung=?, gesamt=?, bezahlt=? WHERE id=?",
-                vals + (inv_id,))
+                " positionen_json=?, zahlungsbedingung=?, gesamt=?, bezahlt=?, kleinunternehmer=?, ust_satz=? WHERE id=?",
+                vals + steuer + (inv_id,))
             return inv_id
         return con.execute(
             "INSERT INTO rechnungen (nummer, datum, kunde_id, kunde_json, positionen_json,"
-            " zahlungsbedingung, gesamt, bezahlt, festgeschrieben, storno_von, bezahlt_am)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            vals + (int(bool(inv.get("festgeschrieben"))), inv.get("storno_von"), inv.get("bezahlt_am"))).lastrowid
+            " zahlungsbedingung, gesamt, bezahlt, festgeschrieben, storno_von, bezahlt_am, kleinunternehmer, ust_satz)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            vals + (int(bool(inv.get("festgeschrieben"))), inv.get("storno_von"), inv.get("bezahlt_am")) + steuer).lastrowid
+
+
+def _ku(wert):
+    return None if wert is None else int(bool(wert))
 
 
 def set_paid(inv_id, paid):
@@ -458,17 +469,19 @@ def get_offer(offer_id):
 
 def save_offer(a, offer_id=None):
     vals = (a["nummer"], a["datum"], a["gueltig_bis"], a.get("kunde_id"), json.dumps(a["kunde"]),
-            json.dumps(a["positionen"]), a["zahlungsbedingung"], a["hinweise"], a["gesamt"])
+            json.dumps(a["positionen"]), a["zahlungsbedingung"], a["hinweise"], a["gesamt"],
+            _ku(a.get("kleinunternehmer")), a.get("ust_satz"))
     with connect() as con:
         if offer_id:
             con.execute(
                 "UPDATE angebote SET nummer=?, datum=?, gueltig_bis=?, kunde_id=?, kunde_json=?,"
-                " positionen_json=?, zahlungsbedingung=?, hinweise=?, gesamt=? WHERE id=?",
+                " positionen_json=?, zahlungsbedingung=?, hinweise=?, gesamt=?, kleinunternehmer=?, ust_satz=? WHERE id=?",
                 vals + (offer_id,))
             return offer_id
         return con.execute(
             "INSERT INTO angebote (nummer, datum, gueltig_bis, kunde_id, kunde_json, positionen_json,"
-            " zahlungsbedingung, hinweise, gesamt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", vals).lastrowid
+            " zahlungsbedingung, hinweise, gesamt, kleinunternehmer, ust_satz) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            vals).lastrowid
 
 
 def set_offer_status(offer_id, status, rechnung_id=None):
