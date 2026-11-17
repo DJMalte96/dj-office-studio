@@ -1,5 +1,7 @@
 """PDF-Erzeugung im Layout der Vorlage-Rechnung (A4, Calibri-ähnliche Schrift)."""
+import io
 import os
+import re
 from datetime import date
 
 from fpdf import FPDF
@@ -137,6 +139,53 @@ def _gruss(pdf, absender, abstand=22):
     pdf.cell(0, 5, absender.get("name") or "", new_x="LMARGIN", new_y="NEXT")
 
 
+# ---------- GiroCode (EPC-QR-Code für Überweisungen) ----------
+
+QR = 28   # Kantenlänge des GiroCodes im PDF in mm
+_OHNE_ZAHLUNG = re.compile(r"\bbar\b|bereits|beglichen|erhalten", re.I)   # „Bar erhalten“, „Bereits bezahlt“ …
+
+
+def girocode_daten(absender, betrag, zweck):
+    """Inhalt des GiroCodes (EPC069-12, Version 002) oder None, wenn kein QR-Code möglich/gewünscht ist."""
+    iban = (absender.get("iban") or "").replace(" ", "").upper()
+    name = (absender.get("kontoinhaber") or absender.get("name") or "").strip()[:70]
+    betrag = round(float(betrag or 0), 2)
+    if not (absender.get("girocode", True) and iban and name and 0.01 <= betrag <= 999999999.99):
+        return None
+    return "\n".join(["BCD", "002", "1", "SCT", (absender.get("bic") or "").replace(" ", "").upper(), name, iban,
+                      f"EUR{betrag:.2f}", "", "", zweck[:140]])
+
+
+def girocode_fuer_rechnung(inv, absender):
+    """GiroCode-Inhalt für eine Rechnung – nicht bei Storno und nicht bei „Bar erhalten“ / „Bereits bezahlt“."""
+    if inv.get("art") == "angebot" or inv.get("storno_zu") or inv.get("storno_von") \
+            or _OHNE_ZAHLUNG.search(inv.get("zahlungsbedingung") or ""):
+        return None
+    return girocode_daten(absender, inv.get("gesamt", 0), f"Rechnung {inv['nummer']}")
+
+
+def girocode_svg(daten):
+    import segno
+    buf = io.BytesIO()
+    segno.make(daten, error="m", micro=False).save(buf, kind="svg", scale=8, border=2, xmldecl=False,
+                                                     svgns=True, dark="#000", light="#fff")
+    return buf.getvalue()
+
+
+def _qr_rechts(pdf, daten, y):
+    """GiroCode rechts neben dem Zahlungstext, mit kurzer Beschriftung darunter."""
+    import segno
+    buf = io.BytesIO()
+    segno.make(daten, error="m", micro=False).save(buf, kind="png", scale=10, border=2)
+    buf.seek(0)
+    x = LEFT + sum(COLS) - QR
+    pdf.image(buf, x=x, y=y, w=QR, h=QR)
+    pdf.set_font("Body", "", 7.5)
+    pdf.set_xy(x - 6, y + QR + 0.5)
+    pdf.multi_cell(QR + 12, 3.4, "Bequem bezahlen:\nmit der Banking-App scannen", align="C")
+    return y + QR + 8   # unterkante inkl. Beschriftung
+
+
 def build_invoice_pdf(inv, absender):
     """inv: dict mit nummer, datum, kunde{...}, positionen[{beschreibung, lieferdatum, preis}],
     zahlungsbedingung. Mit art="angebot" (+ gueltig_bis, hinweise) entsteht ein Angebot,
@@ -205,12 +254,21 @@ def build_invoice_pdf(inv, absender):
         pdf.multi_cell(0, 5, f"Die Rechnung Nr. {storno['nummer']} ist damit aufgehoben. Ein bereits gezahlter "
                              "Betrag wird erstattet.", align="L", new_x="LMARGIN", new_y="NEXT")
     else:
-        # Zahlungsbedingung
+        # Zahlungsbedingung – rechts daneben ggf. der GiroCode
         pdf.set_font("Body", "B", BODY_PT)
         pdf.ln(6)
-        pdf.multi_cell(0, 5, inv.get("zahlungsbedingung") or "", align="L", new_x="LMARGIN", new_y="NEXT")
+        qr = girocode_fuer_rechnung({**inv, "gesamt": gesamt}, absender)
+        if qr and pdf.will_page_break(QR + 10):
+            pdf.add_page()
+        qr_y = pdf.get_y()
+        text_w = sum(COLS) - QR - 8 if qr else 0
+        pdf.multi_cell(text_w, 5, inv.get("zahlungsbedingung") or "", align="L", new_x="LMARGIN", new_y="NEXT")
         pdf.ln(10)
-        pdf.cell(0, 5, "Vielen Dank für Ihren Auftrag!", new_x="LMARGIN", new_y="NEXT")
+        pdf.cell(text_w, 5, "Vielen Dank für Ihren Auftrag!", new_x="LMARGIN", new_y="NEXT")
+        if qr:
+            unten = _qr_rechts(pdf, qr, qr_y)
+            pdf.set_font("Body", "B", BODY_PT)
+            pdf.set_xy(LEFT, max(pdf.get_y(), unten - 16))
     _gruss(pdf, absender)
     return bytes(pdf.output())
 
@@ -251,7 +309,11 @@ def build_mahnung_pdf(inv, mahnung, absender, faellig_iso=None):
 
     pdf.ln(6)
     pdf.set_font("Body", "B", BODY_PT)
-    pdf.multi_cell(0, 5, f"Bitte überweisen Sie den offenen Betrag von {fmt_euro(inv['gesamt'])} bis spätestens "
+    qr = girocode_daten(absender, inv["gesamt"], f"Rechnung {inv['nummer']}") \
+        if not _OHNE_ZAHLUNG.search(inv.get("zahlungsbedingung") or "") else None
+    qr_y = pdf.get_y()
+    text_w = sum(COLS) - QR - 8 if qr else 0
+    pdf.multi_cell(text_w, 5, f"Bitte überweisen Sie den offenen Betrag von {fmt_euro(inv['gesamt'])} bis spätestens "
                          f"{fmt_date_lang(mahnung['frist'])} auf das unten genannte Konto.",
                    align="L", new_x="LMARGIN", new_y="NEXT")
     pdf.ln(4)
@@ -261,7 +323,10 @@ def build_mahnung_pdf(inv, mahnung, absender, faellig_iso=None):
     if stufe == 3:
         schluss = ("Dies ist die letzte Mahnung. Geht der Betrag nicht fristgerecht ein, behalte ich mir weitere "
                    "Schritte vor. " + schluss)
-    pdf.multi_cell(0, 5, schluss, align="L", new_x="LMARGIN", new_y="NEXT")
+    pdf.multi_cell(text_w, 5, schluss, align="L", new_x="LMARGIN", new_y="NEXT")
+    if qr:
+        unten = _qr_rechts(pdf, qr, qr_y)
+        pdf.set_xy(LEFT, max(pdf.get_y(), unten - 16))
     pdf.set_font("Body", "B", BODY_PT)
     _gruss(pdf, absender, abstand=16)
     return bytes(pdf.output())

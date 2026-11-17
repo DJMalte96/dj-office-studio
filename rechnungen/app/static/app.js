@@ -762,6 +762,8 @@ function fristBadge(z) {
 const ICON_MAIL = `<svg class="ico" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3.5 6.5 8.5 6.5 8.5-6.5"/></svg>`;
 
 const ICON_EDIT = `<svg class="ico" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4z"/><path d="m13.5 6.5 4 4"/></svg>`;
+const ICON_QR = `<svg class="ico" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="3.5" width="6" height="6" rx="1"/><rect x="14.5" y="3.5" width="6" height="6" rx="1"/><rect x="3.5" y="14.5" width="6" height="6" rx="1"/><path d="M14.5 14.5h2.5v2.5M20.5 14.5v.01M14.5 20.5h.01M17.5 20.5h3v-3"/></svg>`;
+const OHNE_UEBERWEISUNG = /\bbar\b|bereits|beglichen|erhalten/i;   // wie im Server: „Bar erhalten“, „Bereits bezahlt“
 const aktionen = (...welche) => welche.map(a => ({
   pdf: `<button class="small secondary" data-act="pdf">PDF</button>`,
   edit: `<button class="small secondary" data-act="edit">Bearbeiten</button>`,
@@ -827,6 +829,7 @@ function renderOffen() {
         <td class="btns offen-aktionen">
           ${r.mahnungen.length < 3 ? `<button type="button" class="small ${r.ziel && r.ziel.rest < 0 ? "" : "secondary"}" data-act="mahnung"
               title="${NAECHSTE_MAHNUNG[r.mahnungen.length]} als PDF erstellen">${NAECHSTE_MAHNUNG[r.mahnungen.length]}</button>` : ""}
+          ${OHNE_UEBERWEISUNG.test(r.zahlungsbedingung || "") ? "" : `<button type="button" class="icon senden" data-act="qr" title="QR-Code zum Bezahlen anzeigen (z. B. direkt nach der Feier)" aria-label="QR-Code">${ICON_QR}</button>`}
           <button type="button" class="icon senden" data-act="senden" title="Per E-Mail senden, herunterladen oder teilen" aria-label="Senden">${ICON_MAIL}</button>
           ${r.festgeschrieben ? "" : `<button type="button" class="icon" data-act="lock" title="Festschreiben (z. B. nach dem Versenden) – danach nur noch Storno">🔒</button>`}
           <button type="button" class="icon del" data-act="${r.festgeschrieben ? "storno" : "del"}"
@@ -1003,6 +1006,7 @@ $("#tab-liste").addEventListener("click", async e => {
   try {
     if (btn.dataset.act === "pdf") window.open(`api/rechnungen/${id}/pdf`, "_blank");
     if (btn.dataset.act === "senden") oeffneVersand("rechnung", inv);
+    if (btn.dataset.act === "qr") await oeffneQr(inv);
     if (btn.dataset.act === "edit") loadIntoForm(inv);
     if (btn.dataset.act === "pl-reset" && confirm(`Paperless-Markierung bei ${rechnungsName(inv)} zurücksetzen?\n\n`
         + "Die Rechnung gilt dann wieder als nicht übertragen und kann erneut an Paperless gesendet werden. "
@@ -1257,6 +1261,29 @@ $("#angebote-body").addEventListener("click", async e => {
       await loadAngebote();
       toast(`${angebotName(a)} gelöscht`);
     }
+  } catch (err) { toast(err.message, true); }
+});
+
+// ---------- QR-Code zum Bezahlen (GiroCode) ----------
+
+let qrRechnung = null;
+async function oeffneQr(inv) {
+  const info = await api(`rechnungen/${inv.id}/girocode?info=1`);   // wirft verständliche Fehler (z. B. IBAN fehlt)
+  qrRechnung = inv;
+  $("#qr-titel").textContent = `Rechnung ${inv.nummer} bezahlen`;
+  $("#qr-bild").src = `api/rechnungen/${inv.id}/girocode?t=${Date.now()}`;
+  $("#qr-empfaenger").textContent = info.empfaenger;
+  $("#qr-iban").textContent = info.iban;
+  $("#qr-betrag").textContent = fmtEuro(info.betrag);
+  $("#qr-zweck").textContent = info.zweck;
+  $("#qr-dialog").showModal();
+}
+$("#qr-zu").addEventListener("click", () => $("#qr-dialog").close());
+$("#qr-dialog").addEventListener("click", e => { if (e.target.id === "qr-dialog") $("#qr-dialog").close(); });   // Klick daneben
+$("#qr-bezahlt").addEventListener("click", async () => {
+  try {
+    await setBezahlt(qrRechnung.id, true);
+    $("#qr-dialog").close();
   } catch (err) { toast(err.message, true); }
 });
 

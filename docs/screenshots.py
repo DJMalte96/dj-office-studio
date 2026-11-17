@@ -149,6 +149,13 @@ with sync_playwright() as p:
     page.screenshot(path=str(ZIEL / "versand.png"))
     page.click("#versand-abbrechen")
 
+    # QR-Code zum Bezahlen für Rechnung 041
+    page.locator("#offen tr[data-id]", has_text="_041_").locator("button[data-act=qr]").click()
+    page.wait_for_timeout(800)
+    page.evaluate("document.activeElement && document.activeElement.blur()")
+    page.screenshot(path=str(ZIEL / "girocode.png"))
+    page.click("#qr-zu")
+
     # Rechnungseditor mit Bestandskunde und zwei Positionen
     ctx2 = browser.new_context(viewport={"width": 1240, "height": 1180}, device_scale_factor=2, locale="de-DE")
     ctx2.add_init_script("localStorage.setItem('theme','light')")

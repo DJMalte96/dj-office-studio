@@ -21,7 +21,7 @@ from flask import Flask, Response, abort, jsonify, request, send_from_directory
 import db
 import importer
 import mail
-from pdf import MAHNSTUFEN, build_invoice_pdf, build_mahnung_pdf, fmt_euro, mahnung_filename, pdf_filename
+from pdf import MAHNSTUFEN, build_invoice_pdf, girocode_fuer_rechnung, girocode_svg, build_mahnung_pdf, fmt_euro, mahnung_filename, pdf_filename
 
 OPTIONS_PATH = os.environ.get("OPTIONS_PATH", "/data/options.json")
 DESKTOP = os.environ.get("DJOS_DESKTOP") == "1"   # Desktop-Version (Windows/Mac) statt Home Assistant
@@ -36,6 +36,7 @@ FELDER = {
     "name": (str, ""), "strasse": (str, ""), "plz_ort": (str, ""), "telefon": (str, ""),
     "ort_fuer_datum": (str, ""),
     "bank_name": (str, ""), "kontoinhaber": (str, ""), "iban": (str, ""), "bic": (str, ""),
+    "girocode": (bool, True),         # QR-Code zum Bezahlen auf Rechnungen und Mahnungen
     "steuernummer": (str, ""), "kleinunternehmer": (bool, True),
     "startnummer": (int, 1), "angebot_startnummer": (int, 1), "angebot_gueltigkeit_tage": (int, 30),
     "pdf_ordner": (str, os.environ.get("STANDARD_PDF_ORDNER", "/share/rechnungen")),
@@ -720,6 +721,23 @@ def _pdf_response(inv, download=False):
     disposition = "attachment" if download or request.args.get("download") else "inline"
     return Response(build_invoice_pdf(inv, absender()), mimetype="application/pdf",
                     headers={"Content-Disposition": f'{disposition}; filename="{pdf_filename(inv)}"'})
+
+
+@app.get("/api/rechnungen/<int:inv_id>/girocode")
+def invoices_girocode(inv_id):
+    """GiroCode zum Anzeigen in der App (z. B. Kunde bezahlt direkt nach der Feier am Handy)."""
+    inv = db.get_invoice(inv_id) or abort(404)
+    a = absender() | {"girocode": True}   # Anzeigen geht auch, wenn der Druck im PDF abgeschaltet ist
+    if not (a.get("iban") and (a.get("kontoinhaber") or a.get("name"))):
+        return _fehler("Für den QR-Code fehlen IBAN oder Name – bitte unter ⚙ Einstellungen eintragen.")
+    daten = girocode_fuer_rechnung(inv, a)
+    if not daten or inv["bezahlt"] or inv["storniert_durch"]:
+        return _fehler("Für diese Rechnung gibt es keinen offenen Betrag zum Überweisen.")
+    if request.args.get("info"):
+        return jsonify({"empfaenger": (a.get("kontoinhaber") or a.get("name")).strip()[:70],
+                        "iban": a["iban"], "bic": a.get("bic", ""), "betrag": inv["gesamt"],
+                        "zweck": f"Rechnung {inv['nummer']}"})
+    return Response(girocode_svg(daten), mimetype="image/svg+xml", headers={"Cache-Control": "no-store"})
 
 
 @app.get("/api/rechnungen/<int:inv_id>/pdf")

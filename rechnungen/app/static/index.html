@@ -316,6 +316,8 @@
             <label>Kontoinhaber <span class="opt">(leer = Name)</span><input name="kontoinhaber"></label>
             <label>IBAN<input name="iban" placeholder="DE00 0000 0000 0000 0000 00"></label>
             <label>BIC<input name="bic" placeholder="ABCDEFGHXXX"></label>
+            <label class="inline"><input type="checkbox" name="girocode">
+              QR-Code zum Bezahlen (GiroCode) auf Rechnungen und Mahnungen drucken – der Kunde scannt ihn mit der Banking-App</label>
             <h2 class="abstand">Steuer</h2>
             <label>Steuernummer<input name="steuernummer" placeholder="12/345/67890"></label>
             <label class="inline"><input type="checkbox" name="kleinunternehmer">
@@ -441,6 +443,23 @@
     <section id="tab-textbausteine" class="tab" data-stamm="textbausteine"></section>
     <section id="tab-zahlungsbedingungen" class="tab" data-stamm="zahlungsbedingungen"></section>
   </main>
+
+  <!-- ================= QR-Code zum Bezahlen ================= -->
+  <dialog id="qr-dialog" class="dialog qr-dialog">
+    <h2 id="qr-titel">Rechnung bezahlen</h2>
+    <p class="hint">Mit der Banking-App scannen („Fotoüberweisung“ bzw. „QR-Code scannen“) – Empfänger, Betrag und Verwendungszweck sind dann schon ausgefüllt.</p>
+    <div class="qr-bild"><img id="qr-bild" alt="GiroCode"></div>
+    <dl class="qr-daten">
+      <dt>Empfänger</dt><dd id="qr-empfaenger"></dd>
+      <dt>IBAN</dt><dd id="qr-iban"></dd>
+      <dt>Betrag</dt><dd id="qr-betrag"></dd>
+      <dt>Verwendungszweck</dt><dd id="qr-zweck"></dd>
+    </dl>
+    <div class="actions">
+      <button type="button" class="secondary" id="qr-bezahlt" title="Rechnung als bezahlt abhaken (ins Archiv)">✓ Als bezahlt markieren</button>
+      <button type="button" id="qr-zu">Schließen</button>
+    </div>
+  </dialog>
 
   <!-- ================= Versand-Dialog ================= -->
   <dialog id="versand" class="dialog">
