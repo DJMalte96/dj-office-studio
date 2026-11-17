@@ -1,0 +1,163 @@
+"""Erzeugt die Screenshots für die README (docs/bilder/*.png) – nur mit erfundenen Beispieldaten.
+
+    pip install -r rechnungen/requirements.txt playwright
+    python -m playwright install chromium
+    python docs/screenshots.py
+
+Nach jeder sichtbaren Änderung an der Oberfläche ausführen und die Bilder mit committen.
+"""
+import json
+import os
+import sys
+import tempfile
+import threading
+from datetime import date, timedelta
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+ZIEL = ROOT / "docs" / "bilder"
+tmp = tempfile.mkdtemp()
+os.environ.update(DATA_DIR=tmp, OPTIONS_PATH=os.path.join(tmp, "options.json"))
+sys.path.insert(0, str(ROOT / "rechnungen" / "app"))
+
+import db  # noqa: E402
+import main  # noqa: E402
+
+db.init()
+db.save_settings({
+    "_uebernommen": True, "name": "Max Beispiel", "strasse": "Musterweg 1", "plz_ort": "12345 Musterstadt",
+    "telefon": "0170/1234567", "ort_fuer_datum": "Musterstadt", "bank_name": "Sparkasse Musterstadt",
+    "iban": "DE00 0000 0000 0000 0000 00", "bic": "ABCDEFGHXXX", "steuernummer": "12/345/67890",
+    "kleinunternehmer": True, "startnummer": 37, "angebot_startnummer": 10, "angebot_gueltigkeit_tage": 30,
+    "pdf_ordner": os.path.join(tmp, "pdf"),   # in den Einstellungen wird unten der übliche Pfad gezeigt
+    "paperless_installiert": True, "paperless_eingangsordner": "/share/paperless/consume",
+})
+c = main.app.test_client()
+heute = date.today()
+d = lambda n: (heute + timedelta(days=n)).isoformat()   # noqa: E731
+ZB8 = "Bitte den Betrag innerhalb der nächsten 8 Tage auf das unten genannte Konto überweisen."
+K = {
+    "anna": {"name": "Anna und Jonas Muster", "strasse": "Lindenweg 12", "plz": "12345", "ort": "Musterstadt"},
+    "bernd": {"name": "Bernd Probe", "strasse": "Am Markt 3", "plz": "12346", "ort": "Beispielhausen"},
+    "carla": {"name": "Carla Test", "strasse": "Rosenstr. 8", "plz": "12347", "ort": "Testdorf"},
+    "dora": {"name": "Dora Alt", "strasse": "Feldweg 2", "plz": "12348", "ort": "Altstadt"},
+    "verein": {"name": "Sportverein Musterstadt e. V.", "strasse": "Sportplatz 1", "plz": "12345", "ort": "Musterstadt"},
+    "firma": {"name": "Beispiel GmbH", "strasse": "Industriestr. 5", "plz": "12349", "ort": "Neustadt"},
+    "eva": {"name": "Eva und Tom Probe", "strasse": "Birkenallee 7", "plz": "12346", "ort": "Beispielhausen"},
+}
+H = "Jede weitere angefangene Stunde wird mit 80,- Euro berechnet.\nDie GEMA-Anmeldung erfolgt durch den Veranstalter."
+
+
+def pos(text, datum, preis):
+    return {"beschreibung": text, "lieferdatum": datum, "preis": preis}
+
+
+def angebot(nr, kunde, datum, gueltig, positionen):
+    r = c.post("/api/angebote", json={"art": "angebot", "nummer": nr, "datum": datum, "gueltig_bis": gueltig,
+                                      "kunde": K[kunde], "positionen": positionen, "hinweise": H})
+    assert r.status_code == 201, r.get_json()
+    return r.get_json()["id"]
+
+
+def rechnung(nr, kunde, datum, positionen, bezahlt=False, angebot_id=None):
+    r = c.post("/api/rechnungen", json={"nummer": nr, "datum": datum, "kunde": K[kunde], "positionen": positionen,
+                                        "zahlungsbedingung": ZB8, "angebot_id": angebot_id})
+    assert r.status_code == 201, r.get_json()
+    inv_id = r.get_json()["id"]
+    if bezahlt:
+        c.patch(f"/api/rechnungen/{inv_id}/bezahlt", json={"bezahlt": True})
+    return inv_id
+
+
+# Angebote
+a010 = angebot("010", "anna", d(-60), d(-30), [pos("DJ – Tätigkeit Hochzeit – 17:00 Uhr bis 2:00 Uhr", d(-18), 900)])
+angebot("011", "carla", d(-40), d(-10), [pos("DJ – Tätigkeit Geburtstagsfeier – 20:00 Uhr bis 2:00 Uhr", d(10), 600)])
+angebot("012", "verein", d(-28), d(2), [pos("DJ – Tätigkeit Vereinsfeier – 19:00 Uhr bis 1:00 Uhr", d(40), 700)])
+angebot("013", "eva", d(-6), d(24), [pos("DJ – Tätigkeit Hochzeit – 16:00 Uhr bis 2:00 Uhr", d(200), 1100),
+                                     pos("Fahrtkosten", d(200), 60)])
+angebot("014", "firma", d(-2), d(28), [pos("DJ – Tätigkeit Weihnachtsfeier – 18:00 Uhr bis 0:00 Uhr", d(30), 650)])
+
+# Rechnungen: bezahlt, überfällig mit Zahlungserinnerung, offen, storniert
+rechnung("030", "dora", f"{heute.year - 1}-11-15",
+         [pos("DJ – Tätigkeit Geburtstagsfeier – 20:00 Uhr bis 2:00 Uhr", f"{heute.year - 1}-11-15", 800)], bezahlt=True)
+rechnung("038", "firma", d(-30), [pos("DJ – Tätigkeit Firmenfeier – 19:00 Uhr bis 0:00 Uhr", d(-31), 500)])
+rechnung("039", "carla", d(-21), [pos("DJ – Tätigkeit Geburtstagsfeier – 19:00 Uhr bis 1:00 Uhr", d(-21), 650)],
+         bezahlt=True)
+r040 = rechnung("040", "anna", d(-16), [pos("DJ – Tätigkeit Hochzeit – 17:00 Uhr bis 2:00 Uhr", d(-18), 900),
+                                        pos("Fahrtkosten", d(-18), 60)], angebot_id=a010)
+rechnung("041", "bernd", d(-4), [pos("DJ – Tätigkeit Firmenfeier – 19:00 Uhr bis 0:00 Uhr", d(-4), 450)])
+c.post(f"/api/rechnungen/{r040}/mahnung")                                        # Zahlungserinnerung
+r038 = next(r["id"] for r in db.list_invoices() if r["nummer"] == "038")
+c.post(f"/api/rechnungen/{r038}/stornieren")                                    # 038 → Stornorechnung 042
+
+from playwright.sync_api import sync_playwright  # noqa: E402
+from waitress import create_server  # noqa: E402
+
+srv = create_server(main.app, host="127.0.0.1", port=0)
+threading.Thread(target=srv.run, daemon=True).start()
+URL = f"http://127.0.0.1:{srv.effective_port}/"
+ZIEL.mkdir(parents=True, exist_ok=True)
+fehler = []
+
+
+def oeffne(page, menue, tab):
+    page.click(f"nav .menu-kopf >> text={menue}")
+    page.click(f"nav [data-tab='{tab}']")
+    page.wait_for_timeout(900)
+    page.mouse.move(5, 890)
+
+
+with sync_playwright() as p:
+    browser = p.chromium.launch(args=["--lang=de-DE"])
+    ctx = browser.new_context(viewport={"width": 1240, "height": 900}, device_scale_factor=2, locale="de-DE")
+    ctx.add_init_script("localStorage.setItem('theme','light')")
+    page = ctx.new_page()
+    page.on("pageerror", lambda e: fehler.append(str(e)))
+
+    page.goto(URL)
+    page.wait_for_timeout(1500)
+    page.screenshot(path=str(ZIEL / "startseite.png"), full_page=True)
+
+    oeffne(page, "Rechnungen", "liste")
+    page.screenshot(path=str(ZIEL / "rechnungen.png"), full_page=True)
+
+    oeffne(page, "Angebote", "angebote")
+    page.screenshot(path=str(ZIEL / "angebote.png"), full_page=True)
+
+    page.click("#einstellungen-btn")
+    page.wait_for_timeout(800)
+    page.fill("[name=pdf_ordner]", "/share/rechnungen")   # üblicher Pfad statt Temp-Ordner (nicht gespeichert)
+    page.mouse.move(5, 890)
+    page.screenshot(path=str(ZIEL / "einstellungen.png"), full_page=True)
+
+    # Rechnungseditor mit Bestandskunde und zwei Positionen
+    ctx2 = browser.new_context(viewport={"width": 1240, "height": 1180}, device_scale_factor=2, locale="de-DE")
+    ctx2.add_init_script("localStorage.setItem('theme','light')")
+    page = ctx2.new_page()
+    page.on("pageerror", lambda e: fehler.append(str(e)))
+    page.goto(URL)
+    page.wait_for_timeout(1000)
+    oeffne(page, "Rechnungen", "neu")
+    page.fill("#k-name", "Anna")
+    page.wait_for_timeout(600)
+    page.keyboard.press("ArrowDown")
+    page.keyboard.press("Enter")
+    erste = page.locator("#positionen .pos").nth(0)
+    erste.locator(".tb").select_option(label="Hochzeit")
+    erste.locator(".von").fill("17:00")
+    erste.locator(".bis").fill("02:00")
+    erste.locator(".lieferdatum").fill(d(-2))
+    erste.locator(".preis").fill("960")
+    page.click("#pos-add")
+    zweite = page.locator("#positionen .pos").nth(1)
+    zweite.locator(".tb").select_option(value="frei")
+    zweite.locator(".beschreibung").fill("Fahrtkosten")
+    zweite.locator(".preis").fill("60")
+    page.evaluate("document.activeElement && document.activeElement.blur(); window.scrollTo(0, 0)")
+    page.mouse.move(5, 1100)
+    page.wait_for_timeout(400)
+    page.screenshot(path=str(ZIEL / "rechnungseditor.png"))
+    browser.close()
+
+print("Bilder in", ZIEL, "– JavaScript-Fehler:", fehler or "keine")
+sys.exit(1 if fehler else 0)
