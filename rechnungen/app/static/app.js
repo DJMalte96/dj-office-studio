@@ -128,6 +128,7 @@ const istAngebot = () => state.modus === "angebot";
 
 function speichernText() {
   const art = istAngebot() ? "Angebot" : "Rechnung";
+  $("#btn-senden").classList.toggle("hidden", !state.editId);
   $("#btn-speichern").textContent = state.editId
     ? `${art} ${$("#r-nummer").value} aktualisieren & PDF öffnen`
     : `${art} speichern & PDF öffnen`;
@@ -175,7 +176,104 @@ async function ladeEinstellungen() {
     if (!feld) continue;
     if (feld.type === "checkbox") feld.checked = !!v; else feld.value = v ?? "";
   }
+  zeigePasswortStatus(werte.smtp_passwort_gesetzt);
+  waehleAnbieter(ANBIETER.find(a => a.server && a.server === werte.smtp_server)?.id
+    || (werte.smtp_server ? "andere" : ""), false);
 }
+
+/* ---- E-Mail-Versand: Anbieter-Vorlagen (nur Vorschläge – alle Felder bleiben frei änderbar) ---- */
+const FREISCHALTEN = "Im Postfach muss der Zugriff über externe E-Mail-Programme (POP3/IMAP/SMTP) erlaubt sein:";
+const ANBIETER = [
+  { id: "webde", name: "WEB.DE", server: "smtp.web.de", port: 587, sicherheit: "starttls", domains: ["web.de"],
+    hinweis: `${FREISCHALTEN} WEB.DE → Einstellungen → POP3/IMAP Abruf → „… über externe Programme“ aktivieren.` },
+  { id: "gmx", name: "GMX", server: "mail.gmx.net", port: 587, sicherheit: "starttls",
+    domains: ["gmx.de", "gmx.net", "gmx.at", "gmx.ch"],
+    hinweis: `${FREISCHALTEN} GMX → Einstellungen → POP3/IMAP Abruf → „… über externe Programme“ aktivieren.` },
+  { id: "gmail", name: "Gmail / Google Mail", server: "smtp.gmail.com", port: 587, sicherheit: "starttls",
+    domains: ["gmail.com", "googlemail.com"],
+    hinweis: "Das normale Google-Passwort funktioniert nicht: Bestätigung in zwei Schritten einschalten und unter Google-Konto → Sicherheit → App-Passwörter ein App-Passwort erzeugen und hier eintragen." },
+  { id: "outlook", name: "Outlook.com / Hotmail", server: "smtp-mail.outlook.com", port: 587, sicherheit: "starttls",
+    domains: ["outlook.com", "outlook.de", "hotmail.com", "hotmail.de", "live.com", "live.de", "msn.com"],
+    hinweis: "Microsoft erlaubt die Anmeldung per Passwort bei privaten Konten teilweise nicht mehr – falls die Testmail scheitert, bitte ein anderes Postfach verwenden." },
+  { id: "icloud", name: "iCloud Mail", server: "smtp.mail.me.com", port: 587, sicherheit: "starttls",
+    domains: ["icloud.com", "me.com", "mac.com"],
+    hinweis: "Benötigt ein app-spezifisches Passwort (Apple-Account → Anmeldung und Sicherheit → App-spezifische Passwörter). Benutzername = vollständige iCloud-Adresse." },
+  { id: "tonline", name: "Telekom / T-Online", server: "securesmtp.t-online.de", port: 465, sicherheit: "ssl",
+    domains: ["t-online.de", "magenta.de"],
+    hinweis: "Benötigt das separate E-Mail-Passwort aus dem Telekom-Kundencenter (nicht das Login-Passwort)." },
+  { id: "yahoo", name: "Yahoo Mail", server: "smtp.mail.yahoo.com", port: 465, sicherheit: "ssl",
+    domains: ["yahoo.com", "yahoo.de"], hinweis: "Benötigt ein App-Passwort (Yahoo-Kontosicherheit → App-Passwort erstellen)." },
+  { id: "freenet", name: "freenet Mail", server: "mail.freenet.de", port: 587, sicherheit: "starttls",
+    domains: ["freenet.de"], hinweis: `${FREISCHALTEN} freenet → Einstellungen → POP3/IMAP/SMTP aktivieren.` },
+  { id: "ionos", name: "IONOS (1&1)", server: "smtp.ionos.de", port: 587, sicherheit: "starttls", domains: [] },
+  { id: "strato", name: "STRATO", server: "smtp.strato.de", port: 465, sicherheit: "ssl", domains: [] },
+  { id: "posteo", name: "Posteo", server: "posteo.de", port: 587, sicherheit: "starttls", domains: ["posteo.de", "posteo.net"] },
+  { id: "mailbox", name: "mailbox.org", server: "smtp.mailbox.org", port: 465, sicherheit: "ssl", domains: ["mailbox.org"] },
+  { id: "andere", name: "Anderer Anbieter / eigene Domain / eigener Server",
+    hinweis: "Die Daten für den Postausgangsserver (SMTP) findest du in der Hilfe deines Anbieters bzw. in der Verwaltung deines Webhosters – meist Server, Port 587 mit STARTTLS oder Port 465 mit SSL/TLS." },
+];
+$("#mail-anbieter").innerHTML = `<option value="">– bitte wählen –</option>`
+  + ANBIETER.map(a => `<option value="${a.id}">${esc(a.name)}</option>`).join("");
+
+function waehleAnbieter(id, ausfuellen = true) {
+  const a = ANBIETER.find(x => x.id === id);
+  $("#mail-anbieter").value = id || "";
+  $("#mail-anbieter-hinweis").textContent = a?.hinweis || "";
+  if (!ausfuellen || !a?.server) return;
+  const f = $("#einstellungen").elements;
+  f.smtp_server.value = a.server;
+  f.smtp_port.value = a.port;
+  f.smtp_sicherheit.value = a.sicherheit;
+}
+$("#mail-anbieter").addEventListener("change", e => waehleAnbieter(e.target.value));
+// Server von Hand geändert → passende Vorlage oder „Anderer Anbieter“ anzeigen
+$("#einstellungen").elements.smtp_server.addEventListener("input", e => {
+  const server = e.target.value.trim();
+  waehleAnbieter(ANBIETER.find(a => a.server && a.server === server)?.id || (server ? "andere" : ""), false);
+});
+// Anbieter anhand der E-Mail-Adresse vorschlagen, solange kein eigener Server eingetragen ist
+$("#einstellungen").elements.absender_email.addEventListener("change", e => {
+  const domain = e.target.value.trim().toLowerCase().split("@")[1];
+  const a = ANBIETER.find(x => (x.domains || []).includes(domain));
+  const server = $("#einstellungen").elements.smtp_server.value.trim();
+  if (a && (!server || ANBIETER.some(x => x.server === server))) waehleAnbieter(a.id);
+});
+
+function zeigePasswortStatus(gesetzt) {
+  const f = $("#einstellungen").elements.smtp_passwort;
+  f.value = "";
+  f.placeholder = gesetzt ? "•••••••• gespeichert – nur zum Ändern neu eingeben" : "Passwort bzw. App-Passwort";
+  $("#passwort-status").innerHTML = gesetzt
+    ? `(gespeichert · <a href="#" id="passwort-entfernen">entfernen</a>)` : "(wird nur lokal gespeichert)";
+}
+$("#passwort-status").addEventListener("click", async e => {
+  if (e.target.id !== "passwort-entfernen") return;
+  e.preventDefault();
+  if (!confirm("Gespeichertes E-Mail-Passwort entfernen?")) return;
+  try {
+    await api("einstellungen", { method: "PUT", body: { smtp_passwort: null } });
+    zeigePasswortStatus(false);
+    await ladeAbsender();
+    toast("Passwort entfernt");
+  } catch (err) { toast(err.message, true); }
+});
+
+const MAIL_FELDER = ["absender_email", "smtp_server", "smtp_port", "smtp_sicherheit", "smtp_benutzer",
+  "smtp_passwort", "mail_antwort_an", "name"];
+$("#mail-test").addEventListener("click", async e => {
+  const btn = e.currentTarget;
+  const f = $("#einstellungen").elements;
+  const daten = Object.fromEntries(MAIL_FELDER.map(k => [k, f[k].value.trim()]));
+  if (!daten.absender_email || !daten.smtp_server) return toast("Bitte zuerst E-Mail-Adresse und Postausgangsserver eintragen.", true);
+  const vorher = btn.innerHTML;
+  btn.disabled = true;
+  btn.textContent = "Sende Testmail …";
+  try {
+    const res = await api("versand/test", { method: "POST", body: daten });
+    toast(`Testmail an ${res.an} gesendet – schau in dein Postfach. Einstellungen speichern nicht vergessen!`);
+  } catch (err) { toast("Testmail fehlgeschlagen: " + err.message, true); }
+  finally { btn.disabled = false; btn.innerHTML = vorher; }
+});
 
 $("#sicherung-btn").addEventListener("click", () => {
   ladeHerunter("api/backup");
@@ -219,6 +317,7 @@ $("#einstellungen").addEventListener("submit", async e => {
   });
   try {
     const res = await api("einstellungen", { method: "PUT", body: daten });
+    zeigePasswortStatus(res.einstellungen.smtp_passwort_gesetzt);
     await ladeAbsender();
     pruefeUpdate();
     toast(res.hinweise.length ? `Gespeichert. Hinweis: ${res.hinweise.join(" ")}` : "Einstellungen gespeichert", !!res.hinweise.length);
@@ -550,6 +649,12 @@ async function angebotZuRechnung(a) {
 }
 
 $("#btn-neu").addEventListener("click", () => resetForm());
+$("#btn-senden").addEventListener("click", async () => {
+  try {
+    const art = istAngebot() ? "angebot" : "rechnung";
+    oeffneVersand(art, await api(`${art === "angebot" ? "angebote" : "rechnungen"}/${state.editId}`));
+  } catch (err) { toast(err.message, true); }
+});
 
 $("#btn-vorschau").addEventListener("click", () => {
   const data = readForm();
@@ -648,11 +753,14 @@ function fristBadge(z) {
   return `<span class="frist gruen">noch ${z.rest} Tage</span>`;
 }
 
+const ICON_MAIL = `<svg class="ico" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3.5 6.5 8.5 6.5 8.5-6.5"/></svg>`;
+
 const aktionen = (...welche) => welche.map(a => ({
   pdf: `<button class="small secondary" data-act="pdf">PDF</button>`,
   edit: `<button class="small secondary" data-act="edit">Bearbeiten</button>`,
   del: `<button class="small danger" data-act="del">Löschen</button>`,
   storno: `<button class="small danger" data-act="storno" title="Stornorechnung erstellen">Stornieren</button>`,
+  senden: `<button class="small secondary" data-act="senden" title="Per E-Mail senden, herunterladen oder teilen" aria-label="Senden">${ICON_MAIL}</button>`,
 }[a] || "")).join("");
 
 /* Offen = weder bezahlt noch storniert noch selbst eine Stornorechnung */
@@ -669,9 +777,20 @@ function stornoChip(r) {
   return "";
 }
 
-const mahnChips = r => (r.mahnungen || []).map(m =>
-  ` <a class="mahn-chip" href="api/mahnungen/${m.id}/pdf" target="_blank" rel="noopener"
-       title="${MAHN_KURZ[m.stufe]} vom ${fmtDate(m.datum)} – Frist bis ${fmtDate(m.frist)}">${MAHN_KURZ[m.stufe]} ${fmtDate(m.datum)}</a>`).join("");
+const mahnVersand = (r, m) => (r.versand || []).filter(v => v.mahnung_id === m.id).pop();
+const mahnChips = r => (r.mahnungen || []).map(m => {
+  const v = mahnVersand(r, m);
+  return ` <a class="mahn-chip" href="api/mahnungen/${m.id}/pdf" target="_blank" rel="noopener"
+       title="${MAHN_KURZ[m.stufe]} vom ${fmtDate(m.datum)} – Frist bis ${fmtDate(m.frist)}${v ? ` – per E-Mail an ${esc(v.an)} am ${fmtDate(v.zeitpunkt.slice(0, 10))}` : ""}">${MAHN_KURZ[m.stufe]} ${fmtDate(m.datum)}${v ? " ✉" : ""}</a>`;
+}).join("");
+
+/* „✉ 17.11.26“ – zuletzt per E-Mail versendet (Rechnung bzw. Angebot selbst, ohne Mahnungen) */
+function versandChip(b) {
+  const v = (b.versand || []).filter(x => !x.mahnung_id);
+  if (!v.length) return "";
+  const letzte = v[v.length - 1];
+  return ` <span class="versand-chip" title="${v.map(x => `per E-Mail an ${esc(x.an)} am ${fmtDate(x.zeitpunkt.slice(0, 10))} ${x.zeitpunkt.slice(11, 16)} Uhr`).join("\n")}">✉ ${fmtDate(letzte.zeitpunkt.slice(0, 10))}</span>`;
+}
 
 function renderOffen() {
   const offen = state.rechnungen.filter(istOffen).map(r => ({ ...r, ziel: zahlungsziel(r) }));
@@ -694,13 +813,14 @@ function renderOffen() {
         <td></td><td></td>
       </tr>
       ${offen.map(r => `<tr data-id="${r.id}">
-        <td><a href="#" class="rlink" title="${r.festgeschrieben ? "PDF öffnen (festgeschrieben)" : "Im Editor öffnen"}">${esc(rechnungsName(r))}</a>${schloss(r)}${mahnChips(r)}</td>
+        <td><a href="#" class="rlink" title="${r.festgeschrieben ? "PDF öffnen (festgeschrieben)" : "Im Editor öffnen"}">${esc(rechnungsName(r))}</a>${schloss(r)}${versandChip(r)}${mahnChips(r)}</td>
         <td class="num">${fmtEuro(r.gesamt)}</td>
         <td title="${r.ziel ? `fällig am ${utcToDe(r.ziel.faellig)}` : ""}">${fristBadge(r.ziel)}</td>
         <td class="haken-spalte"><input type="checkbox" class="offen-haken" title="Als bezahlt markieren → ins Archiv"></td>
         <td class="btns offen-aktionen">
           ${r.mahnungen.length < 3 ? `<button type="button" class="small ${r.ziel && r.ziel.rest < 0 ? "" : "secondary"}" data-act="mahnung"
               title="${NAECHSTE_MAHNUNG[r.mahnungen.length]} als PDF erstellen">${NAECHSTE_MAHNUNG[r.mahnungen.length]}</button>` : ""}
+          <button type="button" class="icon senden" data-act="senden" title="Per E-Mail senden, herunterladen oder teilen" aria-label="Senden">${ICON_MAIL}</button>
           ${r.festgeschrieben ? "" : `<button type="button" class="icon" data-act="lock" title="Festschreiben (z. B. nach dem Versenden) – danach nur noch Storno">🔒</button>`}
           <button type="button" class="icon del" data-act="${r.festgeschrieben ? "storno" : "del"}"
             title="${r.festgeschrieben ? "Rechnung stornieren" : "Rechnung löschen"}">✕</button>
@@ -771,14 +891,14 @@ function renderListe() {
   $("#liste-body").innerHTML = list.map(r => `
     <tr data-id="${r.id}"${auswahl.has(r.id) ? ' class="markiert"' : ""}>
       <td class="auswahl-spalte"><input type="checkbox" class="auswahl"${auswahl.has(r.id) ? " checked" : ""} title="Markieren (Herunterladen / Paperless)"></td>
-      <td>${esc(r.nummer)}${schloss(r)}${stornoChip(r)}${r.paperless_am
+      <td>${esc(r.nummer)}${schloss(r)}${stornoChip(r)}${versandChip(r)}${r.paperless_am
         ? plChip(r) : ""}</td>
       <td>${fmtDate(r.datum)}</td>
       <td>${esc(r.kunde.name)}<br><small>${esc(r.kunde.ort)}</small></td>
       <td class="num">${fmtEuro(r.gesamt)}</td>
       <td>${r.storno_von || r.storniert_durch ? `<span class="frist neutral">${r.storno_von ? "Storno" : "storniert"}</span>`
         : `<input type="checkbox" class="bezahlt" checked title="Haken entfernen = zurück zu den offenen Rechnungen">`}</td>
-      <td class="btns">${aktionen("pdf", ...(!r.festgeschrieben ? ["edit", "del"]
+      <td class="btns">${aktionen("pdf", "senden", ...(!r.festgeschrieben ? ["edit", "del"]
         : r.storno_von || r.storniert_durch ? [] : ["storno"]))}</td>
     </tr>`).join("") ||
     `<tr><td colspan="7" class="hint">${q ? "Keine Treffer im Archiv." : "Noch keine bezahlten oder stornierten Rechnungen im Archiv."}</td></tr>`;
@@ -875,6 +995,7 @@ $("#tab-liste").addEventListener("click", async e => {
   const inv = state.rechnungen.find(r => r.id === id);
   try {
     if (btn.dataset.act === "pdf") window.open(`api/rechnungen/${id}/pdf`, "_blank");
+    if (btn.dataset.act === "senden") oeffneVersand("rechnung", inv);
     if (btn.dataset.act === "edit") loadIntoForm(inv);
     if (btn.dataset.act === "pl-reset" && confirm(`Paperless-Markierung bei ${rechnungsName(inv)} zurücksetzen?\n\n`
         + "Die Rechnung gilt dann wieder als nicht übertragen und kann erneut an Paperless gesendet werden. "
@@ -992,11 +1113,11 @@ function renderAngeboteOffen() {
         <td></td>
       </tr>
       ${offen.map(a => `<tr data-id="${a.id}">
-        <td><a href="#" class="rlink" title="Im Editor öffnen">${esc(angebotName(a))}</a><br><small>${esc(a.kunde.name)}</small></td>
+        <td><a href="#" class="rlink" title="Im Editor öffnen">${esc(angebotName(a))}</a>${versandChip(a)}<br><small>${esc(a.kunde.name)}</small></td>
         <td>${fmtDate(a.datum)}</td>
         <td class="num">${fmtEuro(a.gesamt)}</td>
         <td>${restBadge(a)}</td>
-        <td class="btns"><button class="small" data-act="rechnung" title="Rechnung aus diesem Angebot erstellen">→ Rechnung</button></td>
+        <td class="btns offen-aktionen"><button class="small" data-act="rechnung" title="Rechnung aus diesem Angebot erstellen">→ Rechnung</button><button type="button" class="icon senden" data-act="senden" title="Per E-Mail senden, herunterladen oder teilen" aria-label="Senden">${ICON_MAIL}</button></td>
       </tr>`).join("")}
       </tbody></table>`
     : `<p class="hint alles-bezahlt">Keine offenen Angebote.</p>`}`;
@@ -1007,6 +1128,7 @@ $("#angebote-offen").addEventListener("click", async e => {
   if (!tr) return;
   const a = state.angebote.find(x => x.id === Number(tr.dataset.id));
   if (e.target.closest("a.rlink")) { e.preventDefault(); loadAngebotIntoForm(a); }
+  if (e.target.closest("button[data-act='senden']")) oeffneVersand("angebot", a);
   if (e.target.closest("button[data-act='rechnung']")) {
     try { await angebotZuRechnung(a); } catch (err) { toast(err.message, true); }
   }
@@ -1021,7 +1143,7 @@ function renderAngebote() {
   $("#angebote-body").innerHTML = list.map(a => `
     <tr data-id="${a.id}" class="${a.status === "offen" ? "" : "angebot-zu"}${auswahlA.has(a.id) ? " markiert" : ""}">
       <td class="auswahl-spalte"><input type="checkbox" class="auswahl"${auswahlA.has(a.id) ? " checked" : ""} title="Markieren (Herunterladen / Paperless)"></td>
-      <td>${esc(a.nummer)}${a.paperless_am ? plChip(a) : ""}</td>
+      <td>${esc(a.nummer)}${versandChip(a)}${a.paperless_am ? plChip(a) : ""}</td>
       <td>${fmtDate(a.datum)}</td>
       <td>${esc(a.kunde.name)}<br><small>${esc(a.kunde.ort)}</small></td>
       <td class="num">${fmtEuro(a.gesamt)}</td>
@@ -1030,6 +1152,7 @@ function renderAngebote() {
         .map(([k, t]) => `<option value="${k}"${k === a.status ? " selected" : ""}>${t}</option>`).join("")}</select></td>
       <td class="btns">
         <button class="small secondary" data-act="pdf">PDF</button>
+        <button class="small secondary" data-act="senden" title="Per E-Mail senden, herunterladen oder teilen" aria-label="Senden">${ICON_MAIL}</button>
         <button class="small secondary" data-act="edit">Bearbeiten</button>
         ${a.rechnung_id ? "" : `<button class="small" data-act="rechnung" title="Rechnung aus diesem Angebot erstellen">→ Rechnung</button>`}
         <button class="small danger" data-act="del">Löschen</button>
@@ -1110,6 +1233,7 @@ $("#angebote-body").addEventListener("click", async e => {
   const a = state.angebote.find(x => x.id === id);
   try {
     if (btn.dataset.act === "pdf") window.open(`api/angebote/${id}/pdf`, "_blank");
+    if (btn.dataset.act === "senden") oeffneVersand("angebot", a);
     if (btn.dataset.act === "edit") loadAngebotIntoForm(a);
     if (btn.dataset.act === "pl-reset" && confirm(`Paperless-Markierung bei ${angebotName(a)} zurücksetzen?\n\n`
         + "Das Angebot gilt dann wieder als nicht übertragen und kann erneut an Paperless gesendet werden. "
@@ -1127,6 +1251,115 @@ $("#angebote-body").addEventListener("click", async e => {
       toast(`${angebotName(a)} gelöscht`);
     }
   } catch (err) { toast(err.message, true); }
+});
+
+// ---------- Versand: E-Mail, Herunterladen, Teilen ----------
+
+const versand = { art: null, beleg: null, entwurf: null, dateien: null };
+const kannTeilen = () => !!(navigator.canShare && window.isSecureContext
+  && navigator.canShare({ files: [new File(["x"], "x.pdf", { type: "application/pdf" })] }));
+
+/* Aktuell gewähltes Dokument: { art: rechnung|angebot|mahnung, mahnung } */
+function versandDokument() {
+  const v = $("#versand-dokument").value;
+  if (versand.art === "angebot") return { art: "angebot" };
+  const m = v && versand.beleg.mahnungen.find(x => String(x.id) === v);
+  return m ? { art: "mahnung", mahnung: m } : { art: "rechnung" };
+}
+
+/* PDF-Adressen des gewählten Dokuments (bei Mahnungen: Mahnung + Rechnung) */
+function versandPdfs() {
+  const d = versandDokument();
+  const beleg = versand.art === "angebot" ? `api/angebote/${versand.beleg.id}/pdf` : `api/rechnungen/${versand.beleg.id}/pdf`;
+  return d.mahnung ? [`api/mahnungen/${d.mahnung.id}/pdf`, beleg] : [beleg];
+}
+
+async function oeffneVersand(art, beleg) {
+  versand.art = art;
+  versand.beleg = beleg;
+  $("#versand-titel").textContent = `${art === "angebot" ? "Angebot" : beleg.storno_von ? "Stornorechnung" : "Rechnung"} ${beleg.nummer} senden`;
+  const mahnungen = art === "rechnung" ? beleg.mahnungen || [] : [];
+  $("#versand-dokument").innerHTML = `<option value="">${art === "angebot" ? "Angebot" : beleg.storno_von ? "Stornorechnung" : "Rechnung"}</option>`
+    + mahnungen.map(m => `<option value="${m.id}">${MAHN_KURZ[m.stufe] === "Erinnerung" ? "Zahlungserinnerung" : MAHN_KURZ[m.stufe]} vom ${fmtDate(m.datum)} (mit Rechnung)</option>`).join("");
+  // Offene Rechnung mit Mahnung: standardmäßig die letzte Mahnung schicken
+  $("#versand-dokument").value = mahnungen.length && istOffen(beleg) ? String(mahnungen[mahnungen.length - 1].id) : "";
+  $("#versand-dokument-label").classList.toggle("hidden", !mahnungen.length);
+  $("#versand-teilen").classList.toggle("hidden", !kannTeilen());
+  try { await ladeEntwurf(); } catch (err) { return toast(err.message, true); }
+  $("#versand").showModal();
+  if (!$("#versand-mail").classList.contains("hidden")) ($("#versand-an").value ? $("#versand-text") : $("#versand-an")).focus();
+}
+
+async function ladeEntwurf() {
+  const d = versandDokument();
+  const e = await api(`versand/entwurf?art=${d.art}&id=${versand.beleg.id}${d.mahnung ? `&mahnung_id=${d.mahnung.id}` : ""}`);
+  versand.entwurf = e;
+  $("#versand-nicht-eingerichtet").classList.toggle("hidden", e.konfiguriert);
+  $("#versand-mail").classList.toggle("hidden", !e.konfiguriert);
+  $("#versand-senden").classList.toggle("hidden", !e.konfiguriert);
+  $("#versand-an").value = e.an;
+  $("#versand-betreff").value = e.betreff;
+  $("#versand-text").value = e.text;
+  $("#versand-kopie").checked = e.kopie;
+  $("#versand-eigene").textContent = e.absender_email;
+  $("#versand-anhaenge").innerHTML = e.anhaenge.map((n, i) =>
+    `<a href="${versandPdfs()[i]}" target="_blank" rel="noopener" class="anhang">📎 ${esc(n)}</a>`).join("");
+  $("#versand-frueher").textContent = e.versand.length
+    ? "Bereits gesendet: " + e.versand.map(v => `${fmtDate(v.zeitpunkt.slice(0, 10))} an ${v.an}`).join(" · ") : "";
+  pruefeEmailSpeichern();
+  // Für „Teilen“ die PDFs schon jetzt laden – manche Browser erlauben Teilen nur direkt nach dem Klick
+  versand.dateien = kannTeilen() ? Promise.all(versandPdfs().map(async (url, i) =>
+    new File([await (await fetch(url)).blob()], e.anhaenge[i], { type: "application/pdf" }))) : null;
+}
+
+function pruefeEmailSpeichern() {
+  const an = $("#versand-an").value.trim();
+  const zeigen = !!an && !an.includes(",") && an.toLowerCase() !== (versand.entwurf?.kunde_email || "").toLowerCase();
+  $("#versand-speichern-label").classList.toggle("hidden", !zeigen);
+}
+$("#versand-an").addEventListener("input", pruefeEmailSpeichern);
+$("#versand-dokument").addEventListener("change", () => ladeEntwurf().catch(err => toast(err.message, true)));
+$("#versand-abbrechen").addEventListener("click", () => $("#versand").close());
+$("#versand-zu-einstellungen").addEventListener("click", () => {
+  $("#versand").close();
+  setTimeout(() => $("#mail-karte").scrollIntoView({ behavior: "smooth" }), 50);
+});
+
+$("#versand-download").addEventListener("click", () => {
+  versandPdfs().forEach((url, i) => setTimeout(() => ladeHerunter(url), i * 400));
+  toast(versandPdfs().length > 1 ? "PDFs werden heruntergeladen …" : "PDF wird heruntergeladen …");
+});
+
+$("#versand-teilen").addEventListener("click", async () => {
+  try {
+    const files = await versand.dateien;
+    await navigator.share({ files, title: $("#versand-betreff").value });
+  } catch (err) {
+    if (err.name !== "AbortError") toast("Teilen nicht möglich – bitte herunterladen. (" + err.message + ")", true);
+  }
+});
+
+$("#versand-form").addEventListener("submit", async e => {
+  e.preventDefault();
+  const d = versandDokument();
+  const btn = $("#versand-senden");
+  const vorher = btn.innerHTML;
+  btn.disabled = true;
+  btn.textContent = "Sende …";
+  try {
+    const res = await api("versand", { method: "POST", body: {
+      art: d.art, id: versand.beleg.id, mahnung_id: d.mahnung?.id,
+      an: $("#versand-an").value, betreff: $("#versand-betreff").value, text: $("#versand-text").value,
+      kopie: $("#versand-kopie").checked,
+      email_speichern: !$("#versand-speichern-label").classList.contains("hidden") && $("#versand-speichern").checked,
+    } });
+    $("#versand").close();
+    toast(`✉ ${res.anhaenge.join(" + ")} an ${res.an.join(", ")} gesendet`);
+    // Versendete Rechnungen sind festgeschrieben – Editor nicht mit veralteten Daten offen lassen
+    if (versand.art === "rechnung" && !istAngebot() && state.editId === versand.beleg.id) await resetForm();
+    if (versand.art === "angebot") await loadAngebote(); else await loadListe();
+  } catch (err) { toast("Senden fehlgeschlagen: " + err.message, true); }
+  finally { btn.disabled = false; btn.innerHTML = vorher; }
 });
 
 // ---------- Stammdaten-Tabs (Kunden, Textbausteine, Zahlungsbedingungen) ----------

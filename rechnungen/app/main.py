@@ -20,7 +20,8 @@ from flask import Flask, Response, abort, jsonify, request, send_from_directory
 
 import db
 import importer
-from pdf import MAHNSTUFEN, build_invoice_pdf, build_mahnung_pdf, mahnung_filename, pdf_filename
+import mail
+from pdf import MAHNSTUFEN, build_invoice_pdf, build_mahnung_pdf, fmt_euro, mahnung_filename, pdf_filename
 
 OPTIONS_PATH = os.environ.get("OPTIONS_PATH", "/data/options.json")
 DESKTOP = os.environ.get("DJOS_DESKTOP") == "1"   # Desktop-Version (Windows/Mac) statt Home Assistant
@@ -40,9 +41,19 @@ FELDER = {
     "pdf_ordner": (str, os.environ.get("STANDARD_PDF_ORDNER", "/share/rechnungen")),
     "paperless_installiert": (bool, False),
     "paperless_eingangsordner": (str, "" if DESKTOP else "/share/paperless/consume"),
-    "update_pruefen": (bool, True),
-    "mahnfrist_tage": (int, 7),       # Frist in Zahlungserinnerung/Mahnung (Tage ab Datum)   # nur Desktop-Version: beim Start nach neuer Version suchen
+    "update_pruefen": (bool, True),   # nur Desktop-Version: beim Start nach neuer Version suchen
+    "mahnfrist_tage": (int, 7),       # Frist in Zahlungserinnerung/Mahnung (Tage ab Datum)
+    # E-Mail-Versand über das eigene Postfach (beliebiger Anbieter / eigener Server)
+    "absender_email": (str, ""), "smtp_server": (str, ""), "smtp_port": (int, 587),
+    "smtp_sicherheit": (str, "starttls"), "smtp_benutzer": (str, ""), "smtp_passwort": (str, ""),
+    "mail_antwort_an": (str, ""), "mail_kopie_an_mich": (bool, True),
+    **{k: (str, v) for k, v in mail.VORLAGEN.items()},
 }
+GEHEIM = set(db.GEHEIM)   # wird nie an den Browser zurückgegeben
+
+
+def _ohne_geheimnisse(a):
+    return {k: ("" if k in GEHEIM else v) for k, v in a.items()} | {"smtp_passwort_gesetzt": bool(a.get("smtp_passwort"))}
 
 
 def _app_version():
@@ -114,7 +125,7 @@ def static_files(name):
 
 @app.get("/api/einstellungen")
 def settings_get():
-    return jsonify(absender())
+    return jsonify(_ohne_geheimnisse(absender()))
 
 
 @app.put("/api/einstellungen")
@@ -125,6 +136,12 @@ def settings_put():
         if k not in daten:
             continue
         v = daten[k]
+        if k in GEHEIM:
+            if v is None:          # ausdrücklich löschen
+                werte[k] = ""
+            elif v:                # leeres Feld = gespeichertes Passwort behalten
+                werte[k] = v
+            continue
         if typ is bool:
             werte[k] = bool(v)
         elif typ is int:
@@ -135,8 +152,20 @@ def settings_put():
                 continue
             if werte[k] < 1:
                 fehler.append(f"„{k}“ muss mindestens 1 sein")
+        elif k.startswith("mail_text_"):
+            werte[k] = (v or "").rstrip() if (v or "").strip() else standard   # leere Vorlage → Standardtext
         else:
             werte[k] = (v or "").strip()
+            if k.startswith("mail_betreff_") and not werte[k]:
+                werte[k] = standard
+    if werte.get("smtp_sicherheit", "starttls") not in mail.SICHERHEIT:
+        fehler.append("Unbekannte Verschlüsselung")
+    for k in ("absender_email", "mail_antwort_an"):
+        if werte.get(k):
+            try:
+                mail.adressen(werte[k])
+            except ValueError:
+                fehler.append(f"Ungültige E-Mail-Adresse: {werte[k]}")
     if fehler:
         return jsonify({"error": "; ".join(fehler)}), 400
     db.save_settings(werte)
@@ -145,7 +174,7 @@ def settings_put():
     hinweise = []
     if a["paperless_installiert"] and not os.path.isdir(a["paperless_eingangsordner"] or "-"):
         hinweise.append(f"Paperless-Eingangsordner {a['paperless_eingangsordner'] or '(leer)'} wurde nicht gefunden.")
-    return jsonify({"einstellungen": a, "hinweise": hinweise})
+    return jsonify({"einstellungen": _ohne_geheimnisse(a), "hinweise": hinweise})
 
 
 # ---------- Update-Prüfung (nur Desktop-Version) ----------
@@ -198,6 +227,7 @@ def get_absender():
                    | {"vollstaendig": bool(a.get("name") and a.get("iban")),
                       "paperless": bool(a.get("paperless_installiert")),
                       "angebot_gueltigkeit_tage": a.get("angebot_gueltigkeit_tage") or 30,
+                      "mail": mail.konfiguriert(a),
                       "version": APP_VERSION,
                       "desktop": DESKTOP})
 
@@ -473,6 +503,7 @@ def backup_download():
     with tempfile.TemporaryDirectory() as tmp:
         pfad = os.path.join(tmp, "rechnungen.db")
         db.sichern(pfad)
+        db.geheimnisse_entfernen(pfad)   # Mail-Passwort nicht in die herunterladbare Datei
         buf = io.BytesIO()
         with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
             zf.write(pfad, "rechnungen.db")
@@ -550,6 +581,115 @@ def export_year():
         zf.writestr(f"Rechnungen_{jahr}.csv", "\ufeff" + csv_buf.getvalue())
     return Response(buf.getvalue(), mimetype="application/zip",
                     headers={"Content-Disposition": f'attachment; filename="Export_Rechnungen_{jahr}.zip"'})
+
+
+# ---------- E-Mail-Versand ----------
+
+def _de(iso):
+    try:
+        return date.fromisoformat(iso).strftime("%d.%m.%Y")
+    except (TypeError, ValueError):
+        return ""
+
+
+def _versand_beleg(art, beleg_id, mahnung_id=None):
+    """Beleg, Anhänge und Platzhalter-Werte für eine E-Mail. art: rechnung | angebot | mahnung."""
+    a = absender()
+    if art == "angebot":
+        beleg = db.get_offer(beleg_id) or abort(404)
+    elif art in ("rechnung", "mahnung"):
+        beleg = db.get_invoice(beleg_id) or abort(404)
+    else:
+        abort(400)
+    mahnung = None
+    if art == "mahnung":
+        mahnung = next((m for m in beleg["mahnungen"] if m["id"] == mahnung_id), None) or abort(404)
+    anhaenge = [(pdf_filename(beleg), build_invoice_pdf(beleg, a))]
+    if mahnung:
+        anhaenge.insert(0, (mahnung_filename(beleg, mahnung), build_mahnung_pdf(beleg, mahnung, a, _faellig_am(beleg))))
+    offen = art != "angebot" and not beleg["bezahlt"] and not beleg["storno_von"]
+    werte = {
+        "kunde": beleg["kunde"].get("name", ""),
+        "nummer": beleg["nummer"], "datum": _de(beleg["datum"]),
+        "betrag": fmt_euro(beleg["gesamt"]),
+        "faellig": _de(_faellig_am(beleg)) if offen else "",
+        "gueltig_bis": _de(beleg.get("gueltig_bis")) if art == "angebot" else "",
+        "leistungsdatum": _de(next((p.get("lieferdatum") for p in beleg["positionen"] if p.get("lieferdatum")), "")),
+        "stufe": MAHNSTUFEN[mahnung["stufe"]] if mahnung else "",
+        "frist": _de(mahnung["frist"]) if mahnung else "",
+        "absender": a.get("name", ""), "telefon": a.get("telefon", ""),
+    }
+    return beleg, mahnung, anhaenge, werte
+
+
+@app.get("/api/versand/entwurf")
+def mail_draft():
+    """Vorausgefüllte E-Mail (Empfänger aus den Kundendaten, Betreff/Text aus den Vorlagen)."""
+    art = request.args.get("art", "")
+    mahnung_id = request.args.get("mahnung_id", type=int)
+    beleg, mahnung, anhaenge, werte = _versand_beleg(art, request.args.get("id", type=int), mahnung_id)
+    a = absender()
+    kunde = db.get_customer(beleg.get("kunde_id")) if beleg.get("kunde_id") else None
+    email = (kunde or {}).get("email") or beleg["kunde"].get("email") or ""
+    return jsonify({
+        "an": email, "kunde_email": email, "kunde_id": beleg.get("kunde_id"),
+        "betreff": mail.fuellen(a[f"mail_betreff_{art}"], werte),
+        "text": mail.fuellen(a[f"mail_text_{art}"], werte),
+        "anhaenge": [name for name, _ in anhaenge],
+        "konfiguriert": mail.konfiguriert(a),
+        "kopie": bool(a.get("mail_kopie_an_mich")), "absender_email": a.get("absender_email", ""),
+        "versand": [v for v in beleg.get("versand", []) if v.get("mahnung_id") == (mahnung["id"] if mahnung else None)],
+    })
+
+
+@app.post("/api/versand")
+def mail_send():
+    """E-Mail mit PDF(s) verschicken, im Versand-Protokoll vermerken; Rechnungen werden festgeschrieben."""
+    d = request.get_json() or {}
+    art = d.get("art", "")
+    beleg, mahnung, anhaenge, _ = _versand_beleg(art, d.get("id"), d.get("mahnung_id"))
+    try:
+        an = mail.adressen(d.get("an"))
+    except ValueError as e:
+        return _fehler(str(e))
+    betreff = (d.get("betreff") or "").strip()
+    text = (d.get("text") or "").strip()
+    if not betreff or not text:
+        return _fehler("Betreff und Text dürfen nicht leer sein.")
+    a = absender()
+    try:
+        mail.senden(a, an, betreff, text, anhaenge,
+                    kopie_an=a.get("absender_email") if d.get("kopie") else None, ssl_kontext=_ssl_kontext())
+    except ValueError as e:
+        return _fehler(str(e), 502)
+    db.add_versand(art, beleg["id"], ", ".join(an), betreff, mahnung["id"] if mahnung else None)
+    if art != "angebot":
+        db.festschreiben(beleg["id"])   # verschickt = ausgestellt
+    if d.get("email_speichern") and len(an) == 1:
+        kid = beleg.get("kunde_id") or db.upsert_customer(beleg["kunde"])
+        db.set_customer_email(kid, an[0])
+    return jsonify({"an": an, "anhaenge": [n for n, _ in anhaenge]})
+
+
+@app.post("/api/versand/test")
+def mail_test():
+    """Testmail an die eigene Adresse – mit den Werten aus dem Formular (noch nicht gespeichert)."""
+    d = request.get_json() or {}
+    cfg = absender()
+    for k in ("absender_email", "smtp_server", "smtp_port", "smtp_sicherheit", "smtp_benutzer", "smtp_passwort",
+              "mail_antwort_an", "name"):
+        if d.get(k) not in (None, ""):
+            cfg[k] = d[k]
+    try:
+        an = mail.adressen(cfg.get("absender_email"))
+        cfg["smtp_port"] = int(cfg.get("smtp_port") or 587)
+        mail.senden(cfg, an, "Testmail von DJ Office Studio",
+                    "Hallo,\n\ndiese Testmail zeigt: Der E-Mail-Versand aus DJ Office Studio funktioniert.\n\n"
+                    f"Server: {cfg['smtp_server']}:{cfg['smtp_port']} ({cfg.get('smtp_sicherheit')})",
+                    ssl_kontext=_ssl_kontext())
+    except ValueError as e:
+        return _fehler(str(e), 502)
+    return jsonify({"an": an[0]})
 
 
 def _pdf_response(inv, download=False):

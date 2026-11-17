@@ -22,7 +22,7 @@ args = [
     "--windowed",                 # kein Konsolenfenster; macOS: .app-Bundle
     "--noconfirm", "--clean",
     "--paths", str(APP),
-    "--hidden-import", "main", "--hidden-import", "db", "--hidden-import", "pdf", "--hidden-import", "importer",
+    "--hidden-import", "main", "--hidden-import", "db", "--hidden-import", "pdf", "--hidden-import", "importer", "--hidden-import", "mail",
     "--add-data", f"{APP / 'static'}{SEP}static",
     "--add-data", f"{ROOT / 'rechnungen' / 'config.yaml'}{SEP}.",
     "--icon", str(ROOT / "rechnungen" / "icon.png"),

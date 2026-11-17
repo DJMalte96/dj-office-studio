@@ -59,6 +59,15 @@ CREATE TABLE IF NOT EXISTS mahnungen (
     frist TEXT NOT NULL,
     erstellt TEXT DEFAULT CURRENT_TIMESTAMP
 );
+CREATE TABLE IF NOT EXISTS versand (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    art TEXT NOT NULL,                     -- rechnung | angebot | mahnung
+    beleg_id INTEGER NOT NULL,             -- ID der Rechnung bzw. des Angebots
+    mahnung_id INTEGER,
+    an TEXT NOT NULL,
+    betreff TEXT DEFAULT '',
+    zeitpunkt TEXT DEFAULT (datetime('now', 'localtime'))
+);
 CREATE TABLE IF NOT EXISTS einstellungen (
     schluessel TEXT PRIMARY KEY,
     wert TEXT                              -- JSON-Wert
@@ -215,8 +224,10 @@ def _ergaenzen(con, rechnungen):
         mahnungen.setdefault(m["rechnung_id"], []).append(dict(m))
     kopf = {r["id"]: {"nummer": r["nummer"], "datum": r["datum"]}
             for r in con.execute("SELECT id, nummer, datum FROM rechnungen")}
+    versand = _versand(con, "rechnung", "mahnung")
     for inv in rechnungen:
         inv["mahnungen"] = mahnungen.get(inv["id"], [])
+        inv["versand"] = versand.get(inv["id"], [])
         inv["storno_zu"] = kopf.get(inv["storno_von"]) if inv.get("storno_von") else None
         inv["storniert_durch_nummer"] = kopf.get(inv["storniert_durch"], {}).get("nummer") \
             if inv.get("storniert_durch") else None
@@ -317,7 +328,36 @@ def get_mahnung(mahnung_id):
         return dict(r) if r else None
 
 
+# ---------- E-Mail-Versand ----------
+
+def _versand(con, *arten):
+    """Versand-Protokoll je Beleg (älteste zuerst)."""
+    out = {}
+    for v in con.execute(f"SELECT * FROM versand WHERE art IN ({', '.join('?' * len(arten))}) ORDER BY id", arten):
+        out.setdefault(v["beleg_id"], []).append(dict(v))
+    return out
+
+
+def add_versand(art, beleg_id, an, betreff, mahnung_id=None):
+    with connect() as con:
+        return con.execute("INSERT INTO versand (art, beleg_id, mahnung_id, an, betreff) VALUES (?, ?, ?, ?, ?)",
+                           (art, beleg_id, mahnung_id, an, betreff)).lastrowid
+
+
+def get_customer(kunde_id):
+    with connect() as con:
+        r = con.execute("SELECT * FROM kunden WHERE id = ?", (kunde_id,)).fetchone()
+        return dict(r) if r else None
+
+
+def set_customer_email(kunde_id, email):
+    with connect() as con:
+        con.execute("UPDATE kunden SET email = ? WHERE id = ?", (email, kunde_id))
+
+
 # ---------- Datensicherung ----------
+
+GEHEIM = ("smtp_passwort",)   # wird nicht in herunterladbare Sicherungen übernommen
 
 def sichern(ziel_pfad):
     """Konsistente Kopie der Datenbank (auch während die App läuft)."""
@@ -328,6 +368,17 @@ def sichern(ziel_pfad):
     finally:
         ziel.close()
         quelle.close()
+
+
+def geheimnisse_entfernen(pfad):
+    """Passwörter aus einer Sicherungskopie löschen (die Kopie kann weitergegeben oder in die Cloud gelegt werden)."""
+    con = sqlite3.connect(pfad)
+    try:
+        con.execute(f"DELETE FROM einstellungen WHERE schluessel IN ({', '.join('?' * len(GEHEIM))})", GEHEIM)
+        con.commit()
+        con.execute("VACUUM")   # gelöschte Werte auch physisch aus der Datei entfernen
+    finally:
+        con.close()
 
 
 def pruefe_sicherung(pfad):
@@ -348,7 +399,9 @@ def pruefe_sicherung(pfad):
 
 
 def wiederherstellen(pfad):
-    """Inhalt der aktuellen Datenbank durch die Sicherung ersetzen und Schema auf Stand bringen."""
+    """Inhalt der aktuellen Datenbank durch die Sicherung ersetzen und Schema auf Stand bringen.
+    Gespeicherte Passwörter bleiben erhalten, wenn die Sicherung keine enthält."""
+    geheim = {k: v for k, v in get_settings().items() if k in GEHEIM and v}
     quelle = sqlite3.connect(pfad)
     ziel = connect()
     try:
@@ -357,6 +410,8 @@ def wiederherstellen(pfad):
         quelle.close()
         ziel.close()
     init()
+    vorhanden = get_settings()
+    save_settings({k: v for k, v in geheim.items() if not vorhanden.get(k)})
 
 
 def set_paperless(inv_id, zeitpunkt, table="rechnungen"):
@@ -382,16 +437,23 @@ def _offer_from_row(r):
     return d
 
 
+def _mit_versand(con, angebote):
+    versand = _versand(con, "angebot")
+    for a in angebote:
+        a["versand"] = versand.get(a["id"], [])
+    return angebote
+
+
 def list_offers():
     with connect() as con:
-        return [_offer_from_row(r) for r in con.execute(
-            "SELECT * FROM angebote ORDER BY datum DESC, nummer DESC")]
+        return _mit_versand(con, [_offer_from_row(r) for r in con.execute(
+            "SELECT * FROM angebote ORDER BY datum DESC, nummer DESC")])
 
 
 def get_offer(offer_id):
     with connect() as con:
         r = con.execute("SELECT * FROM angebote WHERE id = ?", (offer_id,)).fetchone()
-        return _offer_from_row(r) if r else None
+        return _mit_versand(con, [_offer_from_row(r)])[0] if r else None
 
 
 def save_offer(a, offer_id=None):
