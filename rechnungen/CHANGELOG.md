@@ -2,6 +2,12 @@
 
 Alle Änderungen an DJ Office Studio. Neueste Version oben.
 
+## 0.14.0 – 2026-11-17
+
+### Neu
+- **Erinnerung an Datensicherungen** auf der Startseite: Die Karte „Datensicherung“ zeigt, wie lange die letzte heruntergeladene Sicherung her ist („vor 24 Tagen“), mit Fortschrittsbalken bis zur nächsten Erinnerung und Button **Jetzt sichern**. Ist die eingestellte Zeit überschritten (oder wurde noch nie gesichert), wird die Karte rot. Das Intervall lässt sich unter ⚙ Einstellungen → Datensicherung & Export ändern (Standard 30 Tage, 0 = keine Erinnerung).
+- Die Desktop-Version zeigt dort zusätzlich, wann die letzte automatische Tageskopie angelegt wurde.
+
 ## 0.13.0 – 2026-11-17
 
 ### Neu

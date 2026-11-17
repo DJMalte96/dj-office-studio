@@ -43,6 +43,7 @@ FELDER = {
     "paperless_eingangsordner": (str, "" if DESKTOP else "/share/paperless/consume"),
     "update_pruefen": (bool, True),   # nur Desktop-Version: beim Start nach neuer Version suchen
     "mahnfrist_tage": (int, 7),       # Frist in Zahlungserinnerung/Mahnung (Tage ab Datum)
+    "sicherung_erinnerung_tage": (int, 30),   # Startseite erinnert an eine Sicherung nach so vielen Tagen (0 = nie)
     # E-Mail-Versand über das eigene Postfach (beliebiger Anbieter / eigener Server)
     "absender_email": (str, ""), "smtp_server": (str, ""), "smtp_port": (int, 587),
     "smtp_sicherheit": (str, "starttls"), "smtp_benutzer": (str, ""), "smtp_passwort": (str, ""),
@@ -150,8 +151,8 @@ def settings_put():
             except (TypeError, ValueError):
                 fehler.append(f"„{k}“ muss eine Zahl sein")
                 continue
-            if werte[k] < 1:
-                fehler.append(f"„{k}“ muss mindestens 1 sein")
+            if werte[k] < (0 if k == "sicherung_erinnerung_tage" else 1):
+                fehler.append(f"„{k}“ muss mindestens {0 if k == 'sicherung_erinnerung_tage' else 1} sein")
         elif k.startswith("mail_text_"):
             werte[k] = (v or "").rstrip() if (v or "").strip() else standard   # leere Vorlage → Standardtext
         else:
@@ -228,6 +229,7 @@ def get_absender():
                       "paperless": bool(a.get("paperless_installiert")),
                       "angebot_gueltigkeit_tage": a.get("angebot_gueltigkeit_tage") or 30,
                       "mail": mail.konfiguriert(a),
+                      "sicherung": _sicherung_status(a),
                       "version": APP_VERSION,
                       "desktop": DESKTOP})
 
@@ -497,6 +499,24 @@ def dunning_pdf(mahnung_id):
 
 # ---------- Datensicherung & Export ----------
 
+def _letzte_auto_sicherung():
+    """Desktop-Version: Datum der neuesten automatischen Tageskopie (Daten/Sicherungen/rechnungen_JJJJ-MM-TT.db)."""
+    if not DESKTOP:
+        return None
+    try:
+        namen = [n for n in os.listdir(os.path.join(db.DATA_DIR, "Sicherungen"))
+                 if re.fullmatch(r"rechnungen_\d{4}-\d{2}-\d{2}\.db", n)]
+    except OSError:
+        return None
+    return max(namen)[11:21] if namen else None
+
+
+def _sicherung_status(a):
+    return {"letzte": db.get_settings().get("_letzte_sicherung"),   # letzte heruntergeladene Sicherung
+            "erinnerung_tage": a.get("sicherung_erinnerung_tage", 30),
+            "automatisch": _letzte_auto_sicherung()}
+
+
 @app.get("/api/backup")
 def backup_download():
     """Komplette Datenbank als ZIP (Kunden, Rechnungen, Angebote, Einstellungen …)."""
@@ -509,6 +529,7 @@ def backup_download():
             zf.write(pfad, "rechnungen.db")
             zf.writestr("info.json", json.dumps({"app": "DJ Office Studio", "version": APP_VERSION,
                                                  "erstellt": datetime.now().isoformat(timespec="seconds")}))
+    db.save_settings({"_letzte_sicherung": datetime.now().isoformat(timespec="seconds")})   # für die Erinnerung
     name = f"DJ-Office-Studio-Sicherung_{date.today():%Y-%m-%d}.zip"
     return Response(buf.getvalue(), mimetype="application/zip",
                     headers={"Content-Disposition": f'attachment; filename="{name}"'})
@@ -539,7 +560,10 @@ def backup_restore():
         os.makedirs(ordner, exist_ok=True)
         vorher = os.path.join(ordner, f"vor-wiederherstellung_{datetime.now():%Y-%m-%d_%H-%M-%S}.db")
         db.sichern(vorher)
+        letzte = db.get_settings().get("_letzte_sicherung")
         db.wiederherstellen(pfad)
+        if letzte and letzte > (db.get_settings().get("_letzte_sicherung") or ""):
+            db.save_settings({"_letzte_sicherung": letzte})   # Zeitpunkt der letzten Sicherung nicht zurückdrehen
     return jsonify({"anzahl": anzahl, "vorher_gesichert": vorher})
 
 

@@ -466,3 +466,15 @@ dialog.dialog h2 { margin-top: 0; }
 .versand-alternativ span { flex: 1; min-width: 180px; }
 button svg.ico { vertical-align: -3px; }
 #passwort-status a { color: var(--text); }
+
+/* ---------- Startseite: Datensicherung ---------- */
+.sicherung-status { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.sicherung-status .stat-gross.rot { color: var(--danger); }
+.sicherung-karte.faellig { border-color: var(--danger); box-shadow: 0 0 0 3px var(--danger-soft), var(--shadow); }
+.sicherung-balken { height: 6px; border-radius: 999px; background: var(--input-bg); border: 1px solid var(--border); overflow: hidden; margin: 12px 0 4px; }
+.sicherung-balken span { display: block; height: 100%; border-radius: 999px; background: var(--neon); }
+.sicherung-balken.gelb span { background: var(--gelb); }
+.sicherung-balken.rot span { background: var(--danger); }
+.sicherung-karte .hint { margin-top: 10px; }
+#tab-einstellungen .sicherung label.erinnerung { margin: 14px 0 0; }
+#tab-einstellungen .sicherung label.erinnerung input { width: 110px; display: block; }

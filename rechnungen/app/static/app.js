@@ -275,10 +275,16 @@ $("#mail-test").addEventListener("click", async e => {
   finally { btn.disabled = false; btn.innerHTML = vorher; }
 });
 
-$("#sicherung-btn").addEventListener("click", () => {
+/* Sicherung herunterladen; der Server merkt sich den Zeitpunkt → Startseite aktualisieren */
+function sicherungHerunterladen() {
   ladeHerunter("api/backup");
-  toast("Sicherung wird heruntergeladen …");
-});
+  toast("Sicherung wird heruntergeladen … Am besten an einem anderen Ort ablegen (Cloud, USB-Stick).");
+  setTimeout(async () => {
+    await ladeAbsender();
+    if ($("#tab-start").classList.contains("active")) renderSicherung();
+  }, 1500);
+}
+$("#sicherung-btn").addEventListener("click", sicherungHerunterladen);
 $("#export-btn").addEventListener("click", () => {
   ladeHerunter(`api/export?jahr=${$("#export-jahr").value}`);
   toast(`Export ${$("#export-jahr").value} wird heruntergeladen …`);
@@ -1645,6 +1651,35 @@ $("#tab-start").addEventListener("click", e => {
   }
 });
 
+const tageSeit = iso => Math.max(0, Math.round((heuteUtc() - isoToUtc(iso.slice(0, 10))) / TAG_MS));
+const tageText = n => n === 0 ? "heute" : n === 1 ? "gestern" : `vor ${n} Tagen`;
+
+/* Startseite: Zeit seit der letzten heruntergeladenen Sicherung, Erinnerung wenn fällig */
+function renderSicherung() {
+  const s = state.absender?.sicherung;
+  if (!s) return;
+  const intervall = Number(s.erinnerung_tage) || 0;
+  const hatDaten = state.rechnungen.length || state.angebote.length;
+  const tage = s.letzte ? tageSeit(s.letzte) : null;
+  const stufe = tage === null ? (hatDaten && intervall ? "rot" : "neutral")
+    : !intervall ? "gruen" : tage >= intervall ? "rot" : tage >= intervall * 0.75 ? "gelb" : "gruen";
+  const faellig = stufe === "rot";
+  $("#start-sicherung-karte").classList.toggle("faellig", faellig);
+  const auto = s.automatisch
+    ? `Automatische Tageskopie auf diesem Computer: ${tageText(tageSeit(s.automatisch))} ✓ – sie hilft aber nicht, wenn der Computer kaputtgeht oder verloren geht.`
+    : state.absender.desktop ? "" : "Die Daten sind zusätzlich in den Backups von Home Assistant enthalten.";
+  $("#start-sicherung").innerHTML = `
+    <div class="sicherung-status">
+      <div class="stat-gross ${stufe}">${tage === null ? "noch nie" : tageText(tage)}<small>${tage === null
+        ? "wurde eine Sicherung heruntergeladen" : `letzte Sicherung am ${fmtDate(s.letzte.slice(0, 10))} um ${s.letzte.slice(11, 16)} Uhr`}</small></div>
+      <button type="button" class="${faellig ? "" : "secondary"}" id="start-sichern">⇩ Jetzt sichern</button>
+    </div>
+    ${intervall && tage !== null ? `<div class="sicherung-balken ${stufe}" title="Erinnerung nach ${intervall} Tagen"><span style="width:${Math.min(100, tage / intervall * 100)}%"></span></div>` : ""}
+    <p class="hint">${faellig ? `<b>Zeit für eine neue Sicherung!</b> ` : intervall && tage !== null
+      ? `Nächste Erinnerung in ${intervall - tage} ${intervall - tage === 1 ? "Tag" : "Tagen"}. ` : ""}Die Sicherungsdatei am besten an einem anderen Ort ablegen – z. B. in der Cloud oder auf einem USB-Stick. ${auto}</p>`;
+  $("#start-sichern").addEventListener("click", sicherungHerunterladen);
+}
+
 async function renderStart() {
   const jetzt = new Date();
   const h = jetzt.getHours();
@@ -1655,9 +1690,10 @@ async function renderStart() {
     { weekday: "long", day: "numeric", month: "long", year: "numeric" });
 
   try {
-    [state.rechnungen, state.angebote] = await Promise.all([api("rechnungen"), api("angebote")]);
+    [state.rechnungen, state.angebote] = await Promise.all([api("rechnungen"), api("angebote"), ladeAbsender()]);
   } catch (e) { return toast("Laden fehlgeschlagen: " + e.message, true); }
   const alle = state.rechnungen;
+  renderSicherung();
 
   // Offene Angebote (Kurzfassung)
   const offeneAng = offeneAngebote();

@@ -65,3 +65,30 @@ def test_export_fuer_steuerberater(client):
     assert "030" not in daten
     summe = next(z for z in zeilen if z and z[0].startswith("Summe"))
     assert summe[5] == "1410,00"   # 960 + 450 + 300 - 300
+
+
+def test_erinnerung_merkt_letzte_sicherung(client):
+    s = client.get("/api/absender").get_json()["sicherung"]
+    assert s == {"letzte": None, "erinnerung_tage": 30, "automatisch": None}
+    sicherung = client.get("/api/backup").data
+    letzte = client.get("/api/absender").get_json()["sicherung"]["letzte"]
+    assert letzte and letzte[:10] == __import__("datetime").date.today().isoformat()
+    # Einspielen einer (älteren) Sicherung dreht den Zeitpunkt nicht zurück
+    import db
+    db.save_settings({"_letzte_sicherung": "2099-01-01T10:00:00"})
+    client.post("/api/backup", data={"datei": (io.BytesIO(sicherung), "s.zip")}, content_type="multipart/form-data")
+    assert client.get("/api/absender").get_json()["sicherung"]["letzte"] == "2099-01-01T10:00:00"
+    # 0 = keine Erinnerung ist erlaubt, negative Werte nicht
+    assert client.put("/api/einstellungen", json={"sicherung_erinnerung_tage": 0}).status_code == 200
+    assert client.get("/api/absender").get_json()["sicherung"]["erinnerung_tage"] == 0
+    assert client.put("/api/einstellungen", json={"sicherung_erinnerung_tage": -1}).status_code == 400
+
+
+def test_desktop_kennt_automatische_sicherung(app_modul, client, tmp_path, monkeypatch):
+    monkeypatch.setattr(app_modul, "DESKTOP", True)
+    ordner = tmp_path / "Sicherungen"
+    ordner.mkdir(exist_ok=True)
+    for tag in ("2026-11-15", "2026-11-17", "2026-11-16"):
+        (ordner / f"rechnungen_{tag}.db").write_bytes(b"")
+    (ordner / "vor-wiederherstellung_2026-12-01_10-00-00.db").write_bytes(b"")
+    assert client.get("/api/absender").get_json()["sicherung"]["automatisch"] == "2026-11-17"

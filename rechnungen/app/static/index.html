@@ -128,6 +128,10 @@
         </div>
 
         <div class="start-spalte">
+          <div class="card sicherung-karte" id="start-sicherung-karte">
+            <div class="row between"><h2>Datensicherung</h2><a href="#" class="mehr zu-einstellungen">Einstellungen →</a></div>
+            <div id="start-sicherung"></div>
+          </div>
           <div class="card">
             <h2>Umsatz</h2>
             <div id="start-umsatz" class="stat-liste"></div>
@@ -405,6 +409,8 @@
                 <button type="button" id="wiederherstellen-btn" class="secondary">⇪ Sicherung einspielen</button>
                 <input type="file" id="sicherung-datei" accept=".zip,.db" hidden>
               </div>
+              <label class="erinnerung">Auf der Startseite an eine Sicherung erinnern nach <span class="opt">(Tagen, 0 = nie)</span>
+                <input name="sicherung_erinnerung_tage" type="number" min="0" step="1"></label>
             </div>
             <div>
               <strong>Export für den Steuerberater</strong>
