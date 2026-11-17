@@ -289,7 +289,8 @@ for _t in db.TABLES:
 
 # ---------- Rechnungen ----------
 
-def _validate_invoice(data, inv_id=None, check_number=True, art="rechnung"):
+def _validate_invoice(data, inv_id=None, check_number=True, art="rechnung", pflicht=True):
+    """pflicht=False (PDF-Vorschau): Pflichtangaben einer Rechnung noch nicht erzwingen."""
     angebot = art == "angebot"
     wort = "Angebotsnummer" if angebot else "Rechnungsnummer"
     errors = []
@@ -311,6 +312,15 @@ def _validate_invoice(data, inv_id=None, check_number=True, art="rechnung"):
             errors.append(f"Ungültiger Preis bei '{p['beschreibung'][:30]}'")
     if not angebot and not (data.get("zahlungsbedingung") or "").strip():
         errors.append("Zahlungsbedingung fehlt")
+    if not angebot and pflicht:
+        # Pflichtangaben einer Rechnung: vollständige Anschrift des Kunden und Datum der Leistung
+        fehlt = [t for k, t in (("strasse", "Straße"), ("plz", "PLZ"), ("ort", "Ort")) if not (kunde.get(k) or "").strip()]
+        if fehlt and (kunde.get("name") or "").strip():
+            errors.append(f"Anschrift des Kunden unvollständig – {', '.join(fehlt)} fehlt (Pflichtangabe auf Rechnungen)")
+        ohne_datum = [p for p in positionen if not p.get("lieferdatum")]
+        if ohne_datum:
+            errors.append("Bitte bei jeder Position das Lieferdatum (Datum der Veranstaltung) eintragen "
+                          f"(fehlt bei „{ohne_datum[0]['beschreibung'][:40]}“)")
     if errors:
         abort(Response(json.dumps({"error": "; ".join(errors)}), 400, mimetype="application/json"))
     doc = {
@@ -845,7 +855,7 @@ def invoices_to_paperless():
 def invoices_preview():
     data = request.get_json()
     data["nummer"] = (data.get("nummer") or "").strip() or "VORSCHAU"
-    return _pdf_response(_validate_invoice(data, check_number=False, art=data.get("art") or "rechnung"))
+    return _pdf_response(_validate_invoice(data, check_number=False, art=data.get("art") or "rechnung", pflicht=False))
 
 
 # ---------- Angebote ----------

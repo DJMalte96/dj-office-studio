@@ -59,10 +59,23 @@ def fmt_euro(value):
     return f"{s} Euro"
 
 
+# Kleinunternehmer-Hinweis: Seit der Reform 2025 ist die Kleinunternehmerregelung eine Steuerbefreiung.
+# Belege ab dem Stichtag tragen die neue Formulierung; ältere behalten beim erneuten Öffnen ihren ursprünglichen
+# Text, damit sich bereits ausgestellte (festgeschriebene) Rechnungen nicht nachträglich ändern.
+HINWEIS19_STICHTAG = "2026-11-18"
+HINWEIS19_ALT = ["Gem. §19 UStG als Kleinunternehmer", "nicht umsatzsteuerpflichtig"]
+HINWEIS19_NEU = ["Steuerbefreiung nach § 19 UStG", "(Kleinunternehmerregelung)"]
+
+
+def hinweis19(beleg_datum):
+    return HINWEIS19_NEU if (beleg_datum or "") >= HINWEIS19_STICHTAG else HINWEIS19_ALT
+
+
 class InvoicePDF(FPDF):
-    def __init__(self, absender):
+    def __init__(self, absender, beleg_datum=None):
         super().__init__(format="A4", unit="mm")
         self.absender = absender
+        self.beleg_datum = beleg_datum
         reg, bold = _find_fonts()
         self.add_font("Body", "", reg)
         self.add_font("Body", "B", bold)
@@ -81,8 +94,7 @@ class InvoicePDF(FPDF):
             (LEFT + 38, ["Bankverbindung:", a.get("kontoinhaber") or a.get("name"),
                          f"IBAN: {a.get('iban', '')}", f"BIC : {a.get('bic', '')}", a.get("bank_name")]),
             (LEFT + 103, ["Steuernummer:", a.get("steuernummer"), "",
-                          *(["Gem. §19 UStG als Kleinunternehmer", "nicht umsatzsteuerpflichtig"]
-                            if a.get("kleinunternehmer") else [])]),
+                          *(hinweis19(self.beleg_datum) if a.get("kleinunternehmer") else [])]),
         ]
         for x, lines in cols:
             for i, text in enumerate(lines):
@@ -206,7 +218,7 @@ def build_invoice_pdf(inv, absender):
     mit storno_zu={nummer, datum} eine Stornorechnung. Gibt PDF als bytes zurück."""
     angebot = inv.get("art") == "angebot"
     storno = inv.get("storno_zu")
-    pdf = InvoicePDF(absender)
+    pdf = InvoicePDF(absender, inv.get("datum"))
     pdf.add_page()
 
     titel = "Angebot" if angebot else "Stornorechnung" if storno else "Rechnung"
@@ -293,7 +305,7 @@ MAHNSTUFEN = {1: "Zahlungserinnerung", 2: "1. Mahnung", 3: "2. Mahnung"}
 def build_mahnung_pdf(inv, mahnung, absender, faellig_iso=None):
     """Zahlungserinnerung (Stufe 1) bzw. 1./2. Mahnung (Stufe 2/3) zu einer Rechnung."""
     stufe = mahnung["stufe"]
-    pdf = InvoicePDF(absender)
+    pdf = InvoicePDF(absender, mahnung.get("datum"))
     pdf.add_page()
     _briefkopf(pdf, absender, inv["kunde"], MAHNSTUFEN[stufe], mahnung["datum"])
 
