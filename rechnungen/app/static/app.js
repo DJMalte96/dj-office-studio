@@ -761,6 +761,7 @@ function fristBadge(z) {
 
 const ICON_MAIL = `<svg class="ico" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3.5 6.5 8.5 6.5 8.5-6.5"/></svg>`;
 
+const ICON_EDIT = `<svg class="ico" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4z"/><path d="m13.5 6.5 4 4"/></svg>`;
 const aktionen = (...welche) => welche.map(a => ({
   pdf: `<button class="small secondary" data-act="pdf">PDF</button>`,
   edit: `<button class="small secondary" data-act="edit">Bearbeiten</button>`,
@@ -1159,9 +1160,9 @@ function renderAngebote() {
       <td class="btns">
         <button class="small secondary" data-act="pdf">PDF</button>
         <button class="small secondary" data-act="senden" title="Per E-Mail senden, herunterladen oder teilen" aria-label="Senden">${ICON_MAIL}</button>
-        <button class="small secondary" data-act="edit">Bearbeiten</button>
+        <button class="small secondary" data-act="edit" title="Im Editor bearbeiten" aria-label="Bearbeiten">${ICON_EDIT}</button>
         ${a.rechnung_id ? "" : `<button class="small" data-act="rechnung" title="Rechnung aus diesem Angebot erstellen">→ Rechnung</button>`}
-        <button class="small danger" data-act="del">Löschen</button>
+        <button type="button" class="icon del" data-act="del" title="Angebot löschen" aria-label="Löschen">✕</button>
       </td>
     </tr>`).join("") ||
     `<tr><td colspan="8" class="hint">${q ? "Keine Treffer." : "Noch keine Angebote – mit „＋ Neues Angebot“ das erste schreiben."}</td></tr>`;
