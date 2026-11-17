@@ -122,6 +122,14 @@ function setModus(modus) {
   state.modus = modus;
   document.body.classList.toggle("modus-angebot", modus === "angebot");
   fillZahlungSelect();
+  pflichtfelder();
+}
+
+/* Rechnungen brauchen die vollständige Kundenanschrift und je Position ein Lieferdatum (bei Angeboten freiwillig). */
+function pflichtfelder() {
+  const rechnung = state.modus !== "angebot";
+  ["#k-strasse", "#k-plz", "#k-ort"].forEach(s => { $(s).required = rechnung; });
+  $$("#positionen .lieferdatum").forEach(f => { f.required = rechnung; });
 }
 
 const istAngebot = () => state.modus === "angebot";
@@ -537,6 +545,7 @@ function addPosition(p = {}) {
   return pos;
 }
 $("#pos-add").addEventListener("click", () => addPosition());
+new MutationObserver(pflichtfelder).observe($("#positionen"), { childList: true });   // neue Positionen
 
 function updateTotal() {
   const sum = $$("#positionen .preis").reduce((s, i) => s + (Number(i.value) || 0), 0);

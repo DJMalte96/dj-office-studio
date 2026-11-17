@@ -2,6 +2,14 @@
 
 Alle Änderungen an DJ Office Studio. Neueste Version oben.
 
+## 0.16.0 – 2026-11-17
+
+### Neu
+- **Pflichtangaben auf Rechnungen**: Eine Rechnung lässt sich nur noch mit vollständiger Anschrift des Kunden (Straße, PLZ, Ort) und mit einem Lieferdatum bei jeder Position speichern – beides gehört auf eine ordnungsgemäße Rechnung. Das Formular markiert fehlende Felder schon vor dem Speichern. Die PDF-Vorschau funktioniert weiterhin auch unvollständig; für Angebote bleiben die Felder freiwillig. Bereits gespeicherte und importierte Rechnungen bleiben unverändert.
+
+### Geändert
+- **Kleinunternehmer-Hinweis** in der Fußzeile: Seit der Reform 2025 ist die Kleinunternehmerregelung eine Steuerbefreiung. Rechnungen, Angebote und Mahnungen mit Datum ab dem 18.11.2026 tragen deshalb „Steuerbefreiung nach § 19 UStG (Kleinunternehmerregelung)“. Ältere Belege behalten beim erneuten Öffnen ihren ursprünglichen Text („Gem. §19 UStG als Kleinunternehmer nicht umsatzsteuerpflichtig“), damit sich bereits ausgestellte Rechnungen nicht nachträglich ändern.
+
 ## 0.15.1 – 2026-11-17
 
 ### Behoben
