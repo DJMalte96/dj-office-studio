@@ -486,3 +486,10 @@ button svg.ico { vertical-align: -3px; }
 .qr-daten { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; margin: 0 0 18px; font-size: 14px; }
 .qr-daten dt { color: var(--muted); }
 .qr-daten dd { margin: 0; font-weight: 600; word-break: break-word; }
+
+/* ---------- Hinweis beim ersten Start ---------- */
+.hinweis-dialog { width: min(560px, calc(100vw - 24px)); }
+.hinweis-dialog p { margin: 0 0 12px; line-height: 1.5; }
+.hinweis-dialog .actions { margin-top: 18px; }
+.info-links { display: flex; gap: 18px; flex-wrap: wrap; }
+.hinweis-dialog a { color: var(--text); }

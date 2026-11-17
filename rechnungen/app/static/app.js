@@ -362,6 +362,25 @@ $("#update-zu").addEventListener("click", () => {
   $("#update-banner").classList.add("hidden");
 });
 
+/* Hinweis „Nutzung ohne Gewähr“: einmal pro Installation bestätigen, danach unter ⚙ Einstellungen nachlesbar. */
+function zeigeHinweis(pflicht) {
+  const d = $("#hinweis-dialog");
+  d.dataset.pflicht = pflicht ? "1" : "";
+  if (!d.open) d.showModal();
+}
+$("#hinweis-dialog").addEventListener("cancel", e => {   // Esc schließt nur, wenn schon bestätigt
+  if (e.currentTarget.dataset.pflicht) e.preventDefault();
+});
+$("#hinweis-ok").addEventListener("click", async () => {
+  const d = $("#hinweis-dialog");
+  if (d.dataset.pflicht) {
+    try { await api("hinweis", { method: "POST" }); state.absender.hinweis_bestaetigt = true; }
+    catch (err) { return toast(err.message, true); }
+  }
+  d.close();
+});
+$("#hinweis-zeigen").addEventListener("click", e => { e.preventDefault(); zeigeHinweis(false); });
+
 /* Absender-Infos laden und alles aktualisieren, was davon abhängt (Hinweis-Banner, Paperless-Buttons …). */
 async function ladeAbsender() {
   const abs = await api("absender");
@@ -370,6 +389,7 @@ async function ladeAbsender() {
   document.body.classList.toggle("desktop", !!abs.desktop);   // Desktop-Version: HA-spezifische Hinweise ausblenden
   $("#warnung").classList.toggle("hidden", abs.vollstaendig);
   $$(".pl-button").forEach(b => b.classList.toggle("hidden", !abs.paperless));   // nur mit „Paperless installiert“
+  if (!abs.hinweis_bestaetigt) zeigeHinweis(true);
   return abs;
 }
 

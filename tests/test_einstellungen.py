@@ -58,3 +58,16 @@ def test_betraege_formatieren():
     assert pdf.fmt_euro(960) == "960,- Euro"
     assert pdf.fmt_euro(1234.5) == "1.234,50 Euro"
     assert pdf.fmt_euro(-960) == "-960,- Euro"
+
+
+def test_hinweis_beim_ersten_start(client):
+    assert client.get("/api/absender").get_json()["hinweis_bestaetigt"] is False
+    assert client.post("/api/hinweis").status_code == 204
+    assert client.get("/api/absender").get_json()["hinweis_bestaetigt"] is True
+    # Neue Textversion → erscheint einmal erneut
+    import main
+    main.HINWEIS_VERSION += 1
+    try:
+        assert client.get("/api/absender").get_json()["hinweis_bestaetigt"] is False
+    finally:
+        main.HINWEIS_VERSION -= 1

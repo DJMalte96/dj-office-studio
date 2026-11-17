@@ -25,7 +25,7 @@ import main  # noqa: E402
 
 db.init()
 db.save_settings({
-    "_uebernommen": True, "name": "Max Beispiel", "strasse": "Musterweg 1", "plz_ort": "12345 Musterstadt",
+    "_uebernommen": True, "_hinweis_bestaetigt": 1, "name": "Max Beispiel", "strasse": "Musterweg 1", "plz_ort": "12345 Musterstadt",
     "telefon": "0170/1234567", "ort_fuer_datum": "Musterstadt", "bank_name": "Sparkasse Musterstadt",
     "iban": "DE00 0000 0000 0000 0000 00", "bic": "ABCDEFGHXXX", "steuernummer": "12/345/67890",
     "kleinunternehmer": True, "startnummer": 37, "angebot_startnummer": 10, "angebot_gueltigkeit_tage": 30,
