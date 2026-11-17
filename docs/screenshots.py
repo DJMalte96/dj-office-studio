@@ -36,6 +36,7 @@ db.save_settings({
 })
 c = main.app.test_client()
 heute = date.today()
+db.save_settings({"_letzte_sicherung": f"{heute - timedelta(days=12)}T19:42:00"})   # Startseite: Sicherung vor 12 Tagen
 d = lambda n: (heute + timedelta(days=n)).isoformat()   # noqa: E731
 ZB8 = "Bitte den Betrag innerhalb der nächsten 8 Tage auf das unten genannte Konto überweisen."
 K = {
