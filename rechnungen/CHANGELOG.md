@@ -2,6 +2,12 @@
 
 Alle Änderungen an DJ Office Studio. Neueste Version oben.
 
+## 0.12.1 – 2026-11-17
+
+### Behoben
+- Die Option „Beim Start nach neuen Versionen suchen“ wurde unter ⚙ Einstellungen auch in der Home-Assistant-App angezeigt – sie gilt nur für die Desktop-Version und ist dort jetzt wieder ausgeblendet.
+- Kleinere Darstellungsfehler: Hinweistexte bei „Datensicherung & Export“ brachen mitten im Satz um, „nächste Frist“ in der Summenzeile der offenen Rechnungen ebenfalls.
+
 ## 0.12.0 – 2026-11-17
 
 ### Neu

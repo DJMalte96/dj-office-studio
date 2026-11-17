@@ -406,8 +406,9 @@ tr.angebot-zu td.btns, tr.angebot-zu td.auswahl-spalte, tr.angebot-zu td:nth-chi
 #tab-einstellungen label.inline { margin-bottom: 14px; }
 #tab-einstellungen p.hint { margin: 0 0 14px; }
 .info-karte { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; }
-body.desktop .nur-ha { display: none; }
-body:not(.desktop) .nur-desktop { display: none; }
+/* !important: sonst gewinnen speziellere Regeln wie #tab-einstellungen label.inline { display: flex } */
+body.desktop .nur-ha { display: none !important; }
+body:not(.desktop) .nur-desktop { display: none !important; }
 .update-banner { display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
   background: var(--primary-soft); color: var(--text); border-color: var(--neon); }
 .update-banner span { flex: 1; }
@@ -429,3 +430,4 @@ a.mahn-chip:hover { text-decoration: underline; }
 #tab-einstellungen .sicherung .row { flex-wrap: wrap; gap: 8px; align-items: center; }
 #tab-einstellungen .sicherung select { width: auto; }
 #tab-einstellungen .sicherung p.hint { margin: 4px 0 10px; }
+.summen-zeile .naechste, .summen-zeile td:nth-child(3) { white-space: nowrap; }
