@@ -2,6 +2,12 @@
 
 Alle Änderungen an DJ Office Studio. Neueste Version oben.
 
+## 0.17.0 – 2026-11-17
+
+### Neu
+- **Hinweis beim ersten Start**: DJ Office Studio ist ein Hilfsmittel – für den Inhalt der Rechnungen ist jeder Nutzer selbst verantwortlich, die Nutzung erfolgt ohne Gewähr. Der Hinweis erscheint einmal pro Installation und lässt sich danach unter ⚙ Einstellungen → „Hinweise & Lizenz“ jederzeit nachlesen. In der Desktop-Version erinnert er zusätzlich daran, regelmäßig eine Sicherung anzulegen.
+- **MIT-Lizenz**: DJ Office Studio steht jetzt unter der MIT-Lizenz – Nutzen, Weitergeben und Verändern sind ausdrücklich erlaubt.
+
 ## 0.16.0 – 2026-11-17
 
 ### Neu

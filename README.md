@@ -157,6 +157,14 @@ In der **Desktop-Version** liegt alles im Dokumente-Ordner unter `DJ Office Stud
 
 Alle Änderungen je Version stehen in [rechnungen/CHANGELOG.md](rechnungen/CHANGELOG.md) – Home Assistant zeigt sie auch beim Update an.
 
+## Hinweis und Lizenz
+
+DJ Office Studio ist ein kostenloses Hilfsmittel zum Schreiben von Rechnungen und Angeboten. Die App prüft wichtige Pflichtangaben, garantiert aber nicht, dass jede Rechnung allen steuerlichen und rechtlichen Anforderungen entspricht – das hängt auch von der eigenen Situation ab (z. B. Kleinunternehmer oder umsatzsteuerpflichtig). **Für den Inhalt der Rechnungen ist jeder Nutzer selbst verantwortlich**; im Zweifel bitte den Steuerberater fragen. Die Nutzung erfolgt ohne Gewähr.
+
+Die App zeigt diesen Hinweis beim ersten Start einmal an; danach steht er unter **⚙ Einstellungen → Hinweise & Lizenz**.
+
+DJ Office Studio steht unter der [MIT-Lizenz](LICENSE): Nutzen, Weitergeben und Verändern sind ausdrücklich erlaubt.
+
 ## Lokale Entwicklung
 
 Voraussetzung: Python 3.9 oder neuer (im Container läuft 3.12).

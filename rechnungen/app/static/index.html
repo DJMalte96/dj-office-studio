@@ -427,7 +427,10 @@
         <div class="card info-karte">
           <div><strong>DJ Office Studio</strong> <span class="hint">Version <span id="app-version">–</span></span>
             <span id="update-status" class="nur-desktop"></span></div>
-          <a href="https://github.com/DJMalte96/dj-office-studio/blob/main/rechnungen/CHANGELOG.md" target="_blank" rel="noopener" class="mehr">Was ist neu? (Changelog) ↗</a>
+          <span class="info-links">
+            <a href="#" id="hinweis-zeigen" class="mehr">Hinweise &amp; Lizenz</a>
+            <a href="https://github.com/DJMalte96/dj-office-studio/blob/main/rechnungen/CHANGELOG.md" target="_blank" rel="noopener" class="mehr">Was ist neu? (Changelog) ↗</a>
+          </span>
         </div>
         <label class="inline nur-desktop update-option"><input type="checkbox" name="update_pruefen">
           Beim Start nach neuen Versionen suchen (fragt bei GitHub nach – es werden keine Daten übertragen)</label>
@@ -443,6 +446,21 @@
     <section id="tab-textbausteine" class="tab" data-stamm="textbausteine"></section>
     <section id="tab-zahlungsbedingungen" class="tab" data-stamm="zahlungsbedingungen"></section>
   </main>
+
+  <!-- ================= Hinweis beim ersten Start (Nutzung ohne Gewähr) ================= -->
+  <dialog id="hinweis-dialog" class="dialog hinweis-dialog">
+    <h2>Bitte beachten</h2>
+    <p>DJ Office Studio ist ein kostenloses Hilfsmittel zum Schreiben von Rechnungen und Angeboten. Die App prüft wichtige
+      Pflichtangaben, garantiert aber nicht, dass jede Rechnung allen steuerlichen und rechtlichen Anforderungen entspricht –
+      das hängt auch von deiner Situation ab (z. B. Kleinunternehmer oder umsatzsteuerpflichtig).</p>
+    <p><strong>Für den Inhalt deiner Rechnungen bist du selbst verantwortlich</strong>; im Zweifel frag deinen Steuerberater.</p>
+    <p class="nur-desktop">Deine Daten liegen nur auf diesem Computer – lade regelmäßig eine Sicherung herunter und lege sie an einem anderen Ort ab.</p>
+    <p class="hint">Die Nutzung erfolgt ohne Gewähr. DJ Office Studio steht unter der
+      <a href="https://github.com/DJMalte96/dj-office-studio/blob/main/LICENSE" target="_blank" rel="noopener">MIT-Lizenz ↗</a>.</p>
+    <div class="actions">
+      <button type="button" id="hinweis-ok" autofocus>Verstanden</button>
+    </div>
+  </dialog>
 
   <!-- ================= QR-Code zum Bezahlen ================= -->
   <dialog id="qr-dialog" class="dialog qr-dialog">

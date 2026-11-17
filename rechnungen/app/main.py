@@ -231,8 +231,21 @@ def get_absender():
                       "angebot_gueltigkeit_tage": a.get("angebot_gueltigkeit_tage") or 30,
                       "mail": mail.konfiguriert(a),
                       "sicherung": _sicherung_status(a),
+                      "hinweis_bestaetigt": db.get_settings().get("_hinweis_bestaetigt", 0) >= HINWEIS_VERSION,
                       "version": APP_VERSION,
                       "desktop": DESKTOP})
+
+
+# Hinweis „Nutzung ohne Gewähr“ beim ersten Start. Bei einer inhaltlichen Änderung des Textes
+# HINWEIS_VERSION erhöhen – dann erscheint er einmal erneut.
+HINWEIS_VERSION = 1
+
+
+@app.post("/api/hinweis")
+def notice_confirm():
+    db.save_settings({"_hinweis_bestaetigt": HINWEIS_VERSION,
+                      "_hinweis_bestaetigt_am": datetime.now().isoformat(timespec="seconds")})
+    return "", 204
 
 
 # ---------- Stammdaten (Kunden, Textbausteine, Zahlungsbedingungen) ----------
