@@ -187,3 +187,13 @@ def test_testmail_mit_formularwerten(client, smtp):
     r = client.post("/api/versand/test", json=EINRICHTUNG | {"smtp_server": "mail.eigener-server.de", "smtp_port": "2525"})
     assert r.status_code == 200, r.get_json()
     assert smtp.gesendet[0]["server"] == "mail.eigener-server.de:2525" and smtp.gesendet[0]["an"] == ["max@example.org"]
+
+
+def test_entwurf_fuer_stornorechnung(client):
+    einrichten(client)
+    inv = neue_rechnung(client, nummer="037", datum="2026-11-01")
+    client.post(f"/api/rechnungen/{inv}/festschreiben")
+    storno = client.post(f"/api/rechnungen/{inv}/stornieren").get_json()
+    e = client.get(f"/api/versand/entwurf?art=rechnung&id={storno['id']}").get_json()
+    assert e["betreff"] == f"Stornorechnung {storno['nummer']} zur Rechnung 037"
+    assert "Rechnung 037 vom 01.11.2026" in e["text"] and "Vielen Dank für Ihren Auftrag" not in e["text"]

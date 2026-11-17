@@ -1,4 +1,4 @@
-/* Rechnungen – Frontend. Alle URLs relativ, damit es hinter dem HA-Ingress-Pfad funktioniert. */
+/* DJ Office Studio – Frontend. Alle URLs relativ, damit es hinter dem HA-Ingress-Pfad funktioniert. */
 "use strict";
 
 const $ = (sel, root = document) => root.querySelector(sel);
