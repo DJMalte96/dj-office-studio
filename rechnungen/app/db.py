@@ -332,18 +332,19 @@ def sichern(ziel_pfad):
 
 def pruefe_sicherung(pfad):
     """Prüft, ob die Datei eine Datenbank von DJ Office Studio ist; gibt Anzahlen zurück."""
+    # nur lesend öffnen; as_uri() ergibt auch unter Windows eine gültige file:-Adresse.
+    # Die Verbindung wird in jedem Fall geschlossen – Windows kann die Datei sonst nicht löschen.
+    con = sqlite3.connect(Path(pfad).resolve().as_uri() + "?mode=ro", uri=True)
     try:
-        # nur lesend öffnen; as_uri() ergibt auch unter Windows eine gültige file:-Adresse
-        con = sqlite3.connect(Path(pfad).resolve().as_uri() + "?mode=ro", uri=True)
         tabellen = {r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
         if not {"rechnungen", "kunden"} <= tabellen:
             raise ValueError("Die Datei enthält keine Daten von DJ Office Studio.")
-        anzahl = {t: con.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0]
-                  for t in ("rechnungen", "kunden", "angebote") if t in tabellen}
-        con.close()
-        return anzahl
+        return {t: con.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0]
+                for t in ("rechnungen", "kunden", "angebote") if t in tabellen}
     except sqlite3.DatabaseError as e:
         raise ValueError("Die Datei ist keine gültige Sicherung.") from e
+    finally:
+        con.close()
 
 
 def wiederherstellen(pfad):

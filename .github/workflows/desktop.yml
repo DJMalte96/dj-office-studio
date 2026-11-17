@@ -40,7 +40,19 @@ jobs:
         run: pip install -r rechnungen/requirements.txt pyinstaller pillow pytest
 
       - name: Tests
-        run: pytest -q tests
+        run: |
+          pytest -q tests --junitxml=pytest.xml || {
+          python - <<'PY'
+          import sys, xml.etree.ElementTree as ET
+          ok = True
+          for case in ET.parse("pytest.xml").iter("testcase"):
+              for f in list(case.findall("failure")) + list(case.findall("error")):
+                  ok = False
+                  text = (f.get("message") or "") + " | " + (f.text or "").strip().splitlines()[-1][:300] if (f.text or "").strip() else (f.get("message") or "")
+                  print(f"::error title={case.get('name')}::{text}")
+          sys.exit(1)   # pytest ist fehlgeschlagen – Schritt immer rot
+          PY
+          }
 
       - name: Version
         run: |
