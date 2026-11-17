@@ -2,6 +2,20 @@
 
 Alle Änderungen an DJ Office Studio. Neueste Version oben.
 
+## 0.12.0 – 2026-11-17
+
+### Neu
+- **Festschreiben & Storno**: Rechnungen lassen sich nur noch ändern oder löschen, solange sie nicht festgeschrieben sind. Festgeschrieben wird automatisch beim Bezahlt-Markieren, bei einer Mahnung oder beim Senden an Paperless – oder per 🔒 von Hand (z. B. nach dem Versenden). Korrigiert wird dann per **Stornorechnung** mit eigener Nummer und negativen Beträgen; beide Rechnungen landen im Archiv („Storno zu 038“ / „storniert → 040“). Beim Löschen einer nicht festgeschriebenen Rechnung warnt die App, wenn dadurch eine Lücke im Nummernkreis entsteht.
+- **Zahlungserinnerung und Mahnungen**: In „Offene Rechnungen“ erzeugt ein Klick die nächste Stufe – Zahlungserinnerung, 1. Mahnung, 2. Mahnung – als PDF mit Bezug auf die Rechnung, Fälligkeitsdatum und neuer Frist (einstellbar, Standard 7 Tage). Erstellte Mahnungen stehen als Link an der Rechnung; eine Kopie landet im PDF-Ordner. Auf der Startseite steht bei überfälligen Rechnungen die letzte Mahnung dabei.
+- **Datensicherung**: Unter ⚙ Einstellungen alle Daten als eine Datei herunterladen und wieder einspielen (der bisherige Stand wird vorher automatisch gesichert). Die Desktop-Version sichert außerdem einmal pro Tag automatisch (die letzten 14 Tage).
+- **Export für den Steuerberater**: alle Rechnungen eines Jahres als Excel-Tabelle (CSV) – mit Status, Bezahlt-Datum und Stornos – plus alle PDFs in einer ZIP-Datei.
+- Beim Bezahlt-Markieren merkt sich die App jetzt das **Datum der Zahlung** (für den Export).
+- **Automatische Tests** im Repository, die bei jedem Push und vor jedem Bau der Desktop-Version laufen.
+
+### Geändert
+- Bestehende bezahlte oder an Paperless gesendete Rechnungen werden beim Update automatisch festgeschrieben, ebenso importierte alte Rechnungen. Ein Klick auf eine festgeschriebene Rechnung öffnet das PDF statt den Editor.
+- Das Archiv zeigt jetzt bezahlte **und** stornierte Rechnungen.
+
 ## 0.11.1 – 2026-11-16
 
 ### Behoben

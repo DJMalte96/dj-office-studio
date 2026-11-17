@@ -223,7 +223,7 @@
 
       <div class="card">
         <div class="row between">
-          <h2>Archiv <span class="h2-sub">bezahlte Rechnungen</span></h2>
+          <h2>Archiv <span class="h2-sub">bezahlte &amp; stornierte Rechnungen</span></h2>
           <button type="button" id="btn-import" class="secondary">⇪ Alte Rechnungen importieren</button>
         </div>
         <div class="liste-tools">
@@ -325,8 +325,12 @@
               <label>Angebote ab Nr.<input name="angebot_startnummer" type="number" min="1" step="1"></label>
             </div>
             <p class="hint">Gibt es schon höhere Nummern, wird ab der höchsten weitergezählt.</p>
-            <label>Angebote gültig für <span class="opt">(Tage – Vorschlag für „Gültig bis“)</span>
-              <input name="angebot_gueltigkeit_tage" type="number" min="1" step="1"></label>
+            <div class="row">
+              <label>Angebote gültig für <span class="opt">(Tage)</span>
+                <input name="angebot_gueltigkeit_tage" type="number" min="1" step="1"></label>
+              <label>Zahlungsfrist in Mahnungen <span class="opt">(Tage)</span>
+                <input name="mahnfrist_tage" type="number" min="1" step="1"></label>
+            </div>
           </div>
           <div class="card">
             <h2>Ablage &amp; Paperless</h2>
@@ -334,6 +338,30 @@
             <label class="inline"><input type="checkbox" name="paperless_installiert">
               Paperless-ngx ist installiert – „An Paperless senden“ anzeigen</label>
             <label>Paperless-Eingangsordner (consume) <span class="opt nur-desktop">(z. B. Netzlaufwerk von Paperless)</span><input name="paperless_eingangsordner" placeholder="/share/paperless/consume"></label>
+          </div>
+        </div>
+        <div class="card">
+          <h2>Datensicherung &amp; Export</h2>
+          <div class="grid2 sicherung">
+            <div>
+              <strong>Sicherung</strong>
+              <p class="hint">Alle Daten – Kunden, Rechnungen, Angebote, Mahnungen, Einstellungen – in einer Datei.
+                Am besten regelmäßig herunterladen und z. B. in der Cloud ablegen.</p>
+              <div class="row">
+                <button type="button" id="sicherung-btn" class="secondary">⇩ Sicherung herunterladen</button>
+                <button type="button" id="wiederherstellen-btn" class="secondary">⇪ Sicherung einspielen</button>
+                <input type="file" id="sicherung-datei" accept=".zip,.db" hidden>
+              </div>
+            </div>
+            <div>
+              <strong>Export für den Steuerberater</strong>
+              <p class="hint">Alle Rechnungen eines Jahres (inkl. Stornos, mit Bezahlt-Datum) als Excel-Tabelle (CSV)
+                und alle PDFs in einer ZIP-Datei.</p>
+              <div class="row">
+                <select id="export-jahr" aria-label="Jahr"></select>
+                <button type="button" id="export-btn" class="secondary">⇩ Exportieren</button>
+              </div>
+            </div>
           </div>
         </div>
         <div class="card info-karte">

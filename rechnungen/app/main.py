@@ -2,8 +2,11 @@
 
 Läuft als Home-Assistant-App (Ingress) oder als Desktop-App (desktop/start.py setzt DJOS_DESKTOP=1).
 """
+import csv
 import hashlib
 import io
+import shutil
+import tempfile
 import json
 import os
 import re
@@ -11,13 +14,13 @@ import ssl
 import time
 import urllib.request
 import zipfile
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 from flask import Flask, Response, abort, jsonify, request, send_from_directory
 
 import db
 import importer
-from pdf import build_invoice_pdf, pdf_filename
+from pdf import MAHNSTUFEN, build_invoice_pdf, build_mahnung_pdf, mahnung_filename, pdf_filename
 
 OPTIONS_PATH = os.environ.get("OPTIONS_PATH", "/data/options.json")
 DESKTOP = os.environ.get("DJOS_DESKTOP") == "1"   # Desktop-Version (Windows/Mac) statt Home Assistant
@@ -37,7 +40,8 @@ FELDER = {
     "pdf_ordner": (str, os.environ.get("STANDARD_PDF_ORDNER", "/share/rechnungen")),
     "paperless_installiert": (bool, False),
     "paperless_eingangsordner": (str, "" if DESKTOP else "/share/paperless/consume"),
-    "update_pruefen": (bool, True),   # nur Desktop-Version: beim Start nach neuer Version suchen
+    "update_pruefen": (bool, True),
+    "mahnfrist_tage": (int, 7),       # Frist in Zahlungserinnerung/Mahnung (Tage ab Datum)   # nur Desktop-Version: beim Start nach neuer Version suchen
 }
 
 
@@ -337,9 +341,19 @@ def invoices_create():
     return jsonify({"id": inv_id, "datei": _write_pdf_file(inv)}), 201
 
 
+def _fehler(text, code=400):
+    return jsonify({"error": text}), code
+
+
+FESTGESCHRIEBEN = ("Die Rechnung ist festgeschrieben und kann nicht mehr geändert oder gelöscht werden – "
+                   "zum Korrigieren bitte stornieren und neu erstellen.")
+
+
 @app.put("/api/rechnungen/<int:inv_id>")
 def invoices_update(inv_id):
-    db.get_invoice(inv_id) or abort(404)
+    alt = db.get_invoice(inv_id) or abort(404)
+    if alt["festgeschrieben"]:
+        return _fehler(FESTGESCHRIEBEN, 409)
     inv = _validate_invoice(request.get_json(), inv_id)
     inv["kunde_id"] = db.upsert_customer({**inv["kunde"], "id": inv["kunde_id"]})
     db.save_invoice(inv, inv_id)
@@ -361,14 +375,181 @@ def offers_paperless_reset(offer_id):
 
 @app.patch("/api/rechnungen/<int:inv_id>/bezahlt")
 def invoices_paid(inv_id):
+    inv = db.get_invoice(inv_id) or abort(404)
+    if inv["storno_von"] or inv["storniert_durch"]:
+        return _fehler("Stornierte Rechnungen und Stornorechnungen haben keinen Zahlstatus.")
     db.set_paid(inv_id, request.get_json().get("bezahlt"))
     return "", 204
 
 
 @app.delete("/api/rechnungen/<int:inv_id>")
 def invoices_delete(inv_id):
+    inv = db.get_invoice(inv_id) or abort(404)
+    if inv["festgeschrieben"]:
+        return _fehler(FESTGESCHRIEBEN, 409)
     db.delete_invoice(inv_id)
     return "", 204
+
+
+@app.post("/api/rechnungen/<int:inv_id>/festschreiben")
+def invoices_lock(inv_id):
+    db.get_invoice(inv_id) or abort(404)
+    db.festschreiben(inv_id)
+    return "", 204
+
+
+@app.post("/api/rechnungen/<int:inv_id>/stornieren")
+def invoices_cancel(inv_id):
+    """Stornorechnung mit eigener Nummer erzeugen (alle Beträge negativ) und die Rechnung als storniert markieren."""
+    inv = db.get_invoice(inv_id) or abort(404)
+    if inv["storno_von"]:
+        return _fehler("Eine Stornorechnung kann nicht storniert werden.")
+    if inv["storniert_durch"]:
+        return _fehler(f"Die Rechnung wurde bereits storniert (Stornorechnung {inv['storniert_durch_nummer']}).")
+    storno = {
+        "nummer": db.next_number(absender().get("startnummer") or 1),
+        "datum": date.today().isoformat(),
+        "kunde": inv["kunde"], "kunde_id": inv["kunde_id"],
+        "positionen": [{**p, "preis": -round(float(p.get("preis") or 0), 2)} for p in inv["positionen"]],
+        "zahlungsbedingung": "", "gesamt": -inv["gesamt"],
+        "bezahlt": True, "festgeschrieben": True, "storno_von": inv_id,
+    }
+    storno_id = db.save_invoice(storno)
+    db.set_storniert(inv_id, storno_id)
+    storno = db.get_invoice(storno_id)
+    return jsonify({"id": storno_id, "nummer": storno["nummer"], "datei": _write_pdf_file(storno)}), 201
+
+
+# ---------- Zahlungserinnerung / Mahnung ----------
+
+def _faellig_am(inv):
+    """Fälligkeitsdatum aus der Zahlungsbedingung („… innerhalb der nächsten 8 Tage …“)."""
+    m = re.search(r"(\d+)\s*Tage?n?\b", inv.get("zahlungsbedingung") or "", re.I)
+    try:
+        return (date.fromisoformat(inv["datum"]) + timedelta(days=int(m.group(1)))).isoformat() if m else None
+    except ValueError:
+        return None
+
+
+@app.post("/api/rechnungen/<int:inv_id>/mahnung")
+def invoices_dunning(inv_id):
+    """Nächste Stufe erzeugen: Zahlungserinnerung → 1. Mahnung → 2. Mahnung."""
+    inv = db.get_invoice(inv_id) or abort(404)
+    if inv["bezahlt"] or inv["storno_von"] or inv["storniert_durch"]:
+        return _fehler("Für diese Rechnung ist keine Mahnung möglich (bezahlt oder storniert).")
+    stufe = len(inv["mahnungen"]) + 1
+    if stufe > 3:
+        return _fehler("Es wurden bereits Zahlungserinnerung, 1. und 2. Mahnung erstellt.")
+    heute = date.today()
+    frist = (heute + timedelta(days=absender()["mahnfrist_tage"] or 7)).isoformat()
+    mahnung_id = db.add_mahnung(inv_id, stufe, heute.isoformat(), frist)
+    db.festschreiben(inv_id)
+    mahnung = db.get_mahnung(mahnung_id)
+    datei = None
+    try:   # Kopie im PDF-Ordner ablegen
+        os.makedirs(pdf_dir(), exist_ok=True)
+        datei = os.path.join(pdf_dir(), mahnung_filename(inv, mahnung))
+        with open(datei, "wb") as f:
+            f.write(build_mahnung_pdf(inv, mahnung, absender(), _faellig_am(inv)))
+    except OSError as e:
+        app.logger.warning("Mahnung konnte nicht gespeichert werden: %s", e)
+        datei = None
+    return jsonify({"id": mahnung_id, "stufe": stufe, "bezeichnung": MAHNSTUFEN[stufe], "datei": datei}), 201
+
+
+@app.get("/api/mahnungen/<int:mahnung_id>/pdf")
+def dunning_pdf(mahnung_id):
+    mahnung = db.get_mahnung(mahnung_id) or abort(404)
+    inv = db.get_invoice(mahnung["rechnung_id"]) or abort(404)
+    return Response(build_mahnung_pdf(inv, mahnung, absender(), _faellig_am(inv)), mimetype="application/pdf",
+                    headers={"Content-Disposition": f'inline; filename="{mahnung_filename(inv, mahnung)}"'})
+
+
+# ---------- Datensicherung & Export ----------
+
+@app.get("/api/backup")
+def backup_download():
+    """Komplette Datenbank als ZIP (Kunden, Rechnungen, Angebote, Einstellungen …)."""
+    with tempfile.TemporaryDirectory() as tmp:
+        pfad = os.path.join(tmp, "rechnungen.db")
+        db.sichern(pfad)
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+            zf.write(pfad, "rechnungen.db")
+            zf.writestr("info.json", json.dumps({"app": "DJ Office Studio", "version": APP_VERSION,
+                                                 "erstellt": datetime.now().isoformat(timespec="seconds")}))
+    name = f"DJ-Office-Studio-Sicherung_{date.today():%Y-%m-%d}.zip"
+    return Response(buf.getvalue(), mimetype="application/zip",
+                    headers={"Content-Disposition": f'attachment; filename="{name}"'})
+
+
+@app.post("/api/backup")
+def backup_restore():
+    """Sicherung (ZIP oder .db) einspielen. Der bisherige Stand wird vorher automatisch gesichert."""
+    datei = request.files.get("datei") or abort(400)
+    with tempfile.TemporaryDirectory() as tmp:
+        pfad = os.path.join(tmp, "upload.db")
+        inhalt = datei.read()
+        if inhalt[:2] == b"PK":   # ZIP
+            try:
+                with zipfile.ZipFile(io.BytesIO(inhalt)) as zf:
+                    with zf.open("rechnungen.db") as src, open(pfad, "wb") as dst:
+                        shutil.copyfileobj(src, dst)
+            except (KeyError, zipfile.BadZipFile):
+                return _fehler("Die ZIP-Datei enthält keine Sicherung von DJ Office Studio.")
+        else:
+            with open(pfad, "wb") as f:
+                f.write(inhalt)
+        try:
+            anzahl = db.pruefe_sicherung(pfad)
+        except ValueError as e:
+            return _fehler(str(e))
+        ordner = os.path.join(db.DATA_DIR, "sicherungen")
+        os.makedirs(ordner, exist_ok=True)
+        vorher = os.path.join(ordner, f"vor-wiederherstellung_{datetime.now():%Y-%m-%d_%H-%M-%S}.db")
+        db.sichern(vorher)
+        db.wiederherstellen(pfad)
+    return jsonify({"anzahl": anzahl, "vorher_gesichert": vorher})
+
+
+def _betrag(v):
+    return f"{v:.2f}".replace(".", ",")
+
+
+@app.get("/api/export")
+def export_year():
+    """Export für den Steuerberater: alle Rechnungen eines Jahres als CSV (Excel) + PDFs."""
+    jahr = request.args.get("jahr") or str(date.today().year)
+    if not jahr.isdigit():
+        abort(400)
+    rechnungen = sorted((r for r in db.list_invoices() if r["datum"].startswith(jahr)),
+                        key=lambda r: (r["datum"], r["nummer"]))
+    a = absender()
+    csv_buf = io.StringIO()
+    w = csv.writer(csv_buf, delimiter=";")
+    w.writerow(["Rechnungsnummer", "Rechnungsdatum", "Leistungsdatum", "Kunde", "Ort", "Betrag (EUR)",
+                "Status", "Bezahlt am", "Bezug", "Datei"])
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for r in rechnungen:
+            status = ("Storno" if r["storno_von"] else "storniert" if r["storniert_durch"]
+                      else "bezahlt" if r["bezahlt"] else "offen")
+            bezug = (f"Storno zu {r['storno_zu']['nummer']}" if r["storno_zu"]
+                     else f"storniert durch {r['storniert_durch_nummer']}" if r["storniert_durch"] else "")
+            leistung = next((p.get("lieferdatum") for p in r["positionen"] if p.get("lieferdatum")), "")
+            name = pdf_filename(r)
+            w.writerow([r["nummer"], r["datum"], leistung, r["kunde"].get("name", ""), r["kunde"].get("ort", ""),
+                        _betrag(r["gesamt"]), status, r.get("bezahlt_am") or "", bezug, name])
+            zf.writestr(f"PDFs/{name}", build_invoice_pdf(r, a))
+        summe = sum(r["gesamt"] for r in rechnungen)
+        bezahlt = sum(r["gesamt"] for r in rechnungen if r["bezahlt"] and not r["storno_von"])
+        w.writerow([])
+        w.writerow(["Summe aller Rechnungen (inkl. Storno)", "", "", "", "", _betrag(summe)])
+        w.writerow(["davon bezahlt (ohne Stornorechnungen)", "", "", "", "", _betrag(bezahlt)])
+        # BOM, damit Excel die Umlaute richtig erkennt
+        zf.writestr(f"Rechnungen_{jahr}.csv", "\ufeff" + csv_buf.getvalue())
+    return Response(buf.getvalue(), mimetype="application/zip",
+                    headers={"Content-Disposition": f'attachment; filename="Export_Rechnungen_{jahr}.zip"'})
 
 
 def _pdf_response(inv, download=False):
@@ -472,6 +653,8 @@ def invoices_to_paperless():
             fehler.append({"id": inv_id, "name": name, "error": f"{name} konnte nicht abgelegt werden: {e}"})
             continue
         db.set_paperless(inv_id, datetime.now().isoformat(timespec="seconds"), table)
+        if not angebot:
+            db.festschreiben(inv_id)   # an Paperless übergeben = verschickt/abgelegt
         ok.append(inv_id)
     return jsonify({"ok": ok, "fehler": fehler})
 
@@ -619,6 +802,7 @@ def import_uebernehmen():
             "positionen": inv["positionen"], "zahlungsbedingung": inv.get("zahlungsbedingung") or "",
             "gesamt": round(sum(float(p.get("preis") or 0) for p in inv["positionen"]), 2),
             "bezahlt": bool(data.get("bezahlt")),
+            "festgeschrieben": True,   # alte, bereits verschickte Rechnungen
         })
         n_rech += 1
     status = data.get("angebot_status") if data.get("angebot_status") in db.STATUS else "offen"

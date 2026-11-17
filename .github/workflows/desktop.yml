@@ -37,7 +37,10 @@ jobs:
           python-version: "3.12"
 
       - name: Abhängigkeiten
-        run: pip install -r rechnungen/requirements.txt pyinstaller pillow
+        run: pip install -r rechnungen/requirements.txt pyinstaller pillow pytest
+
+      - name: Tests
+        run: pytest -q tests
 
       - name: Version
         run: |

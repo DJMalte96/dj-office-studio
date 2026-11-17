@@ -2,6 +2,7 @@
 import json
 import os
 import sqlite3
+from pathlib import Path
 
 DATA_DIR = os.environ.get("DATA_DIR", "/data")
 DB_PATH = os.path.join(DATA_DIR, "rechnungen.db")
@@ -48,6 +49,14 @@ CREATE TABLE IF NOT EXISTS rechnungen (
     zahlungsbedingung TEXT NOT NULL,
     gesamt REAL NOT NULL,
     bezahlt INTEGER DEFAULT 0,
+    erstellt TEXT DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS mahnungen (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    rechnung_id INTEGER NOT NULL REFERENCES rechnungen(id) ON DELETE CASCADE,
+    stufe INTEGER NOT NULL,                -- 1 Zahlungserinnerung, 2 = 1. Mahnung, 3 = 2. Mahnung
+    datum TEXT NOT NULL,
+    frist TEXT NOT NULL,
     erstellt TEXT DEFAULT CURRENT_TIMESTAMP
 );
 CREATE TABLE IF NOT EXISTS einstellungen (
@@ -120,6 +129,14 @@ def init():
         spalten = {r["name"] for r in con.execute("PRAGMA table_info(rechnungen)")}
         if "paperless_am" not in spalten:   # seit 0.6.0: Zeitpunkt der Übertragung an Paperless
             con.execute("ALTER TABLE rechnungen ADD COLUMN paperless_am TEXT")
+        # seit 0.12.0: Festschreiben, Storno, Bezahlt-Datum
+        if "festgeschrieben" not in spalten:
+            con.execute("ALTER TABLE rechnungen ADD COLUMN festgeschrieben INTEGER DEFAULT 0")
+            # Bestehende bezahlte bzw. an Paperless übertragene Rechnungen gelten als festgeschrieben
+            con.execute("UPDATE rechnungen SET festgeschrieben = 1 WHERE bezahlt = 1 OR paperless_am IS NOT NULL")
+        for spalte, typ in (("storno_von", "INTEGER"), ("storniert_durch", "INTEGER"), ("bezahlt_am", "TEXT")):
+            if spalte not in spalten:
+                con.execute(f"ALTER TABLE rechnungen ADD COLUMN {spalte} {typ}")
         if "paperless_am" not in {r["name"] for r in con.execute("PRAGMA table_info(angebote)")}:
             con.execute("ALTER TABLE angebote ADD COLUMN paperless_am TEXT")   # seit 0.8.4
         for (titel, text), anlass in LEGACY_TEXTBAUSTEINE.items():
@@ -185,19 +202,37 @@ def _invoice_from_row(r):
     d["kunde"] = json.loads(d.pop("kunde_json"))
     d["positionen"] = json.loads(d.pop("positionen_json"))
     d["bezahlt"] = bool(d["bezahlt"])
+    d["festgeschrieben"] = bool(d.get("festgeschrieben"))
     return d
+
+
+def _ergaenzen(con, rechnungen):
+    """Mahnungen und Storno-Bezug (Nummer/Datum der stornierten Rechnung) anhängen."""
+    if not rechnungen:
+        return rechnungen
+    mahnungen = {}
+    for m in con.execute("SELECT * FROM mahnungen ORDER BY stufe"):
+        mahnungen.setdefault(m["rechnung_id"], []).append(dict(m))
+    kopf = {r["id"]: {"nummer": r["nummer"], "datum": r["datum"]}
+            for r in con.execute("SELECT id, nummer, datum FROM rechnungen")}
+    for inv in rechnungen:
+        inv["mahnungen"] = mahnungen.get(inv["id"], [])
+        inv["storno_zu"] = kopf.get(inv["storno_von"]) if inv.get("storno_von") else None
+        inv["storniert_durch_nummer"] = kopf.get(inv["storniert_durch"], {}).get("nummer") \
+            if inv.get("storniert_durch") else None
+    return rechnungen
 
 
 def list_invoices():
     with connect() as con:
-        return [_invoice_from_row(r) for r in con.execute(
-            "SELECT * FROM rechnungen ORDER BY datum DESC, nummer DESC")]
+        return _ergaenzen(con, [_invoice_from_row(r) for r in con.execute(
+            "SELECT * FROM rechnungen ORDER BY datum DESC, nummer DESC")])
 
 
 def get_invoice(inv_id):
     with connect() as con:
         r = con.execute("SELECT * FROM rechnungen WHERE id = ?", (inv_id,)).fetchone()
-        return _invoice_from_row(r) if r else None
+        return _ergaenzen(con, [_invoice_from_row(r)])[0] if r else None
 
 
 def next_number(start=1, table="rechnungen"):
@@ -242,12 +277,85 @@ def save_invoice(inv, inv_id=None):
             return inv_id
         return con.execute(
             "INSERT INTO rechnungen (nummer, datum, kunde_id, kunde_json, positionen_json,"
-            " zahlungsbedingung, gesamt, bezahlt) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", vals).lastrowid
+            " zahlungsbedingung, gesamt, bezahlt, festgeschrieben, storno_von, bezahlt_am)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            vals + (int(bool(inv.get("festgeschrieben"))), inv.get("storno_von"), inv.get("bezahlt_am"))).lastrowid
 
 
 def set_paid(inv_id, paid):
+    """Bezahlt setzen (mit Datum) – eine bezahlte Rechnung wird damit auch festgeschrieben."""
     with connect() as con:
-        con.execute("UPDATE rechnungen SET bezahlt = ? WHERE id = ?", (int(bool(paid)), inv_id))
+        if paid:
+            con.execute("UPDATE rechnungen SET bezahlt = 1, festgeschrieben = 1,"
+                        " bezahlt_am = COALESCE(bezahlt_am, date('now', 'localtime')) WHERE id = ?", (inv_id,))
+        else:
+            con.execute("UPDATE rechnungen SET bezahlt = 0, bezahlt_am = NULL WHERE id = ?", (inv_id,))
+
+
+def festschreiben(inv_id):
+    with connect() as con:
+        con.execute("UPDATE rechnungen SET festgeschrieben = 1 WHERE id = ?", (inv_id,))
+
+
+def set_storniert(inv_id, storno_id):
+    with connect() as con:
+        con.execute("UPDATE rechnungen SET storniert_durch = ?, festgeschrieben = 1 WHERE id = ?",
+                    (storno_id, inv_id))
+
+
+# ---------- Mahnungen ----------
+
+def add_mahnung(inv_id, stufe, datum, frist):
+    with connect() as con:
+        return con.execute("INSERT INTO mahnungen (rechnung_id, stufe, datum, frist) VALUES (?, ?, ?, ?)",
+                           (inv_id, stufe, datum, frist)).lastrowid
+
+
+def get_mahnung(mahnung_id):
+    with connect() as con:
+        r = con.execute("SELECT * FROM mahnungen WHERE id = ?", (mahnung_id,)).fetchone()
+        return dict(r) if r else None
+
+
+# ---------- Datensicherung ----------
+
+def sichern(ziel_pfad):
+    """Konsistente Kopie der Datenbank (auch während die App läuft)."""
+    quelle = connect()
+    ziel = sqlite3.connect(ziel_pfad)
+    try:
+        quelle.backup(ziel)
+    finally:
+        ziel.close()
+        quelle.close()
+
+
+def pruefe_sicherung(pfad):
+    """Prüft, ob die Datei eine Datenbank von DJ Office Studio ist; gibt Anzahlen zurück."""
+    try:
+        # nur lesend öffnen; as_uri() ergibt auch unter Windows eine gültige file:-Adresse
+        con = sqlite3.connect(Path(pfad).resolve().as_uri() + "?mode=ro", uri=True)
+        tabellen = {r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
+        if not {"rechnungen", "kunden"} <= tabellen:
+            raise ValueError("Die Datei enthält keine Daten von DJ Office Studio.")
+        anzahl = {t: con.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0]
+                  for t in ("rechnungen", "kunden", "angebote") if t in tabellen}
+        con.close()
+        return anzahl
+    except sqlite3.DatabaseError as e:
+        raise ValueError("Die Datei ist keine gültige Sicherung.") from e
+
+
+def wiederherstellen(pfad):
+    """Inhalt der aktuellen Datenbank durch die Sicherung ersetzen und Schema auf Stand bringen."""
+    quelle = sqlite3.connect(pfad)
+    ziel = connect()
+    try:
+        quelle.backup(ziel)
+    finally:
+        quelle.close()
+        ziel.close()
+    init()
 
 
 def set_paperless(inv_id, zeitpunkt, table="rechnungen"):
