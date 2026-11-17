@@ -23,7 +23,19 @@ jobs:
         run: pip install -r rechnungen/requirements.txt pytest
 
       - name: Tests
-        run: pytest -v tests
+        run: |
+          pytest -v tests --junitxml=pytest.xml || {
+          python - <<'PY'
+          import sys, xml.etree.ElementTree as ET
+          ok = True
+          for case in ET.parse("pytest.xml").iter("testcase"):
+              for f in list(case.findall("failure")) + list(case.findall("error")):
+                  ok = False
+                  text = (f.get("message") or "") + " | " + (f.text or "").strip().splitlines()[-1][:300] if (f.text or "").strip() else (f.get("message") or "")
+                  print(f"::error title={case.get('name')}::{text}")
+          sys.exit(1)   # pytest ist fehlgeschlagen – Schritt immer rot
+          PY
+          }
 
       - name: JavaScript prüfen (Syntax)
         run: node --check rechnungen/app/static/app.js
