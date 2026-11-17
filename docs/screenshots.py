@@ -31,6 +31,8 @@ db.save_settings({
     "kleinunternehmer": True, "startnummer": 37, "angebot_startnummer": 10, "angebot_gueltigkeit_tage": 30,
     "pdf_ordner": os.path.join(tmp, "pdf"),   # in den Einstellungen wird unten der übliche Pfad gezeigt
     "paperless_installiert": True, "paperless_eingangsordner": "/share/paperless/consume",
+    "absender_email": "max@example.de", "smtp_server": "smtp.example.de", "smtp_port": 587,
+    "smtp_sicherheit": "starttls", "smtp_passwort": "nur-ein-beispiel",
 })
 c = main.app.test_client()
 heute = date.today()
@@ -38,7 +40,8 @@ d = lambda n: (heute + timedelta(days=n)).isoformat()   # noqa: E731
 ZB8 = "Bitte den Betrag innerhalb der nächsten 8 Tage auf das unten genannte Konto überweisen."
 K = {
     "anna": {"name": "Anna und Jonas Muster", "strasse": "Lindenweg 12", "plz": "12345", "ort": "Musterstadt"},
-    "bernd": {"name": "Bernd Probe", "strasse": "Am Markt 3", "plz": "12346", "ort": "Beispielhausen"},
+    "bernd": {"name": "Bernd Probe", "strasse": "Am Markt 3", "plz": "12346", "ort": "Beispielhausen",
+              "email": "bernd.probe@example.de"},
     "carla": {"name": "Carla Test", "strasse": "Rosenstr. 8", "plz": "12347", "ort": "Testdorf"},
     "dora": {"name": "Dora Alt", "strasse": "Feldweg 2", "plz": "12348", "ort": "Altstadt"},
     "verein": {"name": "Sportverein Musterstadt e. V.", "strasse": "Sportplatz 1", "plz": "12345", "ort": "Musterstadt"},
@@ -73,9 +76,11 @@ def rechnung(nr, kunde, datum, positionen, bezahlt=False, angebot_id=None):
 a010 = angebot("010", "anna", d(-60), d(-30), [pos("DJ – Tätigkeit Hochzeit – 17:00 Uhr bis 2:00 Uhr", d(-18), 900)])
 angebot("011", "carla", d(-40), d(-10), [pos("DJ – Tätigkeit Geburtstagsfeier – 20:00 Uhr bis 2:00 Uhr", d(10), 600)])
 angebot("012", "verein", d(-28), d(2), [pos("DJ – Tätigkeit Vereinsfeier – 19:00 Uhr bis 1:00 Uhr", d(40), 700)])
-angebot("013", "eva", d(-6), d(24), [pos("DJ – Tätigkeit Hochzeit – 16:00 Uhr bis 2:00 Uhr", d(200), 1100),
+a013 = angebot("013", "eva", d(-6), d(24), [pos("DJ – Tätigkeit Hochzeit – 16:00 Uhr bis 2:00 Uhr", d(200), 1100),
                                      pos("Fahrtkosten", d(200), 60)])
 angebot("014", "firma", d(-2), d(28), [pos("DJ – Tätigkeit Weihnachtsfeier – 18:00 Uhr bis 0:00 Uhr", d(30), 650)])
+
+db.add_versand("angebot", a013, "eva.probe@example.de", "Ihr Angebot 013")
 
 # Rechnungen: bezahlt, überfällig mit Zahlungserinnerung, offen, storniert
 rechnung("030", "dora", f"{heute.year - 1}-11-15",
@@ -85,8 +90,13 @@ rechnung("039", "carla", d(-21), [pos("DJ – Tätigkeit Geburtstagsfeier – 19
          bezahlt=True)
 r040 = rechnung("040", "anna", d(-16), [pos("DJ – Tätigkeit Hochzeit – 17:00 Uhr bis 2:00 Uhr", d(-18), 900),
                                         pos("Fahrtkosten", d(-18), 60)], angebot_id=a010)
-rechnung("041", "bernd", d(-4), [pos("DJ – Tätigkeit Firmenfeier – 19:00 Uhr bis 0:00 Uhr", d(-4), 450)])
+r041 = rechnung("041", "bernd", d(-4), [pos("DJ – Tätigkeit Firmenfeier – 19:00 Uhr bis 0:00 Uhr", d(-4), 450)])
 c.post(f"/api/rechnungen/{r040}/mahnung")                                        # Zahlungserinnerung
+db.add_versand("rechnung", r040, "anna.muster@example.de", "Rechnung 040")     # per E-Mail verschickt
+db.festschreiben(r040)
+for k in db.list_items("kunden"):                                               # E-Mail-Adresse bei Bernd
+    if k["name"] == "Bernd Probe":
+        db.set_customer_email(k["id"], "bernd.probe@example.de")
 r038 = next(r["id"] for r in db.list_invoices() if r["nummer"] == "038")
 c.post(f"/api/rechnungen/{r038}/stornieren")                                    # 038 → Stornorechnung 042
 
@@ -129,6 +139,14 @@ with sync_playwright() as p:
     page.fill("[name=pdf_ordner]", "/share/rechnungen")   # üblicher Pfad statt Temp-Ordner (nicht gespeichert)
     page.mouse.move(5, 890)
     page.screenshot(path=str(ZIEL / "einstellungen.png"), full_page=True)
+
+    # Versand-Dialog für Rechnung 041
+    oeffne(page, "Rechnungen", "liste")
+    page.locator("#offen tr[data-id]", has_text="_041_").locator("button[data-act=senden]").click()
+    page.wait_for_timeout(800)
+    page.evaluate("document.activeElement && document.activeElement.blur()")
+    page.screenshot(path=str(ZIEL / "versand.png"))
+    page.click("#versand-abbrechen")
 
     # Rechnungseditor mit Bestandskunde und zwei Positionen
     ctx2 = browser.new_context(viewport={"width": 1240, "height": 1180}, device_scale_factor=2, locale="de-DE")

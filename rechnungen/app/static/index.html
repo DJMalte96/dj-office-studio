@@ -196,6 +196,7 @@
         <div class="actions">
           <button type="button" id="btn-neu" class="secondary">Formular leeren</button>
           <button type="button" id="btn-vorschau" class="secondary">PDF-Vorschau</button>
+          <button type="button" id="btn-senden" class="secondary hidden" title="Gespeicherten Beleg per E-Mail senden, herunterladen oder teilen"><svg class="ico" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3.5 6.5 8.5 6.5 8.5-6.5"/></svg> Senden</button>
           <button type="submit" id="btn-speichern">Speichern &amp; PDF öffnen</button>
         </div>
       </form>
@@ -340,12 +341,65 @@
             <label>Paperless-Eingangsordner (consume) <span class="opt nur-desktop">(z. B. Netzlaufwerk von Paperless)</span><input name="paperless_eingangsordner" placeholder="/share/paperless/consume"></label>
           </div>
         </div>
+        <div class="card" id="mail-karte">
+          <h2>E-Mail-Versand <span class="h2-sub">Rechnungen, Angebote und Mahnungen direkt aus der App verschicken – über dein eigenes Postfach</span></h2>
+          <div class="grid2">
+            <div>
+              <label>Deine E-Mail-Adresse <span class="opt">(Absender)</span>
+                <input name="absender_email" type="email" placeholder="name@example.de" autocomplete="off"></label>
+              <label>Anbieter <span class="opt">(füllt Server, Port und Verschlüsselung aus – alles bleibt änderbar)</span>
+                <select id="mail-anbieter"></select></label>
+              <p id="mail-anbieter-hinweis" class="hint mail-hinweis"></p>
+              <div class="row">
+                <label class="grow">Postausgangsserver (SMTP)<input name="smtp_server" placeholder="smtp.example.de" autocomplete="off"></label>
+                <label class="port">Port<input name="smtp_port" type="number" min="1" max="65535" step="1"></label>
+              </div>
+              <label>Verschlüsselung
+                <select name="smtp_sicherheit">
+                  <option value="starttls">STARTTLS (meist Port 587)</option>
+                  <option value="ssl">SSL/TLS (meist Port 465)</option>
+                  <option value="keine">keine (nur im eigenen Netz)</option>
+                </select></label>
+            </div>
+            <div>
+              <label>Benutzername <span class="opt">(leer = E-Mail-Adresse)</span>
+                <input name="smtp_benutzer" autocomplete="off"></label>
+              <label>Passwort <span class="opt" id="passwort-status"></span>
+                <input name="smtp_passwort" type="password" autocomplete="new-password"></label>
+              <label>Antworten an <span class="opt">(optional, falls Antworten an eine andere Adresse gehen sollen)</span>
+                <input name="mail_antwort_an" type="email" autocomplete="off"></label>
+              <label class="inline"><input type="checkbox" name="mail_kopie_an_mich">
+                Standardmäßig eine Kopie an mich senden (BCC) – so liegt jede verschickte Mail auch in deinem Postfach</label>
+              <div class="row">
+                <button type="button" id="mail-test" class="secondary"><svg class="ico" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3.5 6.5 8.5 6.5 8.5-6.5"/></svg> Testmail an mich senden</button>
+              </div>
+            </div>
+          </div>
+          <details class="vorlagen">
+            <summary>Textvorlagen für die E-Mails</summary>
+            <p class="hint">Platzhalter: <code>{kunde}</code> <code>{nummer}</code> <code>{datum}</code> <code>{betrag}</code>
+              <code>{faellig}</code> <code>{leistungsdatum}</code> <code>{gueltig_bis}</code> <code>{stufe}</code> <code>{frist}</code>
+              <code>{absender}</code> <code>{telefon}</code> – eine Zeile, deren Platzhalter leer bleibt (z. B. keine Zahlungsfrist), entfällt automatisch.
+              Feld leeren = Standardtext.</p>
+            <div class="grid3">
+              <div><strong>Rechnung</strong>
+                <label>Betreff<input name="mail_betreff_rechnung"></label>
+                <label>Text<textarea name="mail_text_rechnung" rows="10"></textarea></label></div>
+              <div><strong>Angebot</strong>
+                <label>Betreff<input name="mail_betreff_angebot"></label>
+                <label>Text<textarea name="mail_text_angebot" rows="10"></textarea></label></div>
+              <div><strong>Zahlungserinnerung / Mahnung</strong>
+                <label>Betreff<input name="mail_betreff_mahnung"></label>
+                <label>Text<textarea name="mail_text_mahnung" rows="10"></textarea></label></div>
+            </div>
+          </details>
+        </div>
         <div class="card">
           <h2>Datensicherung &amp; Export</h2>
           <div class="grid2 sicherung">
             <div>
               <strong>Sicherung</strong>
-              <p class="hint">Alle Daten – Kunden, Rechnungen, Angebote, Mahnungen, Einstellungen – in einer Datei. Am besten regelmäßig herunterladen und z. B. in der Cloud ablegen.</p>
+              <p class="hint">Alle Daten – Kunden, Rechnungen, Angebote, Mahnungen, Einstellungen – in einer Datei. Am besten regelmäßig herunterladen und z. B. in der Cloud ablegen. Das E-Mail-Passwort ist nicht enthalten.</p>
               <div class="row">
                 <button type="button" id="sicherung-btn" class="secondary">⇩ Sicherung herunterladen</button>
                 <button type="button" id="wiederherstellen-btn" class="secondary">⇪ Sicherung einspielen</button>
@@ -381,6 +435,36 @@
     <section id="tab-textbausteine" class="tab" data-stamm="textbausteine"></section>
     <section id="tab-zahlungsbedingungen" class="tab" data-stamm="zahlungsbedingungen"></section>
   </main>
+
+  <!-- ================= Versand-Dialog ================= -->
+  <dialog id="versand" class="dialog">
+    <form method="dialog" id="versand-form" autocomplete="off">
+      <h2 id="versand-titel">Per E-Mail senden</h2>
+      <label id="versand-dokument-label" class="hidden">Dokument <select id="versand-dokument"></select></label>
+      <p id="versand-nicht-eingerichtet" class="hinweis-box hidden">Der E-Mail-Versand ist noch nicht eingerichtet –
+        <a href="#" class="zu-einstellungen" id="versand-zu-einstellungen">unter ⚙ Einstellungen → E-Mail-Versand</a> dein Postfach eintragen.
+        Herunterladen und Teilen geht trotzdem (unten).</p>
+      <div id="versand-mail">
+        <label>An <span class="opt">(mehrere mit Komma trennen)</span><input id="versand-an" type="text" inputmode="email" required></label>
+        <label class="inline hidden" id="versand-speichern-label"><input type="checkbox" id="versand-speichern" checked>
+          Adresse beim Kunden speichern</label>
+        <label>Betreff<input id="versand-betreff" required></label>
+        <label>Text<textarea id="versand-text" rows="11" required></textarea></label>
+        <div class="versand-anhaenge" id="versand-anhaenge"></div>
+        <label class="inline" id="versand-kopie-label"><input type="checkbox" id="versand-kopie"> <span>Kopie an mich (<span id="versand-eigene"></span>)</span></label>
+        <p id="versand-frueher" class="hint"></p>
+      </div>
+      <div class="actions">
+        <button type="button" class="secondary" id="versand-abbrechen">Abbrechen</button>
+        <button type="submit" id="versand-senden" value="senden"><svg class="ico" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3.5 6.5 8.5 6.5 8.5-6.5"/></svg> Senden</button>
+      </div>
+      <div class="versand-alternativ">
+        <span>Lieber per WhatsApp, Messenger &amp; Co.?</span>
+        <button type="button" class="small secondary" id="versand-download">⇩ PDF herunterladen</button>
+        <button type="button" class="small secondary hidden" id="versand-teilen">↗ Teilen …</button>
+      </div>
+    </form>
+  </dialog>
 
   <template id="tpl-position">
     <div class="pos">

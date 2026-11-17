@@ -2,6 +2,17 @@
 
 Alle Änderungen an DJ Office Studio. Neueste Version oben.
 
+## 0.13.0 – 2026-11-17
+
+### Neu
+- **E-Mail-Versand**: Rechnungen, Angebote, Zahlungserinnerungen und Mahnungen direkt aus der App verschicken – über das eigene Postfach (SMTP), mit jedem Anbieter oder eigenem Mailserver. Unter ⚙ Einstellungen → E-Mail-Versand gibt es Vorlagen für gängige Anbieter (WEB.DE, GMX, Gmail, Outlook.com, iCloud, T-Online, Yahoo, freenet, IONOS, STRATO, Posteo, mailbox.org) samt Hinweisen zu Freischaltung bzw. App-Passwort; Server, Port und Verschlüsselung bleiben frei änderbar. Mit „Testmail an mich senden“ lässt sich die Einrichtung prüfen.
+- **Versand-Dialog** (Briefumschlag an jeder Rechnung und jedem Angebot, im Editor „Senden“): Empfänger aus den Kundendaten, Betreff und Text aus anpassbaren Vorlagen mit Platzhaltern, PDF als Anhang (bei Mahnungen Mahnung + Rechnung), optional Kopie an mich (BCC). Eine neue E-Mail-Adresse kann direkt beim Kunden gespeichert werden.
+- Verschickte Belege zeigen „✉ Datum“, gesendete Mahnungen ein ✉ am Mahnungs-Chip. Rechnungen werden beim Versenden festgeschrieben.
+- Herunterladen bleibt wie bisher möglich – zusätzlich direkt im Versand-Dialog („PDF herunterladen“, auf Geräten mit Teilen-Funktion auch „Teilen …“, z. B. für WhatsApp).
+
+### Sicherheit
+- Das E-Mail-Passwort wird nie an die Oberfläche zurückgegeben und ist nicht in der herunterladbaren Sicherung enthalten; beim Einspielen einer Sicherung bleibt das gespeicherte Passwort erhalten.
+
 ## 0.12.1 – 2026-11-17
 
 ### Behoben
