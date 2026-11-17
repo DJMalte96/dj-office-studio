@@ -414,3 +414,18 @@ body:not(.desktop) .nur-desktop { display: none; }
 .update-banner.hidden { display: none !important; }
 #update-status a { color: var(--text); }
 #tab-einstellungen .update-option { margin: -6px 0 16px; }
+
+/* ---------- Festschreiben, Storno, Mahnungen ---------- */
+.schloss { font-size: 12px; opacity: .7; cursor: help; }
+.storno-chip, a.mahn-chip { display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 999px; font-size: 11px;
+  font-weight: 600; white-space: nowrap; vertical-align: middle; text-decoration: none; }
+.storno-chip { color: var(--danger); background: var(--danger-soft); }
+a.mahn-chip { color: var(--gelb); background: var(--gelb-soft); }
+a.mahn-chip:hover { text-decoration: underline; }
+.offen-aktionen { white-space: nowrap; }
+.offen-aktionen button.small { margin-right: 4px; }
+.offen-aktionen button.icon[data-act="lock"]:hover { color: var(--text); background: var(--input-bg); }
+#tab-einstellungen .sicherung { margin: 0; gap: 24px; }
+#tab-einstellungen .sicherung .row { flex-wrap: wrap; gap: 8px; align-items: center; }
+#tab-einstellungen .sicherung select { width: auto; }
+#tab-einstellungen .sicherung p.hint { margin: 4px 0 10px; }

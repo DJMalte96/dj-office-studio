@@ -96,24 +96,16 @@ def fmt_date_lang(iso):
         return iso or ""
 
 
-def build_invoice_pdf(inv, absender):
-    """inv: dict mit nummer, datum, kunde{...}, positionen[{beschreibung, lieferdatum, preis}],
-    zahlungsbedingung. Mit art="angebot" (+ gueltig_bis, hinweise) entsteht ein Angebot.
-    Gibt PDF als bytes zurück."""
-    angebot = inv.get("art") == "angebot"
-    pdf = InvoicePDF(absender)
-    pdf.add_page()
+def _briefkopf(pdf, absender, kunde, titel, datum_iso):
+    """Absenderzeile, Empfänger, Titel (z. B. „Rechnung Nr.: 037“) und „Ort, den Datum“."""
     epw = pdf.epw
-
-    # Absenderzeile über dem Adressfeld
     pdf.set_font("Body", "", 7)
     pdf.set_xy(LEFT, 42)
     sender_line = " | ".join(x for x in (absender.get("name"), absender.get("strasse"),
                                          absender.get("plz_ort")) if x)
     pdf.cell(0, 4, sender_line)
 
-    # Empfänger
-    k = inv["kunde"]
+    k = kunde
     pdf.set_font("Body", "", BODY_PT)
     pdf.set_xy(LEFT, 49)
     plz_ort = " ".join(x for x in (k.get("plz"), k.get("ort")) if x)
@@ -121,21 +113,52 @@ def build_invoice_pdf(inv, absender):
         if line:
             pdf.cell(0, 5, line, new_x="LMARGIN", new_y="NEXT")
 
-    # Rechnungsnummer + Ort/Datum
     pdf.set_xy(LEFT, 93)
     pdf.set_font("Body", "BU", 13)
-    pdf.cell(epw / 2, 7, f"{'Angebot' if angebot else 'Rechnung'} Nr.: {inv['nummer']}")
+    pdf.cell(epw * 0.6, 7, titel)
     pdf.set_font("Body", "", BODY_PT)
     ort = absender.get("ort_fuer_datum") or ""
-    datum = fmt_date(inv["datum"])
-    right_edge = LEFT + sum(COLS) - 8  # wie in der Vorlage: rechtsbündig, etwas vor dem Tabellenrand
-    pdf.set_x(LEFT + epw / 2)
+    datum = fmt_date(datum_iso)
+    right_edge = LEFT + sum(COLS) - 8  # rechtsbündig, etwas vor dem Tabellenrand
+    pdf.set_x(LEFT + epw * 0.6)
     pdf.cell(right_edge - pdf.get_x(), 7, f"{ort}, den {datum}" if ort else datum, align="R")
+
+
+def _gruss(pdf, absender, abstand=22):
+    """„Mit freundlichen Grüßen“ + Name immer zusammen: passt der Block (inkl. Abstand)
+    nicht mehr auf die Seite, kommt er komplett auf die nächste."""
+    gruss_block = 5 + 4 + 5
+    if pdf.will_page_break(abstand + gruss_block):
+        pdf.add_page()
+    else:
+        pdf.ln(abstand)
+    pdf.cell(0, 5, "Mit freundlichen Grüßen", new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(4)
+    pdf.cell(0, 5, absender.get("name") or "", new_x="LMARGIN", new_y="NEXT")
+
+
+def build_invoice_pdf(inv, absender):
+    """inv: dict mit nummer, datum, kunde{...}, positionen[{beschreibung, lieferdatum, preis}],
+    zahlungsbedingung. Mit art="angebot" (+ gueltig_bis, hinweise) entsteht ein Angebot,
+    mit storno_zu={nummer, datum} eine Stornorechnung. Gibt PDF als bytes zurück."""
+    angebot = inv.get("art") == "angebot"
+    storno = inv.get("storno_zu")
+    pdf = InvoicePDF(absender)
+    pdf.add_page()
+
+    titel = "Angebot" if angebot else "Stornorechnung" if storno else "Rechnung"
+    _briefkopf(pdf, absender, inv["kunde"], f"{titel} Nr.: {inv['nummer']}", inv["datum"])
 
     # Einleitung
     pdf.set_xy(LEFT, 110)
-    pdf.cell(0, 5, "Vielen Dank für Ihre Anfrage. Gerne biete ich Ihnen folgende Leistungen an:"
-             if angebot else "Gemäß Ihrem Auftrag stelle ich wie folgt in Rechnung:")
+    if angebot:
+        einleitung = "Vielen Dank für Ihre Anfrage. Gerne biete ich Ihnen folgende Leistungen an:"
+    elif storno:
+        einleitung = (f"Hiermit storniere ich die Rechnung Nr. {storno['nummer']} vom "
+                      f"{fmt_date_lang(storno['datum'])} vollständig:")
+    else:
+        einleitung = "Gemäß Ihrem Auftrag stelle ich wie folgt in Rechnung:"
+    pdf.cell(0, 5, einleitung)
     pdf.set_xy(LEFT, 118)
 
     # Positionstabelle
@@ -176,6 +199,11 @@ def build_invoice_pdf(inv, absender):
         pdf.set_font("Body", "B", BODY_PT)   # Schluss + Gruß fett wie bei der Rechnung
         pdf.multi_cell(0, 5, "Ich freue mich auf Ihre Rückmeldung und stehe für Rückfragen gerne zur Verfügung.",
                        align="L", new_x="LMARGIN", new_y="NEXT")
+    elif storno:
+        pdf.set_font("Body", "B", BODY_PT)
+        pdf.ln(6)
+        pdf.multi_cell(0, 5, f"Die Rechnung Nr. {storno['nummer']} ist damit aufgehoben. Ein bereits gezahlter "
+                             "Betrag wird erstattet.", align="L", new_x="LMARGIN", new_y="NEXT")
     else:
         # Zahlungsbedingung
         pdf.set_font("Body", "B", BODY_PT)
@@ -183,18 +211,70 @@ def build_invoice_pdf(inv, absender):
         pdf.multi_cell(0, 5, inv.get("zahlungsbedingung") or "", align="L", new_x="LMARGIN", new_y="NEXT")
         pdf.ln(10)
         pdf.cell(0, 5, "Vielen Dank für Ihren Auftrag!", new_x="LMARGIN", new_y="NEXT")
-    # „Mit freundlichen Grüßen“ + Name immer zusammen: passt der Block (inkl. Abstand)
-    # nicht mehr auf die Seite, kommt er komplett auf die nächste.
-    gruss_block = 5 + 4 + 5
-    if pdf.will_page_break(22 + gruss_block):
-        pdf.add_page()
-    else:
-        pdf.ln(22)
-    pdf.cell(0, 5, "Mit freundlichen Grüßen", new_x="LMARGIN", new_y="NEXT")
-    pdf.ln(4)
-    pdf.cell(0, 5, absender.get("name") or "", new_x="LMARGIN", new_y="NEXT")
-
+    _gruss(pdf, absender)
     return bytes(pdf.output())
+
+
+MAHNSTUFEN = {1: "Zahlungserinnerung", 2: "1. Mahnung", 3: "2. Mahnung"}
+
+
+def build_mahnung_pdf(inv, mahnung, absender, faellig_iso=None):
+    """Zahlungserinnerung (Stufe 1) bzw. 1./2. Mahnung (Stufe 2/3) zu einer Rechnung."""
+    stufe = mahnung["stufe"]
+    pdf = InvoicePDF(absender)
+    pdf.add_page()
+    _briefkopf(pdf, absender, inv["kunde"], MAHNSTUFEN[stufe], mahnung["datum"])
+
+    pdf.set_xy(LEFT, 110)
+    pdf.set_font("Body", "", BODY_PT)
+    einleitung = {
+        1: "sicher ist es Ihrer Aufmerksamkeit entgangen: Für die folgende Rechnung konnte ich bisher "
+           "keinen Zahlungseingang feststellen.",
+        2: "leider konnte ich für die folgende Rechnung trotz Zahlungserinnerung noch keinen "
+           "Zahlungseingang feststellen.",
+        3: "trotz Zahlungserinnerung und Mahnung ist die folgende Rechnung weiterhin nicht beglichen.",
+    }[stufe]
+    pdf.multi_cell(0, 5, "Guten Tag,\n\n" + einleitung, align="L", new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(5)
+
+    bold = FontFace(emphasis="BOLD")
+    with pdf.table(col_widths=COLS, width=sum(COLS), align="LEFT", text_align="LEFT",
+                   line_height=5, padding=(1, 2, 1, 2), first_row_as_headings=True,
+                   headings_style=bold, borders_layout="ALL", v_align="TOP") as table:
+        head = table.row()
+        for h in ("Rechnung", "Datum", "Offener Betrag"):
+            head.cell(h)
+        row = table.row()
+        row.cell(f"Rechnung Nr. {inv['nummer']}" + (f"\nfällig seit {fmt_date(faellig_iso)}" if faellig_iso else ""))
+        row.cell(fmt_date(inv["datum"]))
+        row.cell(fmt_euro(inv["gesamt"]))
+
+    pdf.ln(6)
+    pdf.set_font("Body", "B", BODY_PT)
+    pdf.multi_cell(0, 5, f"Bitte überweisen Sie den offenen Betrag von {fmt_euro(inv['gesamt'])} bis spätestens "
+                         f"{fmt_date_lang(mahnung['frist'])} auf das unten genannte Konto.",
+                   align="L", new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(4)
+    pdf.set_font("Body", "", BODY_PT)
+    schluss = ("Sollten Sie die Zahlung bereits veranlasst haben, betrachten Sie dieses Schreiben bitte als "
+               "gegenstandslos.")
+    if stufe == 3:
+        schluss = ("Dies ist die letzte Mahnung. Geht der Betrag nicht fristgerecht ein, behalte ich mir weitere "
+                   "Schritte vor. " + schluss)
+    pdf.multi_cell(0, 5, schluss, align="L", new_x="LMARGIN", new_y="NEXT")
+    pdf.set_font("Body", "B", BODY_PT)
+    _gruss(pdf, absender, abstand=16)
+    return bytes(pdf.output())
+
+
+def mahnung_filename(inv, mahnung):
+    """Zahlungserinnerung_037_171126.pdf / 1-Mahnung_037_… / 2-Mahnung_037_…"""
+    art = MAHNSTUFEN[mahnung["stufe"]].replace(". ", "-")
+    try:
+        suffix = "_" + date.fromisoformat(mahnung["datum"]).strftime("%d%m%y")
+    except (TypeError, ValueError):
+        suffix = ""
+    return f"{art}_{inv['nummer']}{suffix}.pdf"
 
 
 def pdf_filename(inv):
@@ -205,5 +285,5 @@ def pdf_filename(inv):
         suffix = date.fromisoformat(d).strftime("%d%m%y")
     except (TypeError, ValueError):
         suffix = ""
-    art = "Angebot" if inv.get("art") == "angebot" else "Rechnung"
+    art = "Angebot" if inv.get("art") == "angebot" else "Stornorechnung" if inv.get("storno_von") else "Rechnung"
     return f"{art}_{inv['nummer']}" + (f"_{suffix}" if suffix else "") + ".pdf"

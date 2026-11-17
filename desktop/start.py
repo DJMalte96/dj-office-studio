@@ -4,7 +4,8 @@ Startet den eingebauten Webserver lokal (nur auf diesem Rechner erreichbar), öf
 im Standardbrowser und zeigt ein kleines Fenster zum erneuten Öffnen bzw. Beenden.
 
 Daten liegen im Dokumente-Ordner unter „DJ Office Studio“:
-  Daten/  – Datenbank (Kunden, Rechnungen, Angebote, Einstellungen) und Protokoll
+  Daten/  – Datenbank (Kunden, Rechnungen, Angebote, Einstellungen), Protokoll und
+            Sicherungen/ (automatisch einmal pro Tag, die letzten 14 Tage)
   PDFs/   – Kopien aller gespeicherten Rechnungen und Angebote
 """
 import json
@@ -64,6 +65,21 @@ def freier_port():
     raise RuntimeError("Kein freier Port zwischen 8765 und 8775 gefunden.")
 
 
+def automatische_sicherung(db, behalten=14):
+    """Einmal pro Tag beim Start eine Kopie der Datenbank in Daten/Sicherungen ablegen (die letzten 14 bleiben)."""
+    from datetime import date
+    ordner = DATEN / "Sicherungen"
+    ordner.mkdir(exist_ok=True)
+    ziel = ordner / f"rechnungen_{date.today().isoformat()}.db"
+    try:
+        if not ziel.exists():
+            db.sichern(str(ziel))
+        for alt in sorted(ordner.glob("rechnungen_*.db"))[:-behalten]:
+            alt.unlink()
+    except OSError as e:
+        print(f"Automatische Sicherung fehlgeschlagen: {e}")
+
+
 def ordner_oeffnen(pfad):
     if sys.platform == "win32":
         os.startfile(pfad)  # noqa: S606
@@ -100,6 +116,7 @@ def main():
     from waitress import create_server
 
     db.init()
+    automatische_sicherung(db)
     port = freier_port()
     server = create_server(webapp.app, host="127.0.0.1", port=port, threads=8)
     threading.Thread(target=server.run, daemon=True).start()

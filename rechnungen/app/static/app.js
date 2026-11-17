@@ -166,7 +166,9 @@ document.addEventListener("click", e => {
 });
 
 async function ladeEinstellungen() {
-  const werte = await api("einstellungen");
+  const [werte, rechnungen] = await Promise.all([api("einstellungen"), api("rechnungen")]);
+  const jahre = [...new Set([String(new Date().getFullYear()), ...rechnungen.map(r => r.datum.slice(0, 4))])].sort().reverse();
+  $("#export-jahr").innerHTML = jahre.map(j => `<option>${j}</option>`).join("");
   const form = $("#einstellungen");
   for (const [k, v] of Object.entries(werte)) {
     const feld = form.elements[k];
@@ -174,6 +176,34 @@ async function ladeEinstellungen() {
     if (feld.type === "checkbox") feld.checked = !!v; else feld.value = v ?? "";
   }
 }
+
+$("#sicherung-btn").addEventListener("click", () => {
+  ladeHerunter("api/backup");
+  toast("Sicherung wird heruntergeladen …");
+});
+$("#export-btn").addEventListener("click", () => {
+  ladeHerunter(`api/export?jahr=${$("#export-jahr").value}`);
+  toast(`Export ${$("#export-jahr").value} wird heruntergeladen …`);
+});
+$("#wiederherstellen-btn").addEventListener("click", () => $("#sicherung-datei").click());
+$("#sicherung-datei").addEventListener("change", async e => {
+  const datei = e.target.files[0];
+  e.target.value = "";
+  if (!datei || !confirm(`Sicherung „${datei.name}“ einspielen?\n\nAlle aktuellen Daten (Kunden, Rechnungen, `
+      + "Angebote, Einstellungen) werden durch die Sicherung ersetzt. Der aktuelle Stand wird vorher automatisch "
+      + "gesichert.")) return;
+  const fd = new FormData();
+  fd.append("datei", datei);
+  try {
+    const res = await fetch("api/backup", { method: "POST", body: fd });
+    const daten = await res.json();
+    if (!res.ok) throw new Error(daten.error || `Fehler ${res.status}`);
+    const n = daten.anzahl;
+    alert(`Sicherung eingespielt: ${n.rechnungen} Rechnungen, ${n.kunden} Kunden${n.angebote != null ? `, ${n.angebote} Angebote` : ""}.`
+      + "\n\nDie App wird neu geladen.");
+    location.reload();
+  } catch (err) { toast("Einspielen fehlgeschlagen: " + err.message, true); }
+});
 
 $("#einstellungen-verwerfen").addEventListener("click", () => {
   ladeEinstellungen();
@@ -469,6 +499,11 @@ function setZahlung(text) {
 }
 
 function loadIntoForm(inv) {
+  if (inv.festgeschrieben) {
+    window.open(`api/rechnungen/${inv.id}/pdf`, "_blank");
+    toast(`${rechnungsName(inv)} ist festgeschrieben – Änderungen nur per Storno.`);
+    return;
+  }
   setModus("rechnung");
   setAusAngebot(null);
   state.editId = inv.id;
@@ -617,10 +652,29 @@ const aktionen = (...welche) => welche.map(a => ({
   pdf: `<button class="small secondary" data-act="pdf">PDF</button>`,
   edit: `<button class="small secondary" data-act="edit">Bearbeiten</button>`,
   del: `<button class="small danger" data-act="del">Löschen</button>`,
-}[a])).join("");
+  storno: `<button class="small danger" data-act="storno" title="Stornorechnung erstellen">Stornieren</button>`,
+}[a] || "")).join("");
+
+/* Offen = weder bezahlt noch storniert noch selbst eine Stornorechnung */
+const istOffen = r => !r.bezahlt && !r.storno_von && !r.storniert_durch;
+const NAECHSTE_MAHNUNG = ["Zahlungserinnerung", "1. Mahnung", "2. Mahnung"];
+const MAHN_KURZ = { 1: "Erinnerung", 2: "1. Mahnung", 3: "2. Mahnung" };
+
+const schloss = r => r.festgeschrieben
+  ? ` <span class="schloss" title="Festgeschrieben – Änderungen nur per Storno">🔒</span>` : "";
+
+function stornoChip(r) {
+  if (r.storno_von) return ` <span class="storno-chip">Storno zu ${esc(r.storno_zu?.nummer || "?")}</span>`;
+  if (r.storniert_durch) return ` <span class="storno-chip">storniert → ${esc(r.storniert_durch_nummer || "?")}</span>`;
+  return "";
+}
+
+const mahnChips = r => (r.mahnungen || []).map(m =>
+  ` <a class="mahn-chip" href="api/mahnungen/${m.id}/pdf" target="_blank" rel="noopener"
+       title="${MAHN_KURZ[m.stufe]} vom ${fmtDate(m.datum)} – Frist bis ${fmtDate(m.frist)}">${MAHN_KURZ[m.stufe]} ${fmtDate(m.datum)}</a>`).join("");
 
 function renderOffen() {
-  const offen = state.rechnungen.filter(r => !r.bezahlt).map(r => ({ ...r, ziel: zahlungsziel(r) }));
+  const offen = state.rechnungen.filter(istOffen).map(r => ({ ...r, ziel: zahlungsziel(r) }));
   // Überfällige zuerst, dann nach Fälligkeit, Rechnungen ohne Frist am Ende
   offen.sort((a, b) => (a.ziel ? a.ziel.faellig : Infinity) - (b.ziel ? b.ziel.faellig : Infinity)
     || a.datum.localeCompare(b.datum));
@@ -631,7 +685,7 @@ function renderOffen() {
   $("#offen").innerHTML = `
     <h2>Offene Rechnungen</h2>
     ${offen.length ? `<table class="list offen-liste">
-      <thead><tr><th>Rechnung</th><th class="num">Betrag</th><th>Verbleibende Zeit</th><th class="haken-spalte">Bezahlt</th><th class="loesch-spalte"></th></tr></thead>
+      <thead><tr><th>Rechnung</th><th class="num">Betrag</th><th>Verbleibende Zeit</th><th class="haken-spalte">Bezahlt</th><th></th></tr></thead>
       <tbody>
       <tr class="summen-zeile">
         <td>${offen.length} offene Rechnung${offen.length === 1 ? "" : "en"}</td>
@@ -640,11 +694,17 @@ function renderOffen() {
         <td></td><td></td>
       </tr>
       ${offen.map(r => `<tr data-id="${r.id}">
-        <td><a href="#" class="rlink" title="Im Editor öffnen">${esc(rechnungsName(r))}</a></td>
+        <td><a href="#" class="rlink" title="${r.festgeschrieben ? "PDF öffnen (festgeschrieben)" : "Im Editor öffnen"}">${esc(rechnungsName(r))}</a>${schloss(r)}${mahnChips(r)}</td>
         <td class="num">${fmtEuro(r.gesamt)}</td>
         <td title="${r.ziel ? `fällig am ${utcToDe(r.ziel.faellig)}` : ""}">${fristBadge(r.ziel)}</td>
         <td class="haken-spalte"><input type="checkbox" class="offen-haken" title="Als bezahlt markieren → ins Archiv"></td>
-        <td class="loesch-spalte"><button type="button" class="icon del" data-act="del" title="Rechnung löschen">✕</button></td>
+        <td class="btns offen-aktionen">
+          ${r.mahnungen.length < 3 ? `<button type="button" class="small ${r.ziel && r.ziel.rest < 0 ? "" : "secondary"}" data-act="mahnung"
+              title="${NAECHSTE_MAHNUNG[r.mahnungen.length]} als PDF erstellen">${NAECHSTE_MAHNUNG[r.mahnungen.length]}</button>` : ""}
+          ${r.festgeschrieben ? "" : `<button type="button" class="icon" data-act="lock" title="Festschreiben (z. B. nach dem Versenden) – danach nur noch Storno">🔒</button>`}
+          <button type="button" class="icon del" data-act="${r.festgeschrieben ? "storno" : "del"}"
+            title="${r.festgeschrieben ? "Rechnung stornieren" : "Rechnung löschen"}">✕</button>
+        </td>
       </tr>`).join("")}
       </tbody></table>`
     : `<p class="hint alles-bezahlt">Keine offenen Rechnungen – alles bezahlt.</p>`}`;
@@ -698,7 +758,7 @@ const auswahl = new Set();   // IDs der im Archiv markierten Rechnungen
 function renderListe() {
   renderOffen();
   const q = $("#liste-suche").value.trim().toLowerCase();
-  const list = sortiere(state.rechnungen.filter(r => r.bezahlt &&
+  const list = sortiere(state.rechnungen.filter(r => !istOffen(r) &&
     (!q || [rechnungsName(r), r.nummer, r.kunde.name, r.kunde.ort, ...r.positionen.map(p => p.beschreibung)]
       .join(" ").toLowerCase().includes(q))));
 
@@ -711,15 +771,17 @@ function renderListe() {
   $("#liste-body").innerHTML = list.map(r => `
     <tr data-id="${r.id}"${auswahl.has(r.id) ? ' class="markiert"' : ""}>
       <td class="auswahl-spalte"><input type="checkbox" class="auswahl"${auswahl.has(r.id) ? " checked" : ""} title="Markieren (Herunterladen / Paperless)"></td>
-      <td>${esc(r.nummer)}${r.paperless_am
+      <td>${esc(r.nummer)}${schloss(r)}${stornoChip(r)}${r.paperless_am
         ? plChip(r) : ""}</td>
       <td>${fmtDate(r.datum)}</td>
       <td>${esc(r.kunde.name)}<br><small>${esc(r.kunde.ort)}</small></td>
       <td class="num">${fmtEuro(r.gesamt)}</td>
-      <td><input type="checkbox" class="bezahlt" checked title="Haken entfernen = zurück zu den offenen Rechnungen"></td>
-      <td class="btns">${aktionen("pdf", "edit", "del")}</td>
+      <td>${r.storno_von || r.storniert_durch ? `<span class="frist neutral">${r.storno_von ? "Storno" : "storniert"}</span>`
+        : `<input type="checkbox" class="bezahlt" checked title="Haken entfernen = zurück zu den offenen Rechnungen">`}</td>
+      <td class="btns">${aktionen("pdf", ...(!r.festgeschrieben ? ["edit", "del"]
+        : r.storno_von || r.storniert_durch ? [] : ["storno"]))}</td>
     </tr>`).join("") ||
-    `<tr><td colspan="7" class="hint">${q ? "Keine Treffer im Archiv." : "Noch keine bezahlten Rechnungen im Archiv."}</td></tr>`;
+    `<tr><td colspan="7" class="hint">${q ? "Keine Treffer im Archiv." : "Noch keine bezahlten oder stornierten Rechnungen im Archiv."}</td></tr>`;
   $("#liste-summe").textContent = list.length
     ? `${list.length} Rechnung${list.length === 1 ? "" : "en"} · Summe ${fmtEuro(list.reduce((s, r) => s + r.gesamt, 0))}` : "";
   renderAuswahl();
@@ -728,7 +790,7 @@ function renderListe() {
 /* Auswahl-Leiste + „Alle“-Checkbox passend zur aktuellen Auswahl. */
 function renderAuswahl() {
   // Nur Rechnungen behalten, die noch existieren und im Archiv sind
-  const archivIds = new Set(state.rechnungen.filter(r => r.bezahlt).map(r => r.id));
+  const archivIds = new Set(state.rechnungen.filter(r => !istOffen(r)).map(r => r.id));
   [...auswahl].forEach(id => { if (!archivIds.has(id)) auswahl.delete(id); });
 
   const n = auswahl.size;
@@ -822,11 +884,46 @@ $("#tab-liste").addEventListener("click", async e => {
       renderListe();
       toast(`Paperless-Markierung bei ${rechnungsName(inv)} zurückgesetzt`);
     }
-    if (btn.dataset.act === "del" && confirm(`${rechnungsName(inv)} wirklich löschen?`)) {
-      await api("rechnungen/" + id, { method: "DELETE" });
-      if (state.editId === id) resetForm();
+    if (btn.dataset.act === "del") {
+      const hoechste = Math.max(...state.rechnungen.map(r => parseInt(r.nummer, 10) || 0));
+      const luecke = (parseInt(inv.nummer, 10) || 0) < hoechste
+        ? "\n\nAchtung: Es gibt schon spätere Rechnungsnummern – durch das Löschen entsteht eine Lücke im Nummernkreis. "
+          + "Wurde die Rechnung schon verschickt, besser festschreiben und stornieren." : "";
+      if (confirm(`${rechnungsName(inv)} wirklich löschen?${luecke}`)) {
+        await api("rechnungen/" + id, { method: "DELETE" });
+        if (state.editId === id) resetForm();
+        await loadListe();
+        toast(`${rechnungsName(inv)} gelöscht`);
+      }
+    }
+    if (btn.dataset.act === "lock" && confirm(`${rechnungsName(inv)} festschreiben?\n\n`
+        + "Danach lässt sich die Rechnung nicht mehr ändern oder löschen – Korrekturen nur noch per Storno. "
+        + "Bezahlte, gemahnte oder an Paperless gesendete Rechnungen werden automatisch festgeschrieben.")) {
+      await api(`rechnungen/${id}/festschreiben`, { method: "POST" });
       await loadListe();
-      toast(`${rechnungsName(inv)} gelöscht`);
+      toast(`${rechnungsName(inv)} ist festgeschrieben`);
+    }
+    if (btn.dataset.act === "storno" && confirm(`${rechnungsName(inv)} stornieren?\n\n`
+        + "Es wird eine Stornorechnung mit neuer Nummer und negativen Beträgen erstellt; beide Rechnungen landen "
+        + "im Archiv. Das lässt sich nicht rückgängig machen.")) {
+      openPdf(async () => {
+        const res = await api(`rechnungen/${id}/stornieren`, { method: "POST" });
+        await loadListe();
+        toast(`Stornorechnung ${res.nummer} zu ${rechnungsName(inv)} erstellt`);
+        return api(`rechnungen/${res.id}/pdf`);
+      });
+    }
+    if (btn.dataset.act === "mahnung") {
+      const stufe = NAECHSTE_MAHNUNG[inv.mahnungen.length];
+      if (confirm(`${stufe} zu ${rechnungsName(inv)} erstellen?\n\nDas PDF öffnet sich zum Versenden; `
+          + "die Rechnung wird dabei festgeschrieben.")) {
+        openPdf(async () => {
+          const res = await api(`rechnungen/${id}/mahnung`, { method: "POST" });
+          await loadListe();
+          toast(`${res.bezeichnung} zu ${rechnungsName(inv)} erstellt` + (res.datei ? ` → ${res.datei.split("/").pop()}` : ""));
+          return api(`mahnungen/${res.id}/pdf`);
+        });
+      }
     }
   } catch (err) { toast(err.message, true); }
 });
@@ -1344,7 +1441,7 @@ async function renderStart() {
     : `<p class="hint">Keine offenen Angebote.</p>`;
 
   // Offene Rechnungen (Kurzfassung)
-  const offen = alle.filter(r => !r.bezahlt).map(r => ({ ...r, ziel: zahlungsziel(r) }))
+  const offen = alle.filter(istOffen).map(r => ({ ...r, ziel: zahlungsziel(r) }))
     .sort((a, b) => (a.ziel ? a.ziel.faellig : Infinity) - (b.ziel ? b.ziel.faellig : Infinity));
   const summeOffen = offen.reduce((s, r) => s + r.gesamt, 0);
   $("#start-offen").innerHTML = offen.length ? `
@@ -1375,7 +1472,8 @@ async function renderStart() {
       <div class="ml-text"><a href="#" class="start-rlink" data-id="${r.id}">${esc(rechnungsName(r))}</a>
         <small>${esc(r.kunde.name)} · ${fmtDate(r.datum)}</small></div>
       <span class="num">${fmtEuro(r.gesamt)}</span>
-      ${r.bezahlt ? `<span class="frist gruen">bezahlt</span>` : `<span class="frist neutral">offen</span>`}</li>`).join("")
+      ${r.storno_von ? `<span class="frist neutral">Storno</span>` : r.storniert_durch ? `<span class="frist neutral">storniert</span>`
+        : r.bezahlt ? `<span class="frist gruen">bezahlt</span>` : `<span class="frist neutral">offen</span>`}</li>`).join("")
     || `<li class="leer">Noch keine Rechnungen.</li>`;
 
   // Hinweise, die die App selbst erkennt
@@ -1384,7 +1482,8 @@ async function renderStart() {
     hinweise.push(["warn", `Absenderdaten fehlen – bitte unter <a href="#" class="zu-einstellungen">⚙ Einstellungen</a> eintragen.`]);
   }
   for (const r of offen.filter(r => r.ziel && r.ziel.rest < 0)) {
-    hinweise.push(["rot", `<a href="#" class="start-rlink" data-id="${r.id}">${esc(rechnungsName(r))}</a> ist seit ${-r.ziel.rest} ${-r.ziel.rest === 1 ? "Tag" : "Tagen"} überfällig (${esc(r.kunde.name)}, ${fmtEuro(r.gesamt)}).`]);
+    hinweise.push(["rot", `<a href="#" class="start-rlink" data-id="${r.id}">${esc(rechnungsName(r))}</a> ist seit ${-r.ziel.rest} ${-r.ziel.rest === 1 ? "Tag" : "Tagen"} überfällig (${esc(r.kunde.name)}, ${fmtEuro(r.gesamt)})`
+      + (r.mahnungen.length ? ` – ${MAHN_KURZ[r.mahnungen.at(-1).stufe]} am ${fmtDate(r.mahnungen.at(-1).datum)}.` : ".")]);
   }
   for (const r of offen.filter(r => r.ziel && r.ziel.rest === 0)) {
     hinweise.push(["gelb", `<a href="#" class="start-rlink" data-id="${r.id}">${esc(rechnungsName(r))}</a> ist heute fällig.`]);
