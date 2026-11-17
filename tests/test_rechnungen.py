@@ -91,3 +91,11 @@ def test_migration_alter_datenbank(app_modul, tmp_path):
     db.init()
     status = {r["nummer"]: r["festgeschrieben"] for r in db.list_invoices()}
     assert status == {"001": True, "002": False}
+
+
+def test_ohne_daten_verstaendlicher_fehler_statt_absturz(client):
+    """Fehlende oder kaputte JSON-Daten führen zu 400 mit Meldung, nicht zu einem Serverfehler."""
+    for methode, url in (("post", "/api/rechnungen"), ("post", "/api/angebote"), ("post", "/api/vorschau"),
+                         ("post", "/api/kunden"), ("put", "/api/einstellungen"), ("post", "/api/versand")):
+        r = getattr(client, methode)(url, data="kein json", content_type="text/plain")
+        assert r.status_code < 500, (url, r.status_code)

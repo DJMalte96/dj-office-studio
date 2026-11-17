@@ -2,6 +2,16 @@
 
 Alle Änderungen an DJ Office Studio. Neueste Version oben.
 
+## 1.0.0 – 2026-11-17
+
+**Erste stabile Version.** DJ Office Studio deckt jetzt alles ab, was für Rechnungen und Angebote im DJ-Alltag gebraucht wird: Rechnungen und Angebote mit Pflichtangaben-Prüfung, Kleinunternehmerregelung oder Umsatzsteuer, QR-Code zum Bezahlen, E-Mail-Versand, Zahlungserinnerungen und Mahnungen, Festschreiben und Storno, Kopieren, Paperless-Anbindung, Import alter PDFs, Datensicherung mit Erinnerung und Export für den Steuerberater – in Home Assistant und als Desktop-App für Windows und macOS. Ab jetzt gilt: Updates ändern nichts an bestehenden Daten, ohne dass die App sie automatisch anpasst; 1.0.x enthält nur Fehlerbehebungen, neue Funktionen kommen mit 1.1, 1.2 …
+
+### Behoben
+- **E-Mail zu Stornorechnungen**: Der vorausgefüllte Text lautete bisher „Vielen Dank für Ihren Auftrag! Im Anhang finden Sie die Rechnung … über -500,- Euro“. Jetzt: „Stornorechnung 042 zur Rechnung 038“ mit passendem Text.
+- **Startseite am Handy**: Die Seite war breiter als der Bildschirm (lange Angebotszeilen); Betrag und Frist stehen jetzt unter dem Namen.
+- Unvollständige oder ungültige Anfragen an die App führen zu einer verständlichen Fehlermeldung statt zu einem Serverfehler.
+- README an den aktuellen Funktionsumfang angepasst.
+
 ## 0.18.0 – 2026-11-17
 
 ### Neu

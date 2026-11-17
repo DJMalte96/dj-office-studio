@@ -520,3 +520,12 @@ button[data-act="kopie"] svg.ico, button[data-act="qr"] svg.ico { display: block
   table.list td.btns button, .offen-aktionen button { margin-top: 2px; margin-bottom: 2px; }
   table.list td.btns { min-width: 120px; }
 }
+
+/* Startseite: Spalten dürfen schmaler werden als ihr Inhalt (sonst wird die Seite am Handy breiter als der Bildschirm) */
+.start-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.start-spalte { grid-template-columns: minmax(0, 1fr); }
+@media (max-width: 900px) { .start-grid { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 560px) {
+  ul.mini-liste li { flex-wrap: wrap; }
+  ul.mini-liste .ml-text { flex: 1 1 100%; }
+}

@@ -28,6 +28,12 @@ DESKTOP = os.environ.get("DJOS_DESKTOP") == "1"   # Desktop-Version (Windows/Mac
 STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 
 app = Flask(__name__, static_folder=None)
+
+
+def _daten():
+    """JSON aus der Anfrage – fehlt es oder ist es ungültig, ein leeres dict (→ verständliche Fehlermeldung statt 500)."""
+    d = request.get_json(silent=True)
+    return d if isinstance(d, dict) else {}
 app.config["MAX_CONTENT_LENGTH"] = 100 * 1024 * 1024  # Upload alter Rechnungen
 
 
@@ -134,7 +140,7 @@ def settings_get():
 
 @app.put("/api/einstellungen")
 def settings_put():
-    daten = request.get_json() or {}
+    daten = _daten()
     werte, fehler = {}, []
     for k, (typ, standard) in FELDER.items():
         if k not in daten:
@@ -293,10 +299,10 @@ def _register_crud(table):
         return jsonify(db.list_items(table, request.args.get("q")))
 
     def create():
-        return jsonify({"id": db.save_item(table, _clean(table, request.get_json()))}), 201
+        return jsonify({"id": db.save_item(table, _clean(table, _daten()))}), 201
 
     def update(item_id):
-        db.save_item(table, _clean(table, request.get_json()), item_id)
+        db.save_item(table, _clean(table, _daten()), item_id)
         return jsonify({"id": item_id})
 
     def delete(item_id):
@@ -411,10 +417,10 @@ def invoices_get(inv_id):
 
 @app.post("/api/rechnungen")
 def invoices_create():
-    inv = _validate_invoice(request.get_json())
+    inv = _validate_invoice(_daten())
     inv["kunde_id"] = db.upsert_customer({**inv["kunde"], "id": inv["kunde_id"]})
     inv_id = db.save_invoice(inv)
-    angebot_id = (request.get_json() or {}).get("angebot_id")
+    angebot_id = _daten().get("angebot_id")
     if angebot_id and db.get_offer(angebot_id):
         db.set_offer_status(angebot_id, "angenommen", inv_id)
     return jsonify({"id": inv_id, "datei": _write_pdf_file(inv)}), 201
@@ -433,7 +439,7 @@ def invoices_update(inv_id):
     alt = db.get_invoice(inv_id) or abort(404)
     if alt["festgeschrieben"]:
         return _fehler(FESTGESCHRIEBEN, 409)
-    inv = _validate_invoice(request.get_json(), inv_id)
+    inv = _validate_invoice(_daten(), inv_id)
     inv["kunde_id"] = db.upsert_customer({**inv["kunde"], "id": inv["kunde_id"]})
     db.save_invoice(inv, inv_id)
     return jsonify({"id": inv_id, "datei": _write_pdf_file(inv)})
@@ -457,7 +463,7 @@ def invoices_paid(inv_id):
     inv = db.get_invoice(inv_id) or abort(404)
     if inv["storno_von"] or inv["storniert_durch"]:
         return _fehler("Stornierte Rechnungen und Stornorechnungen haben keinen Zahlstatus.")
-    db.set_paid(inv_id, request.get_json().get("bezahlt"))
+    db.set_paid(inv_id, _daten().get("bezahlt"))
     return "", 204
 
 
@@ -706,10 +712,14 @@ def mail_draft():
     a = absender()
     kunde = db.get_customer(beleg.get("kunde_id")) if beleg.get("kunde_id") else None
     email = (kunde or {}).get("email") or beleg["kunde"].get("email") or ""
+    betreff, text = a[f"mail_betreff_{art}"], a[f"mail_text_{art}"]
+    if art == "rechnung" and beleg.get("storno_zu"):   # Stornorechnung: eigener Text statt „Vielen Dank für Ihren Auftrag“
+        betreff, text = mail.STORNO_BETREFF, mail.STORNO_TEXT
+        werte |= {"storno_nummer": beleg["storno_zu"]["nummer"], "storno_datum": _de(beleg["storno_zu"]["datum"])}
     return jsonify({
         "an": email, "kunde_email": email, "kunde_id": beleg.get("kunde_id"),
-        "betreff": mail.fuellen(a[f"mail_betreff_{art}"], werte),
-        "text": mail.fuellen(a[f"mail_text_{art}"], werte),
+        "betreff": mail.fuellen(betreff, werte),
+        "text": mail.fuellen(text, werte),
         "anhaenge": [name for name, _ in anhaenge],
         "konfiguriert": mail.konfiguriert(a),
         "kopie": bool(a.get("mail_kopie_an_mich")), "absender_email": a.get("absender_email", ""),
@@ -720,7 +730,7 @@ def mail_draft():
 @app.post("/api/versand")
 def mail_send():
     """E-Mail mit PDF(s) verschicken, im Versand-Protokoll vermerken; Rechnungen werden festgeschrieben."""
-    d = request.get_json() or {}
+    d = _daten()
     art = d.get("art", "")
     beleg, mahnung, anhaenge, _ = _versand_beleg(art, d.get("id"), d.get("mahnung_id"))
     try:
@@ -749,7 +759,7 @@ def mail_send():
 @app.post("/api/versand/test")
 def mail_test():
     """Testmail an die eigene Adresse – mit den Werten aus dem Formular (noch nicht gespeichert)."""
-    d = request.get_json() or {}
+    d = _daten()
     cfg = absender()
     for k in ("absender_email", "smtp_server", "smtp_port", "smtp_sicherheit", "smtp_benutzer", "smtp_passwort",
               "mail_antwort_an", "name"):
@@ -858,7 +868,7 @@ def invoices_to_paperless():
     """Ausgewählte Rechnungen oder Angebote als PDF in den Eingangsordner von Paperless legen:
     {"ids": [1, 2, 3], "art": "rechnung" | "angebot"}."""
     a = absender()
-    daten = request.get_json() or {}
+    daten = _daten()
     angebot = daten.get("art") == "angebot"
     laden, table = (db.get_offer, "angebote") if angebot else (db.get_invoice, "rechnungen")
     ordner = _paperless_ordner(a)
@@ -893,7 +903,7 @@ def invoices_to_paperless():
 
 @app.post("/api/vorschau")
 def invoices_preview():
-    data = request.get_json()
+    data = _daten()
     data["nummer"] = (data.get("nummer") or "").strip() or "VORSCHAU"
     return _pdf_response(_validate_invoice(data, check_number=False, art=data.get("art") or "rechnung", pflicht=False))
 
@@ -916,7 +926,7 @@ def offers_get(offer_id):
 
 
 def _save_offer(offer_id=None):
-    a = _validate_invoice(request.get_json(), offer_id, art="angebot")
+    a = _validate_invoice(_daten(), offer_id, art="angebot")
     a["kunde_id"] = db.upsert_customer({**a["kunde"], "id": a["kunde_id"]})
     offer_id = db.save_offer(a, offer_id)
     return {"id": offer_id, "datei": _write_pdf_file(a)}
@@ -935,7 +945,7 @@ def offers_update(offer_id):
 
 @app.patch("/api/angebote/<int:offer_id>/status")
 def offers_status(offer_id):
-    status = (request.get_json() or {}).get("status")
+    status = _daten().get("status")
     if status not in db.STATUS:
         abort(400)
     db.set_offer_status(offer_id, status)
@@ -1012,7 +1022,7 @@ def import_analyse():
 
 @app.post("/api/import/uebernehmen")
 def import_uebernehmen():
-    data = request.get_json() or {}
+    data = _daten()
     n_kunden = n_tb = n_rech = n_ang = 0
     for k in data.get("kunden") or []:
         if (k.get("name") or "").strip():
@@ -1061,5 +1071,5 @@ if __name__ == "__main__":
 
     db.init()
     port = int(os.environ.get("PORT", "8099"))
-    print(f"Rechnungen läuft auf Port {port}")
+    print(f"DJ Office Studio läuft auf Port {port}")
     serve(app, host="0.0.0.0", port=port)

@@ -34,6 +34,13 @@ VORLAGEN = {
         "Viele Grüße\n{absender}\n{telefon}"),
 }
 
+# Stornorechnung (nicht einstellbar – kommt selten vor)
+STORNO_BETREFF = "Stornorechnung {nummer} zur Rechnung {storno_nummer}"
+STORNO_TEXT = ("Hallo {kunde},\n\n"
+               "im Anhang finden Sie die Stornorechnung {nummer} zur Rechnung {storno_nummer} vom {storno_datum}. "
+               "Die Rechnung {storno_nummer} ist damit aufgehoben; ein bereits gezahlter Betrag wird erstattet.\n\n"
+               "Viele Grüße\n{absender}\n{telefon}")
+
 _PLATZHALTER = re.compile(r"\{(\w+)\}")
 _ADRESSE = re.compile(r"^[^@\s,;<>]+@[^@\s,;<>]+\.[^@\s,;<>]+$")
 
