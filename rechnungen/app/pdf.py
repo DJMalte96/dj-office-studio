@@ -175,11 +175,25 @@ def girocode_svg(daten):
 def _qr_rechts(pdf, daten, y):
     """GiroCode rechts neben dem Zahlungstext, mit kurzer Beschriftung darunter."""
     import segno
-    buf = io.BytesIO()
-    segno.make(daten, error="m", micro=False).save(buf, kind="png", scale=10, border=2)
-    buf.seek(0)
     x = LEFT + sum(COLS) - QR
-    pdf.image(buf, x=x, y=y, w=QR, h=QR)
+    # Als Vektorgrafik zeichnen (kein Bild): Eingebettete Schwarz-Weiß-Bilder stellen manche
+    # PDF-Programme fehlerhaft dar – Rechtecke sehen überall gleich aus und sind beim Druck scharf.
+    matrix = [list(zeile) for zeile in segno.make(daten, error="m", micro=False).matrix_iter(border=2)]
+    modul = QR / len(matrix)
+    pdf.set_fill_color(255)
+    pdf.rect(x, y, QR, QR, style="F")          # weißer Rand (Ruhezone)
+    pdf.set_fill_color(0)
+    for r, zeile in enumerate(matrix):
+        c = 0
+        while c < len(zeile):
+            if zeile[c]:
+                start = c
+                while c < len(zeile) and zeile[c]:
+                    c += 1
+                # minimal überlappen, damit keine feinen Lücken zwischen den Modulen entstehen
+                pdf.rect(x + start * modul, y + r * modul, (c - start) * modul + 0.01, modul + 0.01, style="F")
+            else:
+                c += 1
     pdf.set_font("Body", "", 7.5)
     pdf.set_xy(x - 6, y + QR + 0.5)
     pdf.multi_cell(QR + 12, 3.4, "Bequem bezahlen:\nmit der Banking-App scannen", align="C")
