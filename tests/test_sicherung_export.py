@@ -57,14 +57,16 @@ def test_export_fuer_steuerberater(client):
     text = zf.read("Rechnungen_2026.csv").decode("utf-8")
     assert text.startswith("﻿")
     zeilen = list(csv.reader(io.StringIO(text.lstrip("﻿")), delimiter=";"))
+    sp = {name: i for i, name in enumerate(zeilen[0])}
     daten = {z[0]: z for z in zeilen[1:] if z and z[0].isdigit()}
-    assert daten["037"][6] == "bezahlt" and daten["037"][7]
-    assert daten["038"][6] == "offen"
-    assert daten["039"][6] == "storniert" and daten["039"][8] == "storniert durch 040"
-    assert daten["040"][6] == "Storno" and daten["040"][5] == "-300,00"
+    assert daten["037"][sp["Status"]] == "bezahlt" and daten["037"][sp["Bezahlt am"]]
+    assert daten["038"][sp["Status"]] == "offen"
+    assert daten["039"][sp["Status"]] == "storniert" and daten["039"][sp["Bezug"]] == "storniert durch 040"
+    assert daten["040"][sp["Status"]] == "Storno" and daten["040"][sp["Betrag (EUR)"]] == "-300,00"
+    assert daten["037"][sp["Netto (EUR)"]] == "960,00" and daten["037"][sp["USt-Satz"]] == ""   # Kleinunternehmer
     assert "030" not in daten
     summe = next(z for z in zeilen if z and z[0].startswith("Summe"))
-    assert summe[5] == "1410,00"   # 960 + 450 + 300 - 300
+    assert summe[sp["Betrag (EUR)"]] == "1410,00"   # 960 + 450 + 300 - 300
 
 
 def test_erinnerung_merkt_letzte_sicherung(client):

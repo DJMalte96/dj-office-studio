@@ -224,7 +224,9 @@ input.bezahlt:checked { background: var(--ok); }
 input.bezahlt:checked::after { transform: translateX(18px); }
 input.bezahlt:focus { box-shadow: 0 0 0 4px var(--primary-soft); }
 
-@media (max-width: 760px) {
+@media (max-width: 900px) {   /* Tabellen gestapelt (Handy, schmale Fenster) */
+  table.list td.btns, .offen-aktionen { white-space: normal; }
+  table.list td.btns button, .offen-aktionen button { margin: 2px 4px 2px 0; }
   table.list thead { display: none; }
   table.list td { display: block; border: none; padding: 4px 6px; }
   table.list td.num, table.list td.btns { text-align: left; }
@@ -493,3 +495,28 @@ button svg.ico { vertical-align: -3px; }
 .hinweis-dialog .actions { margin-top: 18px; }
 .info-links { display: flex; gap: 18px; flex-wrap: wrap; }
 .hinweis-dialog a { color: var(--text); }
+
+/* ---------- Umsatzsteuer ---------- */
+body:not(.ust) .nur-ust { display: none; }
+.ust-felder.hidden { display: none; }
+.ust-felder .hint { margin: 10px 0 12px; }
+.ust-zeilen { margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--border); font-size: 14px; color: var(--muted); }
+.ust-zeilen.hidden { display: none; }
+.ust-zeilen div { display: flex; justify-content: space-between; padding: 2px 0; }
+.ust-zeilen div span:last-child { font-variant-numeric: tabular-nums; color: var(--text); font-weight: 600; }
+.ust-zeilen:not(.hidden) + .total { margin-top: 8px; }
+.total .total-titel { font-size: inherit; font-weight: inherit; color: inherit; letter-spacing: 0; }
+.total .total-titel span { font-size: inherit; font-weight: inherit; color: inherit; }
+button.small[data-act="kopie"] { padding: 4px 9px; vertical-align: middle; }
+button[data-act="kopie"] svg.ico, button[data-act="qr"] svg.ico { display: block; }
+
+/* Angebotsliste hat viele Spalten und Buttons – etwas engere Zellabstände, damit sie in die Karte passt */
+#tab-angebote .card:last-child table.list th, #tab-angebote .card:last-child table.list td { padding-left: 6px; padding-right: 6px; }
+#tab-angebote table.list td.btns button { margin-left: 3px; }
+
+/* Mittlere Fensterbreiten (z. B. Home Assistant mit Seitenleiste): Buttons dürfen umbrechen, damit Tabellen in die Karte passen */
+@media (min-width: 901px) and (max-width: 1200px) {
+  table.list td.btns, .offen-aktionen { white-space: normal; }
+  table.list td.btns button, .offen-aktionen button { margin-top: 2px; margin-bottom: 2px; }
+  table.list td.btns { min-width: 120px; }
+}

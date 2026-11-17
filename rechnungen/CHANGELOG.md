@@ -2,6 +2,17 @@
 
 Alle Änderungen an DJ Office Studio. Neueste Version oben.
 
+## 0.18.0 – 2026-11-17
+
+### Neu
+- **Umsatzsteuer für Nutzer ohne Kleinunternehmerregelung**: Ist unter ⚙ Einstellungen → Steuer „Kleinunternehmer“ ausgeschaltet, sind die Positionspreise Nettopreise. Rechnungen, Angebote und Stornorechnungen weisen dann Nettobetrag, Umsatzsteuer (19 % oder 7 %) und Gesamtbetrag aus; Gesamtbetrag, Mahnungen, GiroCode und E-Mail-Vorlagen verwenden den Bruttobetrag. Der Editor zeigt die Aufstellung schon beim Schreiben. Optional lässt sich eine USt-IdNr. eintragen (erscheint in der Fußzeile). Der Export für den Steuerberater enthält neue Spalten für Netto, Steuersatz und Steuer.
+- Steuersatz und Kleinunternehmer-Status werden **je Beleg gespeichert** – ein späterer Wechsel in den Einstellungen ändert bereits geschriebene Rechnungen nicht. Bestehende Belege verhalten sich wie bisher.
+- **Rechnung oder Angebot kopieren**: Das neue Kopieren-Symbol bei offenen Rechnungen, im Archiv und in der Angebotsliste übernimmt Kunde, Texte, Preise und Zahlungsbedingung in einen neuen Beleg mit neuer Nummer und heutigem Datum – das Datum der Veranstaltung trägt man neu ein.
+- **Hinweis auf fehlende Angaben** nennt jetzt genau, was für vollständige Rechnungen fehlt: Name, Straße, PLZ und Ort, IBAN und – ohne Kleinunternehmerregelung – Steuernummer oder USt-IdNr.
+
+### Behoben
+- Bei mittleren Fensterbreiten (z. B. in Home Assistant mit eingeblendeter Seitenleiste) und am Handy ragten die Tabellen „Offene Rechnungen“ und „Alle Angebote“ über den Kartenrand hinaus. Die Buttons brechen jetzt bei Bedarf in eine zweite Zeile um; unter 900 Pixel Breite werden die Tabellen untereinander dargestellt.
+
 ## 0.17.0 – 2026-11-17
 
 ### Neu

@@ -38,6 +38,8 @@ FELDER = {
     "bank_name": (str, ""), "kontoinhaber": (str, ""), "iban": (str, ""), "bic": (str, ""),
     "girocode": (bool, True),         # QR-Code zum Bezahlen auf Rechnungen und Mahnungen
     "steuernummer": (str, ""), "kleinunternehmer": (bool, True),
+    "ust_satz": (int, 19),            # nur ohne Kleinunternehmerregelung: Umsatzsteuersatz in %
+    "ust_idnr": (str, ""),            # Umsatzsteuer-Identifikationsnummer (optional)
     "startnummer": (int, 1), "angebot_startnummer": (int, 1), "angebot_gueltigkeit_tage": (int, 30),
     "pdf_ordner": (str, os.environ.get("STANDARD_PDF_ORDNER", "/share/rechnungen")),
     "paperless_installiert": (bool, False),
@@ -222,11 +224,22 @@ def update_check():
     return jsonify(ergebnis)
 
 
+def _absender_fehlt(a):
+    """Angaben, ohne die eine Rechnung nicht vollständig ist (Absender, Bank, ggf. Steuernummer)."""
+    fehlt = [t for k, t in (("name", "Name"), ("strasse", "Straße"), ("plz_ort", "PLZ und Ort"), ("iban", "IBAN"))
+             if not (a.get(k) or "").strip()]
+    if not a.get("kleinunternehmer") and not (a.get("steuernummer") or a.get("ust_idnr") or "").strip():
+        fehlt.append("Steuernummer oder USt-IdNr.")
+    return fehlt
+
+
 @app.get("/api/absender")
 def get_absender():
     a = absender()
+    fehlt = _absender_fehlt(a)
     return jsonify({k: a.get(k) for k in ("name", "strasse", "plz_ort", "ort_fuer_datum")}
-                   | {"vollstaendig": bool(a.get("name") and a.get("iban")),
+                   | {"vollstaendig": not fehlt, "fehlt": fehlt,
+                      "kleinunternehmer": bool(a.get("kleinunternehmer")), "ust_satz": a.get("ust_satz") or 19,
                       "paperless": bool(a.get("paperless_installiert")),
                       "angebot_gueltigkeit_tage": a.get("angebot_gueltigkeit_tage") or 30,
                       "mail": mail.konfiguriert(a),
@@ -345,14 +358,24 @@ def _validate_invoice(data, inv_id=None, check_number=True, art="rechnung", pfli
                         "lieferdatum": p.get("lieferdatum") or "",
                         "preis": p["preis"]} for p in positionen],
         "zahlungsbedingung": (data.get("zahlungsbedingung") or "").strip(),
-        "gesamt": round(sum(p["preis"] for p in positionen), 2),
     }
+    doc |= _steuer(sum(p["preis"] for p in positionen))
     if angebot:
         doc |= {"art": "angebot", "gueltig_bis": data.get("gueltig_bis") or "",
                 "hinweise": (data.get("hinweise") or "").strip()}
     else:
         doc["bezahlt"] = bool(data.get("bezahlt"))
     return doc
+
+
+def _steuer(netto, a=None):
+    """Steuer eines neuen bzw. bearbeiteten Belegs nach den aktuellen Einstellungen.
+    Gesamtbetrag = Bruttobetrag (das, was der Kunde zahlt); Positionspreise sind Nettopreise."""
+    a = a or absender()
+    if a.get("kleinunternehmer"):
+        return {"kleinunternehmer": True, "ust_satz": None, "gesamt": round(netto, 2)}
+    satz = float(a.get("ust_satz") or 19)
+    return {"kleinunternehmer": False, "ust_satz": satz, "gesamt": round(netto + round(netto * satz / 100, 2), 2)}
 
 
 def _write_pdf_file(inv):
@@ -468,6 +491,7 @@ def invoices_cancel(inv_id):
         "kunde": inv["kunde"], "kunde_id": inv["kunde_id"],
         "positionen": [{**p, "preis": -round(float(p.get("preis") or 0), 2)} for p in inv["positionen"]],
         "zahlungsbedingung": "", "gesamt": -inv["gesamt"],
+        "kleinunternehmer": inv.get("kleinunternehmer"), "ust_satz": inv.get("ust_satz"),
         "bezahlt": True, "festgeschrieben": True, "storno_von": inv_id,
     }
     storno_id = db.save_invoice(storno)
@@ -606,8 +630,8 @@ def export_year():
     a = absender()
     csv_buf = io.StringIO()
     w = csv.writer(csv_buf, delimiter=";")
-    w.writerow(["Rechnungsnummer", "Rechnungsdatum", "Leistungsdatum", "Kunde", "Ort", "Betrag (EUR)",
-                "Status", "Bezahlt am", "Bezug", "Datei"])
+    w.writerow(["Rechnungsnummer", "Rechnungsdatum", "Leistungsdatum", "Kunde", "Ort", "Netto (EUR)", "USt-Satz",
+                "USt (EUR)", "Betrag (EUR)", "Status", "Bezahlt am", "Bezug", "Datei"])
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
         for r in rechnungen:
@@ -617,14 +641,17 @@ def export_year():
                      else f"storniert durch {r['storniert_durch_nummer']}" if r["storniert_durch"] else "")
             leistung = next((p.get("lieferdatum") for p in r["positionen"] if p.get("lieferdatum")), "")
             name = pdf_filename(r)
+            netto = round(sum(float(p.get("preis") or 0) for p in r["positionen"]), 2)
+            satz = r.get("ust_satz")
             w.writerow([r["nummer"], r["datum"], leistung, r["kunde"].get("name", ""), r["kunde"].get("ort", ""),
+                        _betrag(netto), f"{satz:g} %" if satz else "", _betrag(r["gesamt"] - netto) if satz else "",
                         _betrag(r["gesamt"]), status, r.get("bezahlt_am") or "", bezug, name])
             zf.writestr(f"PDFs/{name}", build_invoice_pdf(r, a))
         summe = sum(r["gesamt"] for r in rechnungen)
         bezahlt = sum(r["gesamt"] for r in rechnungen if r["bezahlt"] and not r["storno_von"])
         w.writerow([])
-        w.writerow(["Summe aller Rechnungen (inkl. Storno)", "", "", "", "", _betrag(summe)])
-        w.writerow(["davon bezahlt (ohne Stornorechnungen)", "", "", "", "", _betrag(bezahlt)])
+        w.writerow(["Summe aller Rechnungen (inkl. Storno)", "", "", "", "", "", "", "", _betrag(summe)])
+        w.writerow(["davon bezahlt (ohne Stornorechnungen)", "", "", "", "", "", "", "", _betrag(bezahlt)])
         # BOM, damit Excel die Umlaute richtig erkennt
         zf.writestr(f"Rechnungen_{jahr}.csv", "\ufeff" + csv_buf.getvalue())
     return Response(buf.getvalue(), mimetype="application/zip",

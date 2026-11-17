@@ -67,7 +67,7 @@
   </header>
 
   <div id="warnung" class="banner hidden">
-    Absenderdaten (Name, IBAN …) fehlen noch. Bitte oben rechts unter
+    Für vollständige Rechnungen fehlt noch: <b id="warnung-fehlt">Name, IBAN</b>. Bitte oben rechts unter
     <a href="#" class="zu-einstellungen"><b>⚙ Einstellungen</b></a> eintragen – daraus werden Absenderzeile und Fußzeile erzeugt.
   </div>
   <div id="update-banner" class="banner update-banner hidden">
@@ -189,7 +189,8 @@
           <h2>Positionen</h2>
           <div id="positionen"></div>
           <button type="button" id="pos-add" class="secondary">+ Position hinzufügen</button>
-          <div class="total">Gesamt: <span id="gesamt">0,- Euro</span></div>
+          <div id="ust-zeilen" class="ust-zeilen hidden"></div>
+          <div class="total"><span class="total-titel">Gesamt<span class="nur-ust"> (brutto)</span>:</span> <span id="gesamt">0,- Euro</span></div>
         </div>
 
         <div class="card nur-angebot">
@@ -321,7 +322,15 @@
             <h2 class="abstand">Steuer</h2>
             <label>Steuernummer<input name="steuernummer" placeholder="12/345/67890"></label>
             <label class="inline"><input type="checkbox" name="kleinunternehmer">
-              Kleinunternehmer – Hinweis „Gem. §19 UStG … nicht umsatzsteuerpflichtig“ drucken</label>
+              Kleinunternehmer (§ 19 UStG) – keine Umsatzsteuer, Hinweis auf die Steuerbefreiung drucken</label>
+            <div id="ust-felder" class="ust-felder">
+              <p class="hint">Ohne Kleinunternehmerregelung weist die App die Umsatzsteuer aus: Die Preise der Positionen sind <b>Nettopreise</b>, auf Rechnung und Angebot stehen Nettobetrag, Umsatzsteuer und Gesamtbetrag.</p>
+              <div class="row">
+                <label>Umsatzsteuersatz <span class="opt">(%)</span>
+                  <select name="ust_satz"><option value="19">19 % (Regelsatz)</option><option value="7">7 % (ermäßigt)</option></select></label>
+                <label>USt-IdNr. <span class="opt">(optional)</span><input name="ust_idnr" placeholder="DE123456789"></label>
+              </div>
+            </div>
           </div>
         </div>
         <div class="grid2">
@@ -523,7 +532,7 @@
       </label>
       <div class="pos-foot">
         <label><span class="nur-rechnung">Lieferdatum</span><span class="nur-angebot">Datum der Veranstaltung</span> <input type="date" class="lieferdatum"></label>
-        <label>Preis (€) <input type="number" step="0.01" min="0" class="preis"></label>
+        <label>Preis <span class="nur-ust">netto </span>(€) <input type="number" step="0.01" min="0" class="preis"></label>
       </div>
     </div>
   </template>

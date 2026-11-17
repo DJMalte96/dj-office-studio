@@ -185,9 +185,15 @@ async function ladeEinstellungen() {
     if (feld.type === "checkbox") feld.checked = !!v; else feld.value = v ?? "";
   }
   zeigePasswortStatus(werte.smtp_passwort_gesetzt);
+  zeigeUstFelder();
   waehleAnbieter(ANBIETER.find(a => a.server && a.server === werte.smtp_server)?.id
     || (werte.smtp_server ? "andere" : ""), false);
 }
+
+function zeigeUstFelder() {
+  $("#ust-felder").classList.toggle("hidden", $("#einstellungen").elements.kleinunternehmer.checked);
+}
+$("#einstellungen").elements.kleinunternehmer.addEventListener("change", zeigeUstFelder);
 
 /* ---- E-Mail-Versand: Anbieter-Vorlagen (nur Vorschläge – alle Felder bleiben frei änderbar) ---- */
 const FREISCHALTEN = "Im Postfach muss der Zugriff über externe E-Mail-Programme (POP3/IMAP/SMTP) erlaubt sein:";
@@ -388,6 +394,9 @@ async function ladeAbsender() {
   $("#app-version").textContent = abs.version || "–";
   document.body.classList.toggle("desktop", !!abs.desktop);   // Desktop-Version: HA-spezifische Hinweise ausblenden
   $("#warnung").classList.toggle("hidden", abs.vollstaendig);
+  $("#warnung-fehlt").textContent = (abs.fehlt || []).join(", ");
+  document.body.classList.toggle("ust", !abs.kleinunternehmer);   // Preise netto, Umsatzsteuer ausweisen
+  updateTotal();
   $$(".pl-button").forEach(b => b.classList.toggle("hidden", !abs.paperless));   // nur mit „Paperless installiert“
   if (!abs.hinweis_bestaetigt) zeigeHinweis(true);
   return abs;
@@ -567,10 +576,19 @@ function addPosition(p = {}) {
 $("#pos-add").addEventListener("click", () => addPosition());
 new MutationObserver(pflichtfelder).observe($("#positionen"), { childList: true });   // neue Positionen
 
+/* Summe im Editor – ohne Kleinunternehmerregelung mit Nettobetrag, Umsatzsteuer und Bruttobetrag */
 function updateTotal() {
-  const sum = $$("#positionen .preis").reduce((s, i) => s + (Number(i.value) || 0), 0);
-  $("#gesamt").textContent = fmtEuro(sum);
+  const netto = $$("#positionen .preis").reduce((s, i) => s + (Number(i.value) || 0), 0);
+  const ust = istUst() ? Math.round(netto * ustSatz()) / 100 : 0;
+  $("#ust-zeilen").classList.toggle("hidden", !istUst());
+  if (istUst()) {
+    $("#ust-zeilen").innerHTML = `<div><span>Nettobetrag</span><span>${fmtEuro(netto)}</span></div>
+      <div><span>zzgl. ${String(ustSatz()).replace(".", ",")} % Umsatzsteuer</span><span>${fmtEuro(ust)}</span></div>`;
+  }
+  $("#gesamt").textContent = fmtEuro(netto + ust);
 }
+const istUst = () => !!state.absender && !state.absender.kleinunternehmer;
+const ustSatz = () => Number(state.absender?.ust_satz) || 19;
 
 // ---------- Formular lesen / setzen ----------
 
@@ -668,6 +686,22 @@ function loadAngebotIntoForm(a) {
   speichernText();
   showTab("neu");
   window.scrollTo(0, 0);
+}
+
+/* Rechnung bzw. Angebot als neuen Beleg kopieren: Kunde, Texte, Preise und Zahlungsbedingung übernehmen,
+   neue Nummer und heutiges Datum. Das Lieferdatum bleibt leer – es ist ja eine neue Veranstaltung. */
+async function kopiere(art, beleg) {
+  setModus(art);
+  await resetForm();
+  fillKunde({ ...beleg.kunde, id: beleg.kunde_id });
+  if (beleg.zahlungsbedingung) setZahlung(beleg.zahlungsbedingung);
+  if (art === "angebot") $("#a-hinweise").value = beleg.hinweise || "";
+  $("#positionen").innerHTML = "";
+  beleg.positionen.forEach(p => addPosition({ beschreibung: p.beschreibung, preis: p.preis }));
+  updateTotal();
+  showTab("neu");
+  window.scrollTo(0, 0);
+  toast(`Kopie von ${art === "angebot" ? "Angebot" : "Rechnung"} ${beleg.nummer} – bitte Datum der Veranstaltung eintragen und speichern.`);
 }
 
 /* Angebot → neue Rechnung: Kunde, Positionen und ggf. Zahlungsbedingung übernehmen. */
@@ -792,12 +826,14 @@ const ICON_MAIL = `<svg class="ico" viewBox="0 0 24 24" width="17" height="17" f
 
 const ICON_EDIT = `<svg class="ico" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4z"/><path d="m13.5 6.5 4 4"/></svg>`;
 const ICON_QR = `<svg class="ico" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="3.5" width="6" height="6" rx="1"/><rect x="14.5" y="3.5" width="6" height="6" rx="1"/><rect x="3.5" y="14.5" width="6" height="6" rx="1"/><path d="M14.5 14.5h2.5v2.5M20.5 14.5v.01M14.5 20.5h.01M17.5 20.5h3v-3"/></svg>`;
+const ICON_KOPIE = `<svg class="ico" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8.5" y="8.5" width="12" height="12" rx="2"/><path d="M15.5 8.5V5.5a2 2 0 0 0-2-2h-8a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h3"/></svg>`;
 const OHNE_UEBERWEISUNG = /\bbar\b|bereits|beglichen|erhalten/i;   // wie im Server: „Bar erhalten“, „Bereits bezahlt“
 const aktionen = (...welche) => welche.map(a => ({
   pdf: `<button class="small secondary" data-act="pdf">PDF</button>`,
   edit: `<button class="small secondary" data-act="edit">Bearbeiten</button>`,
   del: `<button class="small danger" data-act="del">Löschen</button>`,
   storno: `<button class="small danger" data-act="storno" title="Stornorechnung erstellen">Stornieren</button>`,
+  kopie: `<button class="small secondary" data-act="kopie" title="Als neue Rechnung kopieren (z. B. für Stammkunden)" aria-label="Kopieren">${ICON_KOPIE}</button>`,
   senden: `<button class="small secondary" data-act="senden" title="Per E-Mail senden, herunterladen oder teilen" aria-label="Senden">${ICON_MAIL}</button>`,
 }[a] || "")).join("");
 
@@ -860,6 +896,7 @@ function renderOffen() {
               title="${NAECHSTE_MAHNUNG[r.mahnungen.length]} als PDF erstellen">${NAECHSTE_MAHNUNG[r.mahnungen.length]}</button>` : ""}
           ${OHNE_UEBERWEISUNG.test(r.zahlungsbedingung || "") ? "" : `<button type="button" class="icon senden" data-act="qr" title="QR-Code zum Bezahlen anzeigen (z. B. direkt nach der Feier)" aria-label="QR-Code">${ICON_QR}</button>`}
           <button type="button" class="icon senden" data-act="senden" title="Per E-Mail senden, herunterladen oder teilen" aria-label="Senden">${ICON_MAIL}</button>
+          <button type="button" class="icon senden" data-act="kopie" title="Als neue Rechnung kopieren (z. B. für Stammkunden)" aria-label="Kopieren">${ICON_KOPIE}</button>
           ${r.festgeschrieben ? "" : `<button type="button" class="icon" data-act="lock" title="Festschreiben (z. B. nach dem Versenden) – danach nur noch Storno">🔒</button>`}
           <button type="button" class="icon del" data-act="${r.festgeschrieben ? "storno" : "del"}"
             title="${r.festgeschrieben ? "Rechnung stornieren" : "Rechnung löschen"}">✕</button>
@@ -937,7 +974,7 @@ function renderListe() {
       <td class="num">${fmtEuro(r.gesamt)}</td>
       <td>${r.storno_von || r.storniert_durch ? `<span class="frist neutral">${r.storno_von ? "Storno" : "storniert"}</span>`
         : `<input type="checkbox" class="bezahlt" checked title="Haken entfernen = zurück zu den offenen Rechnungen">`}</td>
-      <td class="btns">${aktionen("pdf", "senden", ...(!r.festgeschrieben ? ["edit", "del"]
+      <td class="btns">${aktionen("pdf", "senden", ...(r.storno_von ? [] : ["kopie"]), ...(!r.festgeschrieben ? ["edit", "del"]
         : r.storno_von || r.storniert_durch ? [] : ["storno"]))}</td>
     </tr>`).join("") ||
     `<tr><td colspan="7" class="hint">${q ? "Keine Treffer im Archiv." : "Noch keine bezahlten oder stornierten Rechnungen im Archiv."}</td></tr>`;
@@ -1036,6 +1073,7 @@ $("#tab-liste").addEventListener("click", async e => {
     if (btn.dataset.act === "pdf") window.open(`api/rechnungen/${id}/pdf`, "_blank");
     if (btn.dataset.act === "senden") oeffneVersand("rechnung", inv);
     if (btn.dataset.act === "qr") await oeffneQr(inv);
+    if (btn.dataset.act === "kopie") await kopiere("rechnung", inv);
     if (btn.dataset.act === "edit") loadIntoForm(inv);
     if (btn.dataset.act === "pl-reset" && confirm(`Paperless-Markierung bei ${rechnungsName(inv)} zurücksetzen?\n\n`
         + "Die Rechnung gilt dann wieder als nicht übertragen und kann erneut an Paperless gesendet werden. "
@@ -1193,6 +1231,7 @@ function renderAngebote() {
       <td class="btns">
         <button class="small secondary" data-act="pdf">PDF</button>
         <button class="small secondary" data-act="senden" title="Per E-Mail senden, herunterladen oder teilen" aria-label="Senden">${ICON_MAIL}</button>
+        <button class="small secondary" data-act="kopie" title="Als neues Angebot kopieren" aria-label="Kopieren">${ICON_KOPIE}</button>
         <button class="small secondary" data-act="edit" title="Im Editor bearbeiten" aria-label="Bearbeiten">${ICON_EDIT}</button>
         ${a.rechnung_id ? "" : `<button class="small" data-act="rechnung" title="Rechnung aus diesem Angebot erstellen">→ Rechnung</button>`}
         <button type="button" class="icon del" data-act="del" title="Angebot löschen" aria-label="Löschen">✕</button>
@@ -1274,6 +1313,7 @@ $("#angebote-body").addEventListener("click", async e => {
   try {
     if (btn.dataset.act === "pdf") window.open(`api/angebote/${id}/pdf`, "_blank");
     if (btn.dataset.act === "senden") oeffneVersand("angebot", a);
+    if (btn.dataset.act === "kopie") await kopiere("angebot", a);
     if (btn.dataset.act === "edit") loadAngebotIntoForm(a);
     if (btn.dataset.act === "pl-reset" && confirm(`Paperless-Markierung bei ${angebotName(a)} zurücksetzen?\n\n`
         + "Das Angebot gilt dann wieder als nicht übertragen und kann erneut an Paperless gesendet werden. "
@@ -1805,7 +1845,7 @@ async function renderStart() {
   // Hinweise, die die App selbst erkennt
   const hinweise = [];
   if (state.absender && !state.absender.vollstaendig) {
-    hinweise.push(["warn", `Absenderdaten fehlen – bitte unter <a href="#" class="zu-einstellungen">⚙ Einstellungen</a> eintragen.`]);
+    hinweise.push(["warn", `Für vollständige Rechnungen fehlt noch: ${esc(state.absender.fehlt.join(", "))} – bitte unter <a href="#" class="zu-einstellungen">⚙ Einstellungen</a> eintragen.`]);
   }
   for (const r of offen.filter(r => r.ziel && r.ziel.rest < 0)) {
     hinweise.push(["rot", `<a href="#" class="start-rlink" data-id="${r.id}">${esc(rechnungsName(r))}</a> ist seit ${-r.ziel.rest} ${-r.ziel.rest === 1 ? "Tag" : "Tagen"} überfällig (${esc(r.kunde.name)}, ${fmtEuro(r.gesamt)})`
