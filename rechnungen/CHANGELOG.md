@@ -2,6 +2,11 @@
 
 Alle Änderungen an DJ Office Studio. Neueste Version oben.
 
+## 0.14.1 – 2026-11-17
+
+### Behoben
+- Angebotsliste: Seit dem neuen Senden-Button ragte die Zeile über den Rand der Karte hinaus („Löschen“ stand außerhalb). „Bearbeiten“ und „Löschen“ sind jetzt kompakte Symbol-Buttons (✎ und ✕, mit Tooltip), Kundennamen haben wieder mehr Platz.
+
 ## 0.14.0 – 2026-11-17
 
 ### Neu
