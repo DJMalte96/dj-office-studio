@@ -25,7 +25,7 @@ Auf der Startseite kommt eine kleine Kachel „Gewinn dieses Jahr“ hinzu.
 ## 2. Ausgaben
 
 ### 2.1 Beleg hochladen und auswerten
-- Hochladen per Klick oder Ziehen, mehrere auf einmal. Erlaubt: **PDF, JPG, PNG, HEIC** (iPhone-Fotos).
+- Hochladen per Klick oder Ziehen, mehrere auf einmal. Erlaubt: **PDF, JPG, PNG, HEIC** (iPhone-Fotos) sowie **E-Mails** (`.eml`, `.msg` – siehe 2.1a).
 - **PDFs mit Text** (Online-Rechnungen, Musikpools, Shops): Die App liest den Text und schlägt vor:
   - **Lieferant** (Absender des Belegs; bekannte Lieferanten werden wiedererkannt)
   - **Belegdatum**
@@ -35,6 +35,28 @@ Auf der Startseite kommt eine kleine Kachel „Gewinn dieses Jahr“ hinzu.
 - **Fotos und Scans**: in Stufe 1 ohne automatische Erkennung – Beleg wird gespeichert, Werte trägt man ein. Texterkennung (OCR) folgt in Stufe 3 (siehe 8.).
 - Ansicht beim Übernehmen: **links der Beleg, rechts die Felder** – Vorschlag prüfen, korrigieren, speichern.
 - Der Beleg wird **unverändert** in der App abgelegt (Aufbewahrungspflicht 8 Jahre) und ist in der Datensicherung enthalten. Doppelt hochgeladene Belege werden erkannt (Prüfsumme).
+
+### 2.1a Belege aus E-Mails (Musikkäufe) – Drag & Drop
+Musikkäufe (Apple/iTunes, Amazon, Beatport, Bandcamp, Traxsource, Juno …) haben meist keine PDF-Rechnung, sondern nur eine Kauf-Mail. In Stufe 1 werden diese Mails **per Drag & Drop** in die App gezogen – in denselben Upload-Bereich wie andere Belege, auch mehrere auf einmal.
+
+- **Unterstützte Formate:** `.eml` (Apple Mail, Thunderbird, Gmail „Original herunterladen“, die meisten Programme) und `.msg` (Outlook unter Windows).
+  - Apple Mail und Thunderbird: Mail direkt aus der Liste auf den Upload-Bereich ziehen (falls der Browser das nicht annimmt: erst auf den Schreibtisch ziehen, dann von dort).
+  - Outlook (Windows): Mail auf den Upload-Bereich bzw. in einen Ordner ziehen.
+  - Gmail/Webmail im Browser: Mail als „Original herunterladen“ bzw. „Als .eml speichern“, dann hochladen.
+- **Auswertung:**
+  - **Lieferant** aus der Absenderadresse (z. B. `…@email.apple.com` → Apple) – sehr zuverlässig
+  - **Datum** aus dem Mail-Datum
+  - **Betrag** aus dem Mailtext; für die häufigsten Shops eigene Erkennungsregeln (deren Mails sind immer gleich aufgebaut), sonst allgemeine Suche nach „Gesamt“, „Summe“, „Total“
+  - **Kategorie** „Musik & Lizenzen“ für bekannte Musik-Shops
+  - Bestätigen wie bei allen Belegen: links die Mail, rechts die Felder
+- **Aufbewahrung:** Die **Original-Mail wird unverändert gespeichert** (sie ist der Beleg), zusätzlich eine lesbare PDF-Ansicht für Vorschau und Export. Anhänge der Mail (z. B. eine angehängte PDF-Rechnung) werden mitgespeichert und bevorzugt ausgewertet.
+- **Doppelte Mails** werden an der Mail-Kennung (Message-ID) erkannt.
+- **Hinweise der App:**
+  - Amazon-Bestellbestätigungen sind keine Rechnung – die Rechnung gibt es im Amazon-Konto. Für Kleinunternehmer reicht die Mail meist als Nachweis; wer Vorsteuer ziehen will, braucht die Rechnung.
+  - Bei Fremdwährung (z. B. US-Dollar) zählt der tatsächlich abgebuchte Euro-Betrag – Vorschlag aus der Mail ggf. nach dem Kontoauszug korrigieren.
+- **Ansicht „zusammengefasst“** in der Ausgabenliste (je Monat und Shop), damit viele kleine Einzelkäufe übersichtlich bleiben.
+
+Spätere Ausbaustufen: automatisches Abholen aus einem Mail-Ordner (z. B. „DJ-Belege“, gefüllt per Filterregel) über IMAP mit den Zugangsdaten des E-Mail-Versands (Stufe 2), bzw. über den Mail-Abruf von Paperless-ngx im Rahmen der Paperless-Anbindung (Stufe 3).
 
 ### 2.2 Felder einer Ausgabe
 | Feld | Hinweis |
@@ -164,8 +186,8 @@ Ob weitere Nutzer (z. B. der Kollege) umsatzsteuerpflichtig sind, ist offen – 
 
 | Stufe | Version | Inhalt |
 |---|---|---|
-| **1** | 1.1 | Menü Finanzen · Ausgaben mit Upload und Auswertung von PDFs (Fotos ohne Erkennung) · Kategorien · Einnahmen nach Zahlungsdatum · Veranstaltungsort · Fahrten (automatisch, Privat-/Betriebsfahrzeug) · Übersicht · EÜR mit Prüfliste · erweiterter Export |
-| **2** | 1.2 | Anschaffungen mit Abschreibung und Anlagenverzeichnis · Privatanteil · wiederkehrende Ausgaben · Jahr abschließen · Kleinunternehmer-Grenzen · „Was bleibt pro Auftrag“ |
+| **1** | 1.1 | Menü Finanzen · Ausgaben mit Upload und Auswertung von PDFs und **Kauf-Mails per Drag & Drop** (Fotos ohne Erkennung) · Kategorien · Einnahmen nach Zahlungsdatum · Veranstaltungsort · Fahrten (automatisch, Privat-/Betriebsfahrzeug) · Übersicht · EÜR mit Prüfliste · erweiterter Export |
+| **2** | 1.2 | Kauf-Mails automatisch aus einem Mail-Ordner abholen (IMAP) · Anschaffungen mit Abschreibung und Anlagenverzeichnis · Privatanteil · wiederkehrende Ausgaben · Jahr abschließen · Kleinunternehmer-Grenzen · „Was bleibt pro Auftrag“ |
 | **3** | 1.3+ | Texterkennung für Fotos und Scans · Paperless-Anbindung (Konzept in der Projektnotiz) · Übersicht Umsatzsteuer-Voranmeldung |
 
 ---
@@ -174,7 +196,7 @@ Ob weitere Nutzer (z. B. der Kollege) umsatzsteuerpflichtig sind, ist offen – 
 
 | Tabelle | Wichtige Felder |
 |---|---|
-| `ausgaben` | belegdatum, bezahlt_am, lieferant, beschreibung, kategorie, betrag_brutto, ust_satz, privatanteil, beleg_datei, beleg_pruefsumme, rechnung_id, anlage_id, wiederkehrend_id, paperless_id |
+| `ausgaben` | belegdatum, bezahlt_am, lieferant, beschreibung, kategorie, betrag_brutto, waehrung, ust_satz, privatanteil, beleg_datei, beleg_pdf_ansicht, beleg_pruefsumme, mail_message_id, rechnung_id, anlage_id, wiederkehrend_id, paperless_id |
 | `fahrten` | datum, rechnung_id, start (Adresse), ziel (Adresse), km, hin_und_zurueck, km_satz, quelle (automatisch/manuell), anlass |
 | `anlagen` | bezeichnung, anschaffung_am, kosten, nutzungsdauer_jahre, methode (sofort/linear), abgang_am, abgang_erloes |
 | `einnahmen_sonstige` | datum, beschreibung, betrag, ust_satz |
