@@ -47,6 +47,7 @@ Musikkäufe (Apple/iTunes, Amazon, Beatport, Bandcamp, Traxsource, Juno …) hab
   - **Lieferant** aus der Absenderadresse (z. B. `…@email.apple.com` → Apple) – sehr zuverlässig
   - **Datum** aus dem Mail-Datum
   - **Betrag** aus dem Mailtext; für die häufigsten Shops eigene Erkennungsregeln (deren Mails sind immer gleich aufgebaut), sonst allgemeine Suche nach „Gesamt“, „Summe“, „Total“
+  - **Eigene Erkennungsregeln zuerst für: Beatport, Apple/iTunes, Amazon** (die Shops, bei denen tatsächlich gekauft wird). Grundlage sind echte Beispiel-Mails (persönliche Daten geschwärzt), die als Testfälle ins Projekt kommen; weitere Shops (Bandcamp, Traxsource, Juno …) nach Bedarf.
   - **Kategorie** „Musik & Lizenzen“ für bekannte Musik-Shops
   - Bestätigen wie bei allen Belegen: links die Mail, rechts die Felder
 - **Aufbewahrung:** Die **Original-Mail wird unverändert gespeichert** (sie ist der Beleg), zusätzlich eine lesbare PDF-Ansicht für Vorschau und Export. Anhänge der Mail (z. B. eine angehängte PDF-Rechnung) werden mitgespeichert und bevorzugt ausgewertet.
