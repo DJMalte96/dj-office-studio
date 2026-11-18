@@ -136,6 +136,7 @@ Liste aller Fahrten mit Datum, Ziel, Anlass (Rechnungsnummer, Kunde), km und Bet
 - Grenze für die Sofortabschreibung (geringwertiges Wirtschaftsgut): **800 € netto** – auch für Kleinunternehmer wird die Grenze am Nettobetrag geprüft; abgesetzt wird bei Kleinunternehmern der Bruttobetrag (keine Vorsteuer).
 - Darüber: lineare Abschreibung über die **Nutzungsdauer**, im Anschaffungsjahr anteilig nach Monaten. Vorschläge (änderbar, mit dem Steuerberater abstimmen): Computer/Laptop/Software 1 Jahr, sonstige Technik nach AfA-Tabelle.
 - Verkauf oder Verschrottung eines Geräts kann eingetragen werden (Restwert als Ausgabe, Verkaufserlös als Einnahme).
+- **Geräte aus Vorjahren übernehmen**: Anschaffungen vor Beginn der Nutzung von DJ Office Studio, die noch abgeschrieben werden, lassen sich mit Anschaffungsdatum, Kosten und Nutzungsdauer (bzw. Restwert zum Jahresbeginn) erfassen – am einfachsten aus dem bisherigen Anlagenverzeichnis des Steuerberaters. Ohne diese Geräte wäre die Abschreibung im laufenden Jahr unvollständig.
 - Das **Anlagenverzeichnis** (Gerät, Anschaffung, Kosten, Nutzungsdauer, Abschreibung im Jahr, Restwert) geht in den Export.
 
 ---
@@ -163,7 +164,7 @@ Export_2026.zip
 ├── Einnahmen_2026.csv         Rechnungen nach Zahlungsdatum + sonstige Einnahmen
 ├── Ausgaben_2026.csv          alle Ausgaben mit Beleg-Dateinamen
 ├── Fahrten_2026.csv           Fahrtenliste
-├── Anlagen_2026.csv           Anlagenverzeichnis mit Abschreibung
+├── Anlagen_2026.csv           Anlagenverzeichnis mit Abschreibung (ab 1.1)
 ├── Rechnungen/                eigene Rechnungen als PDF (wie bisher)
 └── Belege/                    alle Ausgaben-Belege, benannt z. B. 2026-03-14_Thomann_129,90.pdf
 ```
@@ -188,8 +189,8 @@ Ob weitere Nutzer (z. B. der Kollege) umsatzsteuerpflichtig sind, ist offen – 
 
 | Stufe | Version | Inhalt |
 |---|---|---|
-| **1** | 1.1 | Menü Finanzen · Ausgaben mit Upload und Auswertung von PDFs und **Kauf-Mails per Drag & Drop** (Fotos ohne Erkennung) · Kategorien · Einnahmen nach Zahlungsdatum · Veranstaltungsort · Fahrten (automatisch, Privat-/Betriebsfahrzeug) · Übersicht · EÜR mit Prüfliste · erweiterter Export |
-| **2** | 1.2 | Kauf-Mails automatisch aus einem Mail-Ordner abholen (IMAP) · Anschaffungen mit Abschreibung und Anlagenverzeichnis · Privatanteil · wiederkehrende Ausgaben · Jahr abschließen · Kleinunternehmer-Grenzen · „Was bleibt pro Auftrag“ |
+| **1** | 1.1 | Menü Finanzen · Ausgaben mit Upload und Auswertung von PDFs und **Kauf-Mails per Drag & Drop** (Fotos ohne Erkennung) · **Anschaffungen mit Abschreibung und Anlagenverzeichnis, inkl. Geräte aus Vorjahren** · Kategorien · Einnahmen nach Zahlungsdatum · Veranstaltungsort · Fahrten (automatisch, Privat-/Betriebsfahrzeug) · Übersicht · EÜR mit Prüfliste · erweiterter Export |
+| **2** | 1.2 | Kauf-Mails automatisch aus einem Mail-Ordner abholen (IMAP) · Privatanteil · wiederkehrende Ausgaben · Jahr abschließen · Kleinunternehmer-Grenzen · „Was bleibt pro Auftrag“ |
 | **3** | 1.3+ | Texterkennung für Fotos und Scans · Paperless-Anbindung (Konzept in der Projektnotiz) · Übersicht Umsatzsteuer-Voranmeldung |
 
 ---
