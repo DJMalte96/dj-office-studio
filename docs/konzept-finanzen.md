@@ -110,7 +110,8 @@ Rechnungen und Angebote bekommen ein neues Feld **Veranstaltungsort** (Name, Str
 - **Datum**: Lieferdatum der ersten Position (Tag der Veranstaltung).
 - **Strecke**: über einen Kartendienst berechnet (Vorschlag: OpenStreetMap – Adresse → Koordinaten über Nominatim, Strecke über einen Routing-Dienst), **Hin- und Rückfahrt**. Ergebnisse werden zwischengespeichert, damit dieselbe Adresse nicht erneut abgefragt wird.
 - Wird angelegt bzw. aktualisiert, wenn eine Rechnung gespeichert wird; nicht für Stornorechnungen. Wird eine Rechnung storniert, wird die Fahrt nicht gelöscht – gefahren ist gefahren – aber markiert.
-- **Immer korrigierbar**: Kilometer von Hand ändern (z. B. Umweg), Fahrt löschen (z. B. Kunde hat selbst abgeholt), weitere Fahrten ergänzen (Aufbau am Vortag, Technik abholen).
+- **Pro Rechnung abwählbar**: Im Editor gibt es bei jeder Rechnung den Schalter **„Fahrt erfassen“** (Standard: an). Ist er aus – z. B. Veranstaltung zu Fuß erreichbar, Mitfahrt, Kunde holt Technik ab, Online-Auftrag –, wird keine Fahrt angelegt, und sie entsteht auch beim erneuten Speichern oder bei „Fahrten nachberechnen“ nicht wieder. Wird eine automatisch angelegte Fahrt in der Fahrtenliste gelöscht, setzt das denselben Schalter. Der Standardwert für neue Rechnungen ist in den Einstellungen änderbar.
+- **Immer korrigierbar**: Kilometer von Hand ändern (z. B. Umweg), weitere Fahrten ergänzen (Aufbau am Vortag, Technik abholen).
 - Für vorhandene Rechnungen: Button „Fahrten nachberechnen“.
 
 ### 3.3 Datenschutz
@@ -203,8 +204,8 @@ Ob weitere Nutzer (z. B. der Kollege) umsatzsteuerpflichtig sind, ist offen – 
 | `einnahmen_sonstige` | datum, beschreibung, betrag, ust_satz |
 | `wiederkehrend` | lieferant, beschreibung, kategorie, betrag, intervall, beginn, ende |
 | `jahresabschluss` | jahr, abgeschlossen_am, notiz |
-| `rechnungen`, `angebote` | **neu:** veranstaltungsort |
-| Einstellungen | fahrzeug (privat/betrieb), km_satz (0,30), startadresse, kartendienst_aktiv |
+| `rechnungen`, `angebote` | **neu:** veranstaltungsort; `rechnungen` zusätzlich fahrt_erfassen (ja/nein) |
+| Einstellungen | fahrzeug (privat/betrieb), km_satz (0,30), startadresse, kartendienst_aktiv, fahrt_standard (an/aus) |
 
 Belege liegen als Dateien im Datenordner (`belege/JJJJ/…`), die Datenbank speichert Pfad und Prüfsumme. Sicherung und Wiederherstellung schließen den Belegordner ein.
 
