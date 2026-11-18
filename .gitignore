@@ -7,3 +7,7 @@ build/
 # Daten der Desktop-App (liegt bei Malte im selben Ordner wie das Projekt)
 Daten/
 PDFs/
+
+# Echte Beispiel-Mails (persönliche Daten) – nie committen; bereinigte Testfälle liegen unter tests/
+Beispielmails/
+beispielmails/
