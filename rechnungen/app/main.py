@@ -252,6 +252,7 @@ def get_absender():
                       "sicherung": _sicherung_status(a),
                       "hinweis_bestaetigt": db.get_settings().get("_hinweis_bestaetigt", 0) >= HINWEIS_VERSION,
                       "version": APP_VERSION,
+                      "fenster": DESKTOP and os.environ.get("DJOS_FENSTER") == "1",
                       "desktop": DESKTOP})
 
 

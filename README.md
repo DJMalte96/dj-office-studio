@@ -139,7 +139,7 @@ DJ Office Studio gibt es auch als eigenständige App für **Windows** und **macO
 
 Alternativ im Terminal: `xattr -dr com.apple.quarantine "/Applications/DJ Office Studio.app"` – danach startet die App normal.
 
-**Benutzung:** Nach dem Start öffnet sich die Oberfläche im Browser, dazu ein kleines Fenster „DJ Office Studio läuft“. Solange dieses Fenster offen ist, läuft die App; Schließen beendet sie. Alles Weitere – Absender, Bankverbindung usw. – unter **⚙ Einstellungen**.
+**Benutzung:** DJ Office Studio öffnet sich in einem **eigenen Programmfenster** – ohne Browser. Fenster schließen beendet die App. PDFs (Vorschau, Rechnungen, Mahnungen) öffnen sich im PDF-Programm des Computers, Sicherungen und Exporte werden über „Speichern unter“ abgelegt, und unter ⚙ Einstellungen öffnet **Daten- und PDF-Ordner öffnen** den Speicherort. Alles Weitere – Absender, Bankverbindung usw. – unter **⚙ Einstellungen**. Unter Windows nutzt das Fenster Microsoft Edge WebView2 (bei Windows 10/11 vorhanden); fehlt es, öffnet sich die App wie früher im Browser mit einem kleinen Statusfenster.
 
 **Daten:** Alles liegt im Dokumente-Ordner unter `DJ Office Studio` – `Daten` (Datenbank mit Kunden, Rechnungen, Angeboten, Einstellungen) und `PDFs` (Kopien aller Rechnungen und Angebote). Für ein Backup einfach diesen Ordner sichern. Die App ist nur auf dem eigenen Rechner erreichbar.
 
@@ -186,6 +186,7 @@ Die Oberfläche läuft dann unter <http://localhost:8099>; Absenderdaten usw. un
 Desktop-Version lokal starten bzw. bauen (Ergebnis in `dist/`):
 
 ```bash
+pip install -r desktop/requirements.txt       # eigenes App-Fenster (pywebview)
 python desktop/start.py                       # aus dem Quellcode starten
 pip install pyinstaller pillow && python desktop/build.py   # App bauen (auf dem jeweiligen System)
 ```
@@ -228,7 +229,8 @@ rechnungen/
     mail.py              E-Mail-Versand per SMTP, Textvorlagen
     static/              Oberfläche (HTML, CSS, JavaScript)
 desktop/
-  start.py               Starter der Desktop-Version (Server + Statusfenster, Daten im Dokumente-Ordner)
+  start.py               Starter der Desktop-Version (Server + eigenes App-Fenster mit pywebview, Daten im Dokumente-Ordner)
+  requirements.txt       Zusätzliche Pakete nur für die Desktop-Version (pywebview)
   build.py               Baut die Desktop-App mit PyInstaller
 .github/workflows/
   desktop.yml            Baut Windows- und Mac-Version, bei Tag „desktop-v…“ als Release

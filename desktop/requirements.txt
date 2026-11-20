@@ -1,0 +1,2 @@
+# Nur für die Desktop-Version (Windows/macOS): eigenes App-Fenster statt Browser
+pywebview>=6.1,<7

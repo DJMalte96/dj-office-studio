@@ -1,19 +1,26 @@
 """DJ Office Studio als Desktop-App (Windows / macOS) – ohne Home Assistant.
 
-Startet den eingebauten Webserver lokal (nur auf diesem Rechner erreichbar), öffnet die Oberfläche
-im Standardbrowser und zeigt ein kleines Fenster zum erneuten Öffnen bzw. Beenden.
+Startet den eingebauten Webserver lokal (nur auf diesem Rechner erreichbar) und zeigt die Oberfläche in einem
+eigenen App-Fenster (pywebview: WebKit unter macOS, Edge WebView2 unter Windows). Schließen des Fensters beendet
+die App. Ist kein eigenes Fenster möglich (z. B. fehlendes WebView2), öffnet sich wie früher der Standardbrowser
+mit einem kleinen Statusfenster.
 
 Daten liegen im Dokumente-Ordner unter „DJ Office Studio“:
   Daten/  – Datenbank (Kunden, Rechnungen, Angebote, Einstellungen), Protokoll und
             Sicherungen/ (automatisch einmal pro Tag, die letzten 14 Tage)
   PDFs/   – Kopien aller gespeicherten Rechnungen und Angebote
 """
+import base64
 import json
 import os
+import re
 import socket
 import subprocess
 import sys
+import tempfile
 import threading
+import time
+import urllib.parse
 import urllib.request
 import webbrowser
 from pathlib import Path
@@ -89,10 +96,24 @@ def ordner_oeffnen(pfad):
         subprocess.Popen(["xdg-open", str(pfad)])
 
 
+def fenster_moeglich():
+    """Kann ein eigenes App-Fenster geöffnet werden? (pywebview und die Plattform-Anbindung vorhanden)"""
+    try:
+        import webview  # noqa: F401
+        if sys.platform == "darwin":
+            import webview.platforms.cocoa  # noqa: F401
+        elif sys.platform == "win32":
+            import webview.platforms.edgechromium  # noqa: F401
+        return True
+    except Exception as e:   # fehlende Bibliothek, kein .NET o. Ä.
+        print(f"Kein eigenes Fenster möglich: {e}", flush=True)
+        return False
+
+
 def main():
     port = laufende_instanz()
-    if port:   # läuft schon → nur die Oberfläche öffnen
-        webbrowser.open(f"http://127.0.0.1:{port}/")
+    if port:   # läuft schon → ein weiteres Fenster zur laufenden App öffnen
+        oberflaeche(f"http://127.0.0.1:{port}/")
         return
 
     DATEN.mkdir(parents=True, exist_ok=True)
@@ -104,6 +125,7 @@ def main():
 
     os.environ.update({
         "DJOS_DESKTOP": "1",
+        "DJOS_FENSTER": "1" if fenster_moeglich() else "0",   # zeigt die App für die Oberfläche bzw. den Test an
         "DATA_DIR": str(DATEN),
         "OPTIONS_PATH": str(DATEN / "options.json"),   # gibt es am Desktop nicht – nur der Vollständigkeit halber
         "STANDARD_PDF_ORDNER": str(PDFS),
@@ -124,13 +146,109 @@ def main():
     print(f"{APP_NAME} {webapp.APP_VERSION} läuft unter {url}", flush=True)
     if os.environ.get("DJOS_TEST") == "1":   # Test/CI: ohne Browser und Fenster, nur Server
         threading.Event().wait()
-    webbrowser.open(url)
+    oberflaeche(url, server, webapp.APP_VERSION)
 
-    fenster(url, webapp.APP_VERSION, server)
+
+# ---------- Eigenes App-Fenster ----------
+
+class DesktopApi:
+    """Wird im Fenster als window.pywebview.api angeboten: Dinge, die ein App-Fenster nicht selbst kann
+    (PDFs anzeigen, Dateien speichern, externe Links)."""
+
+    def __init__(self, basis_url):
+        self._basis = basis_url
+        self._fenster = None
+
+    def _laden(self, pfad):
+        """Datei von der eigenen App holen (nur relative Pfade wie „api/…“) → (Dateiname, Inhalt)."""
+        if "://" in pfad or pfad.startswith("//"):
+            raise ValueError("Nur Adressen der App erlaubt")
+        with urllib.request.urlopen(self._basis + pfad.lstrip("/"), timeout=120) as r:
+            kopf = r.headers.get("Content-Disposition", "")
+            m = re.search(r'filename="?([^";]+)"?', kopf)
+            name = m.group(1) if m else (urllib.parse.urlparse(pfad).path.rsplit("/", 1)[-1] or "Dokument")
+            return _sicherer_name(name), r.read()
+
+    def pdf_oeffnen(self, pfad):
+        """PDF der App im PDF-Programm des Systems öffnen (Vorschau, Edge, Acrobat …)."""
+        name, daten = self._laden(pfad)
+        return self._anzeigen(name, daten)
+
+    def pdf_daten_oeffnen(self, name, inhalt_base64):
+        """Im Browser erzeugtes PDF (z. B. Vorschau) im PDF-Programm des Systems öffnen."""
+        return self._anzeigen(_sicherer_name(name or "Dokument.pdf"), base64.b64decode(inhalt_base64))
+
+    def _anzeigen(self, name, daten):
+        ordner = Path(tempfile.gettempdir()) / APP_NAME
+        ordner.mkdir(exist_ok=True)
+        for alt in ordner.glob("*"):   # alte Ansichten aufräumen (älter als 1 Tag)
+            try:
+                if time.time() - alt.stat().st_mtime > 86400:
+                    alt.unlink()
+            except OSError:
+                pass
+        ziel = ordner / name
+        try:
+            ziel.write_bytes(daten)
+        except OSError:   # z. B. unter Windows noch im PDF-Programm geöffnet → neuer Name
+            ziel = ordner / f"{Path(name).stem}_{int(time.time())}{Path(name).suffix}"
+            ziel.write_bytes(daten)
+        ordner_oeffnen(ziel)
+        return ziel.name
+
+    def speichern(self, pfad):
+        """Datei der App (Sicherung, Export, ZIP …) über „Speichern unter“ ablegen. Rückgabe: Dateiname oder None."""
+        import webview
+        name, daten = self._laden(pfad)
+        ordner = Path.home() / "Downloads"
+        auswahl = self._fenster.create_file_dialog(webview.FileDialog.SAVE, directory=str(ordner if ordner.is_dir() else Path.home()),
+                                                    save_filename=name)
+        if not auswahl:
+            return None
+        ziel = Path(auswahl if isinstance(auswahl, str) else auswahl[0])
+        ziel.write_bytes(daten)
+        return ziel.name
+
+    def extern(self, url):
+        """Externe Seite (GitHub, Changelog …) im Standardbrowser öffnen."""
+        if url.startswith(("https://", "http://", "mailto:")):
+            webbrowser.open(url)
+        return True
+
+    def daten_ordner(self):
+        ordner_oeffnen(BASIS)
+        return True
+
+
+def _sicherer_name(name):
+    name = re.sub(r'[\\/:*?"<>|\x00-\x1f]', "_", name).strip(" .") or "Dokument"
+    return name[:120]
+
+
+def oberflaeche(url, server=None, version=""):
+    """App-Fenster öffnen; falls das nicht geht, wie früher Browser + Statusfenster."""
+    if os.environ.get("DJOS_FENSTER", "1" if fenster_moeglich() else "0") == "1":
+        try:
+            import webview
+            api = DesktopApi(url)
+            api._fenster = webview.create_window(
+                APP_NAME, url, js_api=api, width=1320, height=900, min_size=(940, 640),
+                text_select=True,      # Texte markieren und kopieren (IBAN, Adressen …)
+                zoomable=True,         # Strg/⌘ + / − wie im Browser
+                background_color="#f3f3f3")
+            gui = "edgechromium" if sys.platform == "win32" else None   # Windows: kein Rückfall auf den alten IE
+            webview.start(gui=gui, private_mode=False,        # Hell/Dunkel-Wahl u. Ä. bleiben gespeichert
+                          storage_path=str(DATEN / "Fenster"))
+            return   # Fenster geschlossen → App endet (der Server läuft als Hintergrund-Thread und endet mit)
+        except Exception as e:
+            print(f"Eigenes Fenster konnte nicht geöffnet werden, öffne Browser: {e}", flush=True)
+    webbrowser.open(url)
+    if server:
+        fenster(url, version, server)
 
 
 def fenster(url, version, server):
-    """Kleines Statusfenster: Schließen beendet die App."""
+    """Rückfall ohne eigenes App-Fenster: kleines Statusfenster, Schließen beendet die App."""
     import tkinter as tk
     from tkinter import ttk
 

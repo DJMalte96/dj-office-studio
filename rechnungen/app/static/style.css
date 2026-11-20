@@ -529,3 +529,8 @@ button[data-act="kopie"] svg.ico, button[data-act="qr"] svg.ico { display: block
   ul.mini-liste li { flex-wrap: wrap; }
   ul.mini-liste .ml-text { flex: 1 1 100%; }
 }
+
+/* Desktop-App im eigenen Fenster */
+body:not(.app-fenster) .nur-app-fenster { display: none !important; }
+.daten-ordner { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin: -4px 0 16px; }
+.daten-ordner .hint { margin: 0; }

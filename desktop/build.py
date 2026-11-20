@@ -1,6 +1,6 @@
 """Baut die Desktop-App mit PyInstaller (auf dem jeweiligen Betriebssystem ausführen).
 
-    pip install -r rechnungen/requirements.txt pyinstaller pillow
+    pip install -r rechnungen/requirements.txt -r desktop/requirements.txt pyinstaller pillow
     python desktop/build.py
 
 Ergebnis in dist/: macOS „DJ Office Studio.app“, Windows Ordner „DJ Office Studio“ mit „DJ Office Studio.exe“.
@@ -28,8 +28,12 @@ args = [
     "--icon", str(ROOT / "rechnungen" / "icon.png"),
     "--distpath", str(OUT / "dist"), "--workpath", str(OUT / "build"), "--specpath", str(OUT / "build"),
 ]
+# Eigenes App-Fenster (pywebview): JavaScript-Teile mitnehmen und die Plattform-Anbindung sicher einbinden
+args += ["--collect-data", "webview", "--hidden-import", "webview"]
 if sys.platform == "darwin":
-    args += ["--osx-bundle-identifier", "de.djofficestudio.app"]
+    args += ["--osx-bundle-identifier", "de.djofficestudio.app", "--hidden-import", "webview.platforms.cocoa"]
+elif sys.platform == "win32":
+    args += ["--hidden-import", "webview.platforms.edgechromium", "--hidden-import", "webview.platforms.winforms"]
 
 os.chdir(ROOT)
 PyInstaller.__main__.run(args)
