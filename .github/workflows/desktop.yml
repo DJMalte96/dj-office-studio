@@ -61,6 +61,29 @@ jobs:
       - name: Bauen
         run: python desktop/build.py
 
+      - name: Wie aus dem Internet geladen markieren (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          # So sieht die App aus, wenn sie als ZIP heruntergeladen und mit Windows entpackt wurde
+          Get-ChildItem -Recurse -File "dist/DJ Office Studio" | ForEach-Object {
+            Set-Content -LiteralPath $_.FullName -Stream Zone.Identifier -Value "[ZoneTransfer]`r`nZoneId=3"
+          }
+          $dll = Get-ChildItem -Recurse -File "dist/DJ Office Studio" -Filter Python.Runtime.dll | Select-Object -First 1
+          Get-Content -LiteralPath $dll.FullName -Stream Zone.Identifier
+
+      - name: Gegenprobe ohne Freigabe (Windows) – Fenster muss scheitern wie beim Nutzer
+        if: runner.os == 'Windows'
+        run: |
+          export DJOS_TEST=1 DJOS_KEINE_FREIGABE=1 DJOS_BASIS="$RUNNER_TEMP/djos-gegenprobe"
+          "dist/DJ Office Studio/DJ Office Studio.exe" &
+          for i in $(seq 1 60); do curl -sf http://127.0.0.1:8765/api/absender && break; sleep 1; done
+          curl -sf http://127.0.0.1:8765/api/absender | grep '"fenster":false'
+          cat "$DJOS_BASIS/Daten/protokoll.txt"
+          taskkill //F //IM "DJ Office Studio.exe" || true
+          for i in $(seq 1 20); do curl -sf http://127.0.0.1:8765/api/absender >/dev/null || break; sleep 1; done
+          ! curl -sf http://127.0.0.1:8765/api/absender   # Port muss wieder frei sein
+
       - name: Kurztest (App starten, API und PDF prüfen)
         run: |
           if [ "$RUNNER_OS" = "Windows" ]; then EXE="dist/DJ Office Studio/DJ Office Studio.exe"; else EXE="dist/DJ Office Studio.app/Contents/MacOS/DJ Office Studio"; fi
@@ -69,6 +92,7 @@ jobs:
           for i in $(seq 1 60); do curl -sf http://127.0.0.1:8765/api/absender && break; sleep 1; done
           curl -sf http://127.0.0.1:8765/api/absender | grep '"desktop":true'
           curl -sf http://127.0.0.1:8765/api/absender | grep '"fenster":true'   # App-Fenster (pywebview) ist im Paket lauffähig
+          if [ "$RUNNER_OS" = "Windows" ]; then grep "Programmdateien freigegeben" "$DJOS_BASIS/Daten/protokoll.txt"; fi
           curl -sf -X PUT -H "Content-Type: application/json" -d '{"name":"Test","iban":"DE00"}' http://127.0.0.1:8765/api/einstellungen > /dev/null
           curl -sf -X POST -H "Content-Type: application/json" \
             -d '{"nummer":"001","datum":"2026-01-01","kunde":{"name":"Test","strasse":"Testweg 1","plz":"12345","ort":"Teststadt"},"zahlungsbedingung":"8 Tage","positionen":[{"beschreibung":"DJ","lieferdatum":"2026-01-01","preis":100}]}' \

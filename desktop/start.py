@@ -96,8 +96,33 @@ def ordner_oeffnen(pfad):
         subprocess.Popen(["xdg-open", str(pfad)])
 
 
+def eigene_dateien_freigeben():
+    """Windows: Die Markierung „aus dem Internet geladen“ (Zone.Identifier) von den eigenen Programmdateien entfernen.
+
+    Wird die App als ZIP heruntergeladen und mit Windows entpackt, trägt jede Datei diese Markierung. .NET lädt so
+    markierte Bausteine nicht (Python.Runtime.dll für das Edge-Fenster) – das eigene Fenster scheitert dann mit
+    „Failed to resolve Python.Runtime.Loader.Initialize“. Das entspricht „Eigenschaften → Zulassen“ und betrifft nur
+    die Dateien dieser App."""
+    if sys.platform != "win32" or not getattr(sys, "frozen", False) or os.environ.get("DJOS_KEINE_FREIGABE") == "1":
+        return 0
+    ordner = Path(getattr(sys, "_MEIPASS", Path(sys.executable).parent))
+    freigegeben = 0
+    for datei in ordner.rglob("*"):
+        if datei.suffix.lower() not in (".dll", ".exe", ".pyd", ".json"):
+            continue
+        try:
+            os.remove(f"{datei}:Zone.Identifier")   # alternativer Datenstrom mit der Internet-Markierung
+            freigegeben += 1
+        except OSError:
+            pass   # nicht markiert (Normalfall) oder nicht änderbar
+    if freigegeben:
+        print(f"{freigegeben} Programmdateien freigegeben (Markierung „aus dem Internet“ entfernt)", flush=True)
+    return freigegeben
+
+
 def fenster_moeglich():
     """Kann ein eigenes App-Fenster geöffnet werden? (pywebview und die Plattform-Anbindung vorhanden)"""
+    eigene_dateien_freigeben()
     try:
         import webview  # noqa: F401
         if sys.platform == "darwin":
