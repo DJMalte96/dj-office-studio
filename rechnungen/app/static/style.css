@@ -596,3 +596,8 @@ body.modus-angebot #veranstaltung-karte .nur-rechnung { display: none; }
 .fahrten-tabelle td small { display: block; }
 .knopf-zeile select { width: auto; }
 #tab-einstellungen .fahrzeug-hinweis { margin: -6px 0 14px; }
+
+.anlage-modus { margin: 0 0 14px; }
+details.abgang { margin: 4px 0 14px; }
+details.abgang summary { cursor: pointer; font-size: 14px; color: var(--muted); margin-bottom: 10px; }
+.anlagen-tabelle td small { display: block; color: var(--muted); }
