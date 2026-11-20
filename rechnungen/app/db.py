@@ -112,6 +112,22 @@ CREATE TABLE IF NOT EXISTS fahrten (
     fehler TEXT,                                 -- letzte Meldung der automatischen Berechnung
     erstellt TEXT DEFAULT CURRENT_TIMESTAMP
 );
+-- Anschaffungen über 800 € (Anlagenverzeichnis mit Abschreibung)
+CREATE TABLE IF NOT EXISTS anlagen (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    bezeichnung TEXT NOT NULL,
+    anschaffung_am TEXT,                         -- Kaufdatum
+    kosten REAL,                                 -- Abschreibungsbasis (Kleinunternehmer brutto, sonst netto)
+    nutzungsdauer INTEGER,                       -- Jahre (1 = Computer/Software, voll im Kaufjahr)
+    restwert_start REAL,                         -- übernommen: Restwert zu Beginn von start_jahr …
+    start_jahr INTEGER,
+    rest_nutzungsdauer INTEGER,                  -- … und verbleibende Nutzungsdauer ab dann (Jahre)
+    abgang_am TEXT,                              -- Verkauf / Verschrottung
+    abgang_erloes REAL,
+    ausgabe_id INTEGER,                          -- aus einer Ausgabe (Kategorie „Anschaffung über 800 €“)
+    notiz TEXT DEFAULT '',
+    erstellt TEXT DEFAULT CURRENT_TIMESTAMP
+);
 CREATE TABLE IF NOT EXISTS strecken_cache (
     schluessel TEXT PRIMARY KEY,                 -- geo:<adresse> bzw. km:<start>→<ziel>
     wert TEXT

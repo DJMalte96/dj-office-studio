@@ -213,6 +213,7 @@ def ausgabe_anlegen():
     with db.connect() as con:
         aid = con.execute(f"INSERT INTO ausgaben (status, {', '.join(spalten)}) VALUES ('ok', {', '.join('?' * len(spalten))})",
                           [w[k] for k in spalten]).lastrowid
+    anlage_zur_ausgabe(aid)
     return jsonify(holen(aid)), 201
 
 
@@ -241,6 +242,7 @@ def ausgabe_aendern(aid):
     if w:
         with db.connect() as con:
             con.execute(f"UPDATE ausgaben SET {', '.join(k + ' = ?' for k in w)} WHERE id = ?", [*w.values(), aid])
+    anlage_zur_ausgabe(aid)
     return jsonify(holen(aid))
 
 
@@ -250,6 +252,7 @@ def ausgabe_loeschen(aid):
     a = holen(aid) or abort(404)
     with db.connect() as con:
         con.execute("DELETE FROM ausgaben WHERE id = ?", (aid,))
+        con.execute("DELETE FROM anlagen WHERE ausgabe_id = ?", (aid,))
     if a.get("beleg_datei"):
         try:
             os.remove(os.path.join(db.DATA_DIR, a["beleg_datei"]))
@@ -614,3 +617,199 @@ def fahrt_vorschau():
         return jsonify(antwort | {"km_einfach": km, "km_gesamt": round(km * 2, 1), "betrag": round(km * 2 * satz, 2)})
     except strecken.StreckenFehler as e:
         return jsonify(antwort | {"fehler": str(e)})
+
+
+# ======================= Anschaffungen (Abschreibung) =======================
+
+GWG_GRENZE = 800.0                              # netto: bis hier sofort absetzbar (geringwertiges Wirtschaftsgut)
+COMPUTER = re.compile(r"(?i)laptop|notebook|macbook|computer|\bpc\b|imac|mac mini|tablet|ipad|monitor|drucker|software|lizenz")
+
+
+def nutzungsdauer_vorschlag(text):
+    """Vorschlag: Computer/Software 1 Jahr, sonstige Technik 7 Jahre (mit dem Steuerberater abstimmen)."""
+    return 1 if COMPUTER.search(text or "") else 7
+
+
+def _monat(iso):
+    return int(iso[5:7]) if iso and len(iso) >= 7 else 1
+
+
+def afa_plan(a):
+    """Abschreibung je Jahr → [(jahr, betrag, restwert_ende)]. Linear, im ersten Jahr anteilig nach Monaten;
+    Nutzungsdauer 1 Jahr = voll im Kaufjahr; im Abgangsjahr anteilig bis zum Abgangsmonat."""
+    if a.get("restwert_start") is not None and a.get("start_jahr"):
+        jahr, rest, nd = int(a["start_jahr"]), float(a["restwert_start"]), max(1, int(a.get("rest_nutzungsdauer") or 1))
+        raten = [(jahr + i, 12) for i in range(nd)]
+        basis = rest
+    else:
+        if not a.get("anschaffung_am") or not a.get("kosten"):
+            return []
+        jahr, basis, nd = int(a["anschaffung_am"][:4]), float(a["kosten"]), max(1, int(a.get("nutzungsdauer") or 1))
+        rest = basis
+        if nd == 1:
+            raten = [(jahr, 12)]
+        else:
+            erste = 13 - _monat(a["anschaffung_am"])          # Monate im Kaufjahr (März → 10)
+            monate, raten, j = nd * 12, [], jahr
+            while monate > 0:
+                m = min(12 if j != jahr else erste, monate)
+                raten.append((j, m))
+                monate -= m
+                j += 1
+    abgang_jahr = int(a["abgang_am"][:4]) if a.get("abgang_am") else None
+    gesamt_monate = sum(m for _, m in raten)
+    plan = []
+    for i, (j, m) in enumerate(raten):
+        if abgang_jahr and j > abgang_jahr:
+            break
+        if abgang_jahr and j == abgang_jahr:
+            erstes = i == 0 and a.get("restwert_start") is None
+            m = min(m, _monat(a["abgang_am"]) - ((13 - m) - 1 if erstes else 0))   # nur bis zum Abgangsmonat
+        betrag = rest if i == len(raten) - 1 and not (abgang_jahr and j == abgang_jahr) else round(basis * m / gesamt_monate, 2)
+        betrag = min(round(betrag, 2), round(rest, 2))
+        rest = round(rest - betrag, 2)
+        plan.append((j, betrag, rest))
+        if abgang_jahr and j == abgang_jahr:
+            break
+    return plan
+
+
+def anlage_im_jahr(a, jahr):
+    """Werte für ein Jahr: Wert am Jahresanfang bzw. Zugang, Abschreibung, Restwert am Jahresende, Abgang."""
+    jahr = int(jahr)
+    plan = afa_plan(a)
+    vorjahre = [r for j, _, r in plan if j < jahr]
+    if a.get("restwert_start") is not None and a.get("start_jahr"):
+        anfang = float(a["restwert_start"]) if jahr == int(a["start_jahr"]) else (vorjahre[-1] if vorjahre else 0.0)
+    else:
+        kaufjahr = int((a.get("anschaffung_am") or "0")[:4])
+        anfang = float(a.get("kosten") or 0) if jahr == kaufjahr else (vorjahre[-1] if vorjahre else 0.0)
+    afa = round(sum(b for j, b, _ in plan if j == jahr), 2)
+    ende = next((r for j, _, r in plan if j == jahr), vorjahre[-1] if vorjahre else anfang)
+    abgang = bool(a.get("abgang_am")) and a["abgang_am"][:4] == str(jahr)
+    return {"afa": afa, "restwert_anfang": round(anfang, 2), "restwert_ende": 0.0 if abgang else round(ende, 2),
+            "abgang_restwert": round(ende, 2) if abgang else 0.0,
+            "abgang_erloes": round(float(a.get("abgang_erloes") or 0), 2) if abgang else 0.0}
+
+
+def anlagen_liste(jahr=None):
+    with db.connect() as con:
+        rows = [dict(r) for r in con.execute(
+            "SELECT an.*, au.lieferant AS ausgabe_lieferant, au.beleg_datei IS NOT NULL AS ausgabe_mit_beleg FROM anlagen an"
+            " LEFT JOIN ausgaben au ON au.id = an.ausgabe_id ORDER BY COALESCE(an.anschaffung_am, an.start_jahr || '-01-01') DESC, an.id DESC")]
+    if not jahr:
+        return rows
+    out = []
+    for a in rows:
+        kauf = int((a.get("anschaffung_am") or f"{a.get('start_jahr') or 0}")[:4] or 0)
+        abgang = int(a["abgang_am"][:4]) if a.get("abgang_am") else 9999
+        if kauf <= int(jahr) <= abgang:
+            out.append(a | anlage_im_jahr(a, jahr) | {"plan": afa_plan(a)})
+    return out
+
+
+def _anlage_werte(d):
+    fehler, w = [], {}
+    for k in ("bezeichnung", "notiz"):
+        if k in d:
+            w[k] = (d.get(k) or "").strip()
+    for k in ("anschaffung_am", "abgang_am"):
+        if k in d:
+            w[k] = (d.get(k) or "").strip() or None
+            if w[k] and not re.fullmatch(r"\d{4}-\d{2}-\d{2}", w[k]):
+                fehler.append(f"Ungültiges Datum: {w[k]}")
+    for k in ("kosten", "restwert_start", "abgang_erloes"):
+        if k in d:
+            v = d.get(k)
+            try:
+                w[k] = None if v in (None, "") else round(float(str(v).replace(".", "").replace(",", ".") if "," in str(v) else v), 2)
+            except ValueError:
+                fehler.append(f"„{k}“ muss ein Betrag sein")
+    for k in ("nutzungsdauer", "start_jahr", "rest_nutzungsdauer"):
+        if k in d:
+            v = d.get(k)
+            w[k] = int(v) if str(v or "").strip().isdigit() else None
+    return w, fehler
+
+
+def _anlage_pruefen(a):
+    if not a.get("bezeichnung"):
+        return "Bitte eine Bezeichnung angeben"
+    if a.get("restwert_start") is not None:
+        if not a.get("start_jahr") or not a.get("rest_nutzungsdauer"):
+            return "Bei übernommenem Restwert bitte Jahr und verbleibende Nutzungsdauer angeben"
+    elif not (a.get("anschaffung_am") and a.get("kosten") and a.get("nutzungsdauer")):
+        return "Bitte Kaufdatum, Kosten und Nutzungsdauer angeben"
+    if a.get("abgang_am") and a.get("anschaffung_am") and a["abgang_am"] < a["anschaffung_am"]:
+        return "Der Abgang kann nicht vor dem Kauf liegen"
+    return None
+
+
+@bp.get("/api/anlagen")
+def anlagen_api():
+    jahr = request.args.get("jahr")
+    return jsonify(anlagen_liste(jahr if jahr and jahr.isdigit() else None))
+
+
+@bp.post("/api/anlagen")
+def anlage_anlegen():
+    w, fehler = _anlage_werte(_daten())
+    fehler_text = "; ".join(fehler) or _anlage_pruefen(w)
+    if fehler_text:
+        return _fehler(fehler_text)
+    with db.connect() as con:
+        aid = con.execute(f"INSERT INTO anlagen ({', '.join(w)}) VALUES ({', '.join('?' * len(w))})", list(w.values())).lastrowid
+        r = dict(con.execute("SELECT * FROM anlagen WHERE id = ?", (aid,)).fetchone())
+    return jsonify(r | {"plan": afa_plan(r)}), 201
+
+
+@bp.put("/api/anlagen/<int:aid>")
+def anlage_aendern(aid):
+    with db.connect() as con:
+        alt = con.execute("SELECT * FROM anlagen WHERE id = ?", (aid,)).fetchone() or abort(404)
+    w, fehler = _anlage_werte(_daten())
+    fehler_text = "; ".join(fehler) or _anlage_pruefen(dict(alt) | w)
+    if fehler_text:
+        return _fehler(fehler_text)
+    with db.connect() as con:
+        if w:
+            con.execute(f"UPDATE anlagen SET {', '.join(k + ' = ?' for k in w)} WHERE id = ?", [*w.values(), aid])
+        r = dict(con.execute("SELECT * FROM anlagen WHERE id = ?", (aid,)).fetchone())
+    return jsonify(r | {"plan": afa_plan(r)})
+
+
+@bp.delete("/api/anlagen/<int:aid>")
+def anlage_loeschen(aid):
+    with db.connect() as con:
+        a = con.execute("SELECT * FROM anlagen WHERE id = ?", (aid,)).fetchone() or abort(404)
+        if a["ausgabe_id"]:
+            return _fehler("Dieses Gerät stammt aus einer Ausgabe – bitte dort die Kategorie ändern oder die Ausgabe löschen.", 409)
+        con.execute("DELETE FROM anlagen WHERE id = ?", (aid,))
+    return "", 204
+
+
+def anlage_zur_ausgabe(aid):
+    """Ausgabe der Kategorie „Anschaffung über 800 €“ → Gerät im Anlagenverzeichnis anlegen bzw. abgleichen;
+    andere Kategorie → automatisch angelegtes Gerät wieder entfernen."""
+    a = holen(aid)
+    if not a or a["status"] != "ok":
+        return
+    with db.connect() as con:
+        vorhanden = con.execute("SELECT id FROM anlagen WHERE ausgabe_id = ?", (aid,)).fetchone()
+        if a["kategorie"] != "anschaffung":
+            if vorhanden:
+                con.execute("DELETE FROM anlagen WHERE id = ?", (vorhanden["id"],))
+                con.execute("UPDATE ausgaben SET anlage_id = NULL WHERE id = ?", (aid,))
+            return
+        a_ein = _einstellungen()
+        kosten = a["betrag"] or 0
+        if not a_ein.get("kleinunternehmer") and a.get("ust_satz"):
+            kosten = round(kosten / (1 + a["ust_satz"] / 100), 2)    # Umsatzsteuerpflichtige schreiben netto ab
+        bezeichnung = a["beschreibung"] or a["lieferant"]
+        datum = a["bezahlt_am"] or a["belegdatum"]
+        if vorhanden:
+            con.execute("UPDATE anlagen SET kosten = ?, anschaffung_am = ? WHERE id = ?", (kosten, datum, vorhanden["id"]))
+        else:
+            nid = con.execute("INSERT INTO anlagen (bezeichnung, anschaffung_am, kosten, nutzungsdauer, ausgabe_id) VALUES (?, ?, ?, ?, ?)",
+                              (bezeichnung, datum, kosten, nutzungsdauer_vorschlag(f"{bezeichnung} {a['lieferant']}"), aid)).lastrowid
+            con.execute("UPDATE ausgaben SET anlage_id = ? WHERE id = ?", (nid, aid))

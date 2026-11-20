@@ -28,6 +28,7 @@ async function ladeKategorien() {
 function finanzenTab(name) {
   if (name === "ausgaben") ladeAusgaben();
   if (name === "fahrten") ladeFahrten();
+  if (name === "anschaffungen") ladeAnlagen();
 }
 
 async function ladeAusgaben() {
@@ -404,3 +405,119 @@ $("#fahrt-form").addEventListener("submit", async e => {
     ladeFahrten();
   } catch (err) { toast(err.message, true); }
 });
+
+
+// ======================= Anschaffungen =======================
+
+const anl = { jahr: String(new Date().getFullYear()), liste: [], aktuell: null, modus: "kauf" };
+const zahlText = v => v == null || v === "" ? "" : Number(v).toFixed(2).replace(".", ",");
+
+async function ladeAnlagen() {
+  try { anl.liste = await api(`anlagen?jahr=${anl.jahr}`); }
+  catch (e) { return toast("Laden fehlgeschlagen: " + e.message, true); }
+  const j = Number(new Date().getFullYear());
+  $("#anlagen-jahr").innerHTML = [j + 1, j, j - 1, j - 2, j - 3].map(String)
+    .map(x => `<option${x === anl.jahr ? " selected" : ""}>${x}</option>`).join("");
+  $("#anlagen-kopf-afa").textContent = `Abschreibung ${anl.jahr}`;
+  $("#anlagen-kopf-rest").textContent = `Restwert 31.12.${anl.jahr.slice(2)}`;
+  $("#anlagen-body").innerHTML = anl.liste.map(a => {
+    const kaufjahr = (a.anschaffung_am || "").slice(0, 4);
+    const anteil = kaufjahr === anl.jahr && a.nutzungsdauer > 1 ? `<small>${13 - Number(a.anschaffung_am.slice(5, 7))} von 12 Monaten</small>` : "";
+    return `<tr data-id="${a.id}">
+      <td><b>${esc(a.bezeichnung)}</b><small>${a.ausgabe_id ? `aus Ausgabe ${esc(a.ausgabe_lieferant || "")}${a.ausgabe_mit_beleg ? " · 📎" : ""}` : a.restwert_start != null ? "aus Vorjahren übernommen" : "von Hand erfasst"}${a.abgang_am ? ` · Abgang ${fmtDate(a.abgang_am)}` : ""}</small></td>
+      <td>${a.anschaffung_am ? fmtDate(a.anschaffung_am) : `vor ${a.start_jahr}`}</td>
+      <td class="num">${a.kosten != null ? euro2(a.kosten) : `<small>Restwert 1.1.${String(a.start_jahr).slice(2)}</small>${euro2(a.restwert_start)}`}</td>
+      <td>${a.restwert_start != null ? `noch ${a.rest_nutzungsdauer} J. ab ${a.start_jahr}` : a.nutzungsdauer === 1 ? "1 Jahr" : `${a.nutzungsdauer} Jahre`}</td>
+      <td class="num">${euro2(a.afa)}${anteil}</td>
+      <td class="num">${a.abgang_am && a.abgang_am.startsWith(anl.jahr) ? `<small>Abgang: Restwert ${euro2(a.abgang_restwert)} · Erlös ${euro2(a.abgang_erloes)}</small>` : euro2(a.restwert_ende)}</td>
+      <td class="btns"><button type="button" class="small secondary" data-act="bearbeiten" title="Bearbeiten">✎</button></td>
+    </tr>`;
+  }).join("") || `<tr><td colspan="7" class="hint">Keine Anschaffungen über 800 € in ${anl.jahr}.</td></tr>`;
+  const summe = anl.liste.reduce((s, a) => s + a.afa, 0);
+  $("#anlagen-summe").innerHTML = anl.liste.length ? `Abschreibung ${anl.jahr} gesamt: <b>${euro2(summe)}</b>` : "";
+}
+$("#anlagen-jahr").addEventListener("change", e => { anl.jahr = e.target.value; ladeAnlagen(); });
+$("#anlagen-body").addEventListener("click", e => {
+  const b = e.target.closest("button[data-act=bearbeiten]");
+  if (b) oeffneAnlage(anl.liste.find(a => a.id === Number(b.closest("tr").dataset.id)));
+});
+$("#anlage-uebernehmen").addEventListener("click", () => oeffneAnlage(null));
+
+function anlageModus(m) {
+  anl.modus = m;
+  $$("#anlage-modus button").forEach(b => b.classList.toggle("an", b.dataset.modus === m));
+  $("#anlage-kauf").classList.toggle("hidden", m !== "kauf");
+  $("#anlage-rest").classList.toggle("hidden", m !== "rest");
+}
+$("#anlage-modus").addEventListener("click", e => { const b = e.target.closest("button[data-modus]"); if (b) anlageModus(b.dataset.modus); });
+
+function oeffneAnlage(a) {
+  anl.aktuell = a;
+  const f = $("#anlage-form");
+  f.reset();
+  $("#anlage-titel").textContent = a ? a.bezeichnung : "Gerät aus Vorjahren übernehmen";
+  const w = a || { nutzungsdauer: 7, start_jahr: Number(anl.jahr) };
+  f.elements.bezeichnung.value = w.bezeichnung || "";
+  f.elements.anschaffung_am.value = w.anschaffung_am || "";
+  f.elements.kosten.value = zahlText(w.kosten);
+  f.elements.nutzungsdauer.value = String(w.nutzungsdauer || 7);
+  f.elements.start_jahr.value = w.start_jahr || "";
+  f.elements.restwert_start.value = zahlText(w.restwert_start);
+  f.elements.rest_nutzungsdauer.value = w.rest_nutzungsdauer || "";
+  f.elements.abgang_am.value = w.abgang_am || "";
+  f.elements.abgang_erloes.value = zahlText(w.abgang_erloes);
+  f.elements.notiz.value = w.notiz || "";
+  $(".abgang", f).open = !!(a && a.abgang_am);
+  anlageModus(a && a.restwert_start != null ? "rest" : "kauf");
+  $("#anlage-modus").classList.toggle("hidden", !!(a && a.ausgabe_id));
+  // Kosten und Datum einer Anschaffung aus einer Ausgabe kommen aus der Ausgabe
+  for (const k of ["anschaffung_am", "kosten"]) f.elements[k].disabled = !!(a && a.ausgabe_id);
+  $("#anlage-kosten-hinweis").textContent = a && a.ausgabe_id ? "(aus der Ausgabe)" : state.absender && !state.absender.kleinunternehmer ? "(netto, €)" : "(brutto, €)";
+  $("#anlage-loeschen").classList.toggle("hidden", !a || !!a.ausgabe_id);
+  $("#anlage-plan").textContent = a && a.plan && a.plan.length
+    ? "Plan: " + a.plan.map(([j, b]) => `${j}: ${euro2(b)}`).join(" · ") : "";
+  $("#anlage-dialog").showModal();
+}
+$("#anlage-abbrechen").addEventListener("click", () => $("#anlage-dialog").close());
+$("#anlage-form").addEventListener("submit", async e => {
+  e.preventDefault();
+  const f = e.target.elements;
+  const d = { bezeichnung: f.bezeichnung.value, notiz: f.notiz.value, abgang_am: f.abgang_am.value, abgang_erloes: f.abgang_erloes.value };
+  if (anl.modus === "kauf") {
+    Object.assign(d, { nutzungsdauer: f.nutzungsdauer.value, restwert_start: "", start_jahr: "", rest_nutzungsdauer: "" });
+    if (!f.kosten.disabled) Object.assign(d, { anschaffung_am: f.anschaffung_am.value, kosten: f.kosten.value });
+  } else {
+    Object.assign(d, { restwert_start: f.restwert_start.value, start_jahr: f.start_jahr.value, rest_nutzungsdauer: f.rest_nutzungsdauer.value,
+                       anschaffung_am: "", kosten: "", nutzungsdauer: "" });
+  }
+  try {
+    if (anl.aktuell) await api(`anlagen/${anl.aktuell.id}`, { method: "PUT", body: d });
+    else await api("anlagen", { method: "POST", body: d });
+    $("#anlage-dialog").close();
+    toast("Gespeichert");
+    ladeAnlagen();
+  } catch (err) { toast(err.message, true); }
+});
+$("#anlage-loeschen").addEventListener("click", async () => {
+  if (!anl.aktuell || !confirm(`${anl.aktuell.bezeichnung} aus dem Anlagenverzeichnis löschen?`)) return;
+  try { await api(`anlagen/${anl.aktuell.id}`, { method: "DELETE" }); $("#anlage-dialog").close(); ladeAnlagen(); }
+  catch (err) { toast(err.message, true); }
+});
+
+// Beim Prüfen: Hinweis zur 800-€-Grenze
+function gwgHinweis() {
+  const f = $("#beleg-form");
+  const brutto = Number(String(f.elements.betrag.value).replace(/\./g, "").replace(",", ".")) || 0;
+  const satz = Number(f.elements.ust_satz.value) || 0;
+  const netto = brutto / (1 + satz / 100);
+  const el = $("#erkannt-kategorie");
+  if (f.elements.kategorie.value === "anschaffung") {
+    el.innerHTML = netto && netto <= 800
+      ? `<b>Unter 800 € netto</b> – das kann sofort als Ausgabe abgesetzt werden (Kategorie „Technik“).`
+      : "Wird über die Nutzungsdauer abgeschrieben und erscheint unter Finanzen → Anschaffungen.";
+  } else if (netto > 800 && f.elements.kategorie.value === "technik") {
+    el.innerHTML = `<b>Über 800 € netto</b> – Geräte darüber werden abgeschrieben: Kategorie „Anschaffung über 800 €“ wählen.`;
+  }
+}
+["kategorie", "betrag", "ust_satz"].forEach(k => $("#beleg-form").elements[k].addEventListener("input", gwgHinweis));
+$("#beleg-form").elements.kategorie.addEventListener("change", gwgHinweis);

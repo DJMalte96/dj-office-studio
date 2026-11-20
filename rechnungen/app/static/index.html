@@ -53,6 +53,7 @@
         <div class="menu-liste">
           <button type="button" data-tab="ausgaben">↧ Ausgaben</button>
           <button type="button" data-tab="fahrten">➜ Fahrten</button>
+          <button type="button" data-tab="anschaffungen">▣ Anschaffungen</button>
         </div>
       </div>
       <div class="menu">
@@ -600,6 +601,25 @@
       </div>
     </section>
 
+    <!-- ================= Finanzen: Anschaffungen ================= -->
+    <section id="tab-anschaffungen" class="tab">
+      <div class="kopf">
+        <div><h2>Anschaffungen</h2><p class="hint">Geräte über 800 € netto werden über ihre Nutzungsdauer abgeschrieben – das ist das Anlagenverzeichnis für den Steuerberater.</p></div>
+        <div class="knopf-zeile">
+          <select id="anlagen-jahr" aria-label="Jahr"></select>
+          <button type="button" class="secondary" id="anlage-uebernehmen">＋ Gerät aus Vorjahren übernehmen</button>
+        </div>
+      </div>
+      <div class="card">
+        <table class="list anlagen-tabelle">
+          <thead><tr><th>Gerät</th><th>gekauft</th><th class="num">Kosten</th><th>Nutzungsdauer</th><th class="num" id="anlagen-kopf-afa">Abschreibung</th><th class="num" id="anlagen-kopf-rest">Restwert 31.12.</th><th></th></tr></thead>
+          <tbody id="anlagen-body"></tbody>
+        </table>
+        <p class="hint" id="anlagen-summe"></p>
+        <p class="hint">Neue Anschaffungen über 800 € entstehen automatisch, wenn eine Ausgabe die Kategorie „Anschaffung über 800 €“ bekommt. Nutzungsdauern sind Vorschläge – bitte mit dem Steuerberater abstimmen.</p>
+      </div>
+    </section>
+
     <section id="tab-kunden" class="tab" data-stamm="kunden"></section>
     <section id="tab-textbausteine" class="tab" data-stamm="textbausteine"></section>
     <section id="tab-zahlungsbedingungen" class="tab" data-stamm="zahlungsbedingungen"></section>
@@ -638,6 +658,43 @@
       <p class="hint" id="fahrt-dialog-hinweis"></p>
       <div class="actions">
         <button type="button" class="secondary" id="fahrt-abbrechen">Abbrechen</button>
+        <button type="submit">Speichern</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- ================= Anschaffung bearbeiten / aus Vorjahren übernehmen ================= -->
+  <dialog id="anlage-dialog" class="dialog">
+    <form id="anlage-form" autocomplete="off">
+      <h2 id="anlage-titel">Gerät</h2>
+      <label>Bezeichnung<input name="bezeichnung" required placeholder="z. B. Aktivboxen (Paar)"></label>
+      <div class="umschalter anlage-modus" id="anlage-modus"><button type="button" data-modus="kauf" class="an">Mit Kaufdaten</button><button type="button" data-modus="rest">Mit Restwert</button></div>
+      <div id="anlage-kauf">
+        <div class="row">
+          <label>Kaufdatum<input name="anschaffung_am" type="date"></label>
+          <label>Kosten <span class="opt" id="anlage-kosten-hinweis">(€)</span><input name="kosten" inputmode="decimal"></label>
+          <label>Nutzungsdauer<select name="nutzungsdauer"><option value="1">1 Jahr (Computer, Software)</option><option value="3">3 Jahre</option><option value="5">5 Jahre</option><option value="7">7 Jahre</option><option value="8">8 Jahre</option><option value="10">10 Jahre</option><option value="13">13 Jahre</option></select></label>
+        </div>
+      </div>
+      <div id="anlage-rest" class="hidden">
+        <p class="hint">Wie im bisherigen Anlagenverzeichnis des Steuerberaters: Restwert am 1. Januar eines Jahres und die verbleibenden Jahre.</p>
+        <div class="row">
+          <label>Restwert am 1.1. von<input name="start_jahr" type="number" min="2000" max="2100" step="1"></label>
+          <label>Restwert (€)<input name="restwert_start" inputmode="decimal"></label>
+          <label>noch … Jahre<input name="rest_nutzungsdauer" type="number" min="1" max="30" step="1"></label>
+        </div>
+      </div>
+      <details class="abgang"><summary>Verkauft oder verschrottet?</summary>
+        <div class="row">
+          <label>Abgang am<input name="abgang_am" type="date"></label>
+          <label>Verkaufserlös (€) <span class="opt">(0 bei Verschrottung)</span><input name="abgang_erloes" inputmode="decimal"></label>
+        </div>
+      </details>
+      <label>Notiz <span class="opt">(optional)</span><input name="notiz"></label>
+      <p class="hint" id="anlage-plan"></p>
+      <div class="actions">
+        <button type="button" class="secondary danger-text" id="anlage-loeschen">Löschen</button>
+        <button type="button" class="secondary" id="anlage-abbrechen">Abbrechen</button>
         <button type="submit">Speichern</button>
       </div>
     </form>
