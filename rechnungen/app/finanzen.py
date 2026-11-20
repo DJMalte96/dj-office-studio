@@ -492,6 +492,8 @@ def offene_berechnen(ids=None):
                 km, fehler = strecken.strecke_km(f["start"], f["ziel"], _ssl()), None
             except strecken.StreckenFehler as e:
                 km, fehler = None, str(e)
+            except Exception as e:   # Unerwartetes darf den Hintergrund-Thread nicht lautlos beenden („wird berechnet …“ für immer)
+                km, fehler = None, f"Berechnung fehlgeschlagen ({type(e).__name__})"
             with db.connect() as con:
                 con.execute("UPDATE fahrten SET km_einfach = ?, fehler = ? WHERE id = ?", (km, fehler, f["id"]))
             fertig += km is not None
@@ -503,6 +505,11 @@ def fahrten_api_liste():
     jahr = request.args.get("jahr")
     a = _einstellungen()
     liste_ = fahrten_liste(jahr if jahr and jahr.isdigit() else None)
+    # Offene Fahrten ohne laufende Berechnung (Kartendienst später eingeschaltet, App neu gestartet …) → jetzt anstoßen
+    offen = [f["id"] for f in liste_ if f["km_einfach"] is None and not f["fehler"]]
+    if offen and a.get("kartendienst") and not _berechnung.locked():
+        _im_hintergrund(offene_berechnen, offen)
+        liste_ = fahrten_liste(jahr if jahr and jahr.isdigit() else None)
     ohne = []
     if jahr and jahr.isdigit():
         with db.connect() as con:
