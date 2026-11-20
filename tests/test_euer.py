@@ -99,6 +99,21 @@ def test_bezahlt_datum_nachtragen(client):
     assert client.get("/api/finanzen/euer?jahr=2026").get_json()["einnahmen"] == 500
 
 
+def test_bezahlt_datum_bei_allen_aus_rechnungsdatum(client):
+    a = rechnung(client, "037", "2026-05-01", 500)
+    b = rechnung(client, "038", "2025-12-20", 300)
+    c = rechnung(client, "039", "2026-06-01", 200, bezahlt_am="2026-06-15")   # hat schon ein Datum → bleibt
+    offen = rechnung(client, "040", "2026-07-01", 100)                         # offen → bleibt ohne Datum
+    import db
+    with db.connect() as con:
+        con.execute("UPDATE rechnungen SET bezahlt = 1, bezahlt_am = NULL WHERE id IN (?, ?)", (a, b))
+    assert client.post("/api/finanzen/bezahlt-am-rechnungsdatum").get_json() == {"anzahl": 2}
+    assert client.get("/api/finanzen/ohne-bezahltdatum").get_json() == []
+    daten = {r["id"]: r["bezahlt_am"] for r in client.get("/api/rechnungen").get_json()}
+    assert daten[a] == "2026-05-01" and daten[b] == "2025-12-20" and daten[c] == "2026-06-15" and daten[offen] is None
+    assert client.get("/api/finanzen/euer?jahr=2026").get_json()["einnahmen"] == 700
+
+
 def test_export_enthaelt_finanzen_und_belege(client):
     import csv
     import zipfile

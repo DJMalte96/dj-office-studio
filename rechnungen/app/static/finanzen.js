@@ -709,6 +709,7 @@ async function oeffneBezahltAm() {
   $("#bezahltam-body").innerHTML = liste.map(r => `<tr data-id="${r.id}"><td>Rechnung ${esc(r.nummer)}<br><small>${esc(r.kunde)} · ${fmtDate(r.datum)}</small></td>
       <td class="num">${euro2(r.gesamt)}</td><td><input type="date" value="" aria-label="Bezahlt am"></td></tr>`).join("")
     || `<tr><td class="hint">Alle bezahlten Rechnungen haben ein Bezahlt-Datum.</td></tr>`;
+  $(".bezahltam-alle").hidden = !liste.length;
   $("#bezahltam-dialog").showModal();
 }
 $("#bezahltam-body").addEventListener("change", async e => {
@@ -717,9 +718,19 @@ $("#bezahltam-body").addEventListener("change", async e => {
   try { await api(`rechnungen/${tr.dataset.id}/bezahlt_am`, { method: "PUT", body: { bezahlt_am: e.target.value } }); tr.style.opacity = .5; toast("Bezahlt-Datum gespeichert"); }
   catch (err) { toast(err.message, true); }
 });
-$("#bezahltam-zu").addEventListener("click", () => {
-  $("#bezahltam-dialog").close();
+function finanzenNeuLaden() {
   if ($("#tab-euer").classList.contains("active")) ladeEuer(); else if ($("#tab-finanzen").classList.contains("active")) ladeUebersicht();
+  if (typeof renderStartFinanzen === "function") renderStartFinanzen();
+}
+$("#bezahltam-zu").addEventListener("click", () => { $("#bezahltam-dialog").close(); finanzenNeuLaden(); });
+$("#bezahltam-rechnungsdatum").addEventListener("click", async () => {
+  // Datumsfelder, die schon einzeln ausgefüllt wurden, sind bereits gespeichert – übrig bleiben nur die leeren
+  try {
+    const d = await api("finanzen/bezahlt-am-rechnungsdatum", { method: "POST" });
+    $("#bezahltam-dialog").close();
+    toast(`Rechnungsdatum bei ${d.anzahl} Rechnung${d.anzahl === 1 ? "" : "en"} als Bezahlt-Datum übernommen`);
+    finanzenNeuLaden();
+  } catch (e) { toast(e.message, true); }
 });
 
 $("#einnahme-neu").addEventListener("click", () => {

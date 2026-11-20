@@ -1128,6 +1128,7 @@ def import_uebernehmen():
             "positionen": inv["positionen"], "zahlungsbedingung": inv.get("zahlungsbedingung") or "",
             "gesamt": round(sum(float(p.get("preis") or 0) for p in inv["positionen"]), 2),
             "bezahlt": bool(data.get("bezahlt")),
+            "bezahlt_am": (inv.get("datum") or date.today().isoformat()) if data.get("bezahlt") else None,  # Zahlung unbekannt → Rechnungsdatum
             "festgeschrieben": True,   # alte, bereits verschickte Rechnungen
         })
         n_rech += 1

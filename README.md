@@ -87,7 +87,7 @@ Oben in der Kopfzeile gibt es auf jeder Seite das Menü: **Start**, **Rechnungen
 
 **Anschaffungen:** Wird eine Ausgabe als „Anschaffung über 800 €“ eingeordnet, landet das Gerät automatisch im Anlagenverzeichnis und wird abgeschrieben (Nutzungsdauer vorgeschlagen, änderbar). Geräte aus früheren Jahren übernimmt man mit **Gerät aus Vorjahren übernehmen** und dem Restwert zum 1.1. Wird ein Gerät verkauft oder entsorgt, trägt man das Datum und ggf. den Erlös ein.
 
-**EÜR & Export:** Die EÜR des Jahres mit allen Einnahmen- und Ausgabenposten und dem Gewinn. Die Prüfliste daneben zeigt, was vor dem Export noch fehlt – z. B. ungeprüfte Belege oder bezahlte Rechnungen ohne Bezahlt-Datum (alte Importe; mit **nachtragen** direkt ergänzen). **Export herunterladen** erzeugt das ZIP für den Steuerberater. Die Zuordnung zu den Zeilen der Anlage EÜR ist ein Vorschlag – bitte mit dem Steuerberater abgleichen.
+**EÜR & Export:** Die EÜR des Jahres mit allen Einnahmen- und Ausgabenposten und dem Gewinn. Die Prüfliste daneben zeigt, was vor dem Export noch fehlt – z. B. ungeprüfte Belege oder bezahlte Rechnungen ohne Bezahlt-Datum (alte Importe; unter **nachtragen** mit einem Klick das Rechnungsdatum übernehmen oder einzeln eintragen). **Export herunterladen** erzeugt das ZIP für den Steuerberater. Die Zuordnung zu den Zeilen der Anlage EÜR ist ein Vorschlag – bitte mit dem Steuerberater abgleichen.
 
 ![Screenshot: EÜR & Export](docs/bilder/euer.png)
 
