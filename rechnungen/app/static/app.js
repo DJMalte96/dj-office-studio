@@ -64,9 +64,39 @@ function esc(s) {
   return String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
 
+/* Desktop-App im eigenen Fenster (pywebview): PDFs, Downloads und externe Links laufen über die
+   Brücke zum Starter (window.pywebview.api), weil ein App-Fenster keine Tabs und keine Downloads kennt. */
+const appFenster = () => !!(window.pywebview && window.pywebview.api);
+window.addEventListener("pywebviewready", () => document.body.classList.add("app-fenster"));
+
+function blobAlsBase64(blob) {
+  return new Promise((ok, fehler) => {
+    const r = new FileReader();
+    r.onload = () => ok(String(r.result).split(",")[1]);
+    r.onerror = () => fehler(r.error);
+    r.readAsDataURL(blob);
+  });
+}
+
+/* PDF der App anzeigen (url relativ, z. B. „api/rechnungen/3/pdf“) */
+function zeigePdf(url) {
+  if (appFenster()) {
+    window.pywebview.api.pdf_oeffnen(url).catch(e => toast("PDF konnte nicht geöffnet werden: " + e.message, true));
+    return;
+  }
+  window.open(url, "_blank");
+}
+
 /* Öffnet ein PDF in neuem Tab. Das Fenster wird sofort (synchron zum Klick) geöffnet,
-   damit Popup-Blocker nicht eingreifen. */
-async function openPdf(loader) {
+   damit Popup-Blocker nicht eingreifen. Im App-Fenster: im PDF-Programm des Systems. */
+async function openPdf(loader, name = "Dokument.pdf") {
+  if (appFenster()) {
+    try {
+      const blob = await loader();
+      await window.pywebview.api.pdf_daten_oeffnen(name, await blobAlsBase64(blob));
+    } catch (e) { toast(e.message, true); }
+    return;
+  }
   const win = window.open("", "_blank");
   try {
     const blob = await loader();
@@ -77,6 +107,15 @@ async function openPdf(loader) {
     toast(e.message, true);
   }
 }
+
+document.addEventListener("click", e => {
+  const a = e.target.closest("a[target=_blank]");
+  if (!a || !appFenster()) return;
+  e.preventDefault();
+  const href = a.getAttribute("href") || "";
+  if (href.startsWith("api/")) zeigePdf(href);
+  else if (href && href !== "#") window.pywebview.api.extern(a.href);
+});
 
 // ---------- Tabs ----------
 
@@ -385,6 +424,7 @@ $("#hinweis-ok").addEventListener("click", async () => {
   }
   d.close();
 });
+$("#daten-ordner-btn").addEventListener("click", () => appFenster() && window.pywebview.api.daten_ordner());
 $("#hinweis-zeigen").addEventListener("click", e => { e.preventDefault(); zeigeHinweis(false); });
 
 /* Absender-Infos laden und alles aktualisieren, was davon abhängt (Hinweis-Banner, Paperless-Buttons …). */
@@ -652,7 +692,7 @@ function setZahlung(text) {
 
 function loadIntoForm(inv) {
   if (inv.festgeschrieben) {
-    window.open(`api/rechnungen/${inv.id}/pdf`, "_blank");
+    zeigePdf(`api/rechnungen/${inv.id}/pdf`);
     toast(`${rechnungsName(inv)} ist festgeschrieben – Änderungen nur per Storno.`);
     return;
   }
@@ -727,7 +767,8 @@ $("#btn-senden").addEventListener("click", async () => {
 
 $("#btn-vorschau").addEventListener("click", () => {
   const data = readForm();
-  openPdf(() => { checkPlaceholders(data); return api("vorschau", { method: "POST", body: data }); });
+  openPdf(() => { checkPlaceholders(data); return api("vorschau", { method: "POST", body: data }); },
+    `Vorschau_${istAngebot() ? "Angebot" : "Rechnung"}_${data.nummer || "neu"}.pdf`);
 });
 
 $("#rechnung").addEventListener("submit", e => {
@@ -745,7 +786,7 @@ $("#rechnung").addEventListener("submit", e => {
     speichernText();
     toast(`${art} ${data.nummer} gespeichert` + (res.datei ? ` → ${res.datei.split("/").pop()}` : ""));
     return api(`${pfad}/${res.id}/pdf`);
-  });
+  }, `${art}_${data.nummer}.pdf`);
 });
 
 // ---------- Rechnungsliste ----------
@@ -913,6 +954,12 @@ const plChip = r => ` <button type="button" class="pl-chip" data-act="pl-reset" 
 
 /* Link-Download (Server sendet Content-Disposition: attachment) */
 function ladeHerunter(url) {
+  if (appFenster()) {   // App-Fenster: „Speichern unter“-Dialog
+    window.pywebview.api.speichern(url)
+      .then(name => { if (name) toast(`Gespeichert: ${name}`); })
+      .catch(e => toast("Speichern fehlgeschlagen: " + e.message, true));
+    return;
+  }
   const a = document.createElement("a");
   a.href = url;
   a.download = "";
@@ -1070,7 +1117,7 @@ $("#tab-liste").addEventListener("click", async e => {
   const id = Number(btn.closest("tr").dataset.id);
   const inv = state.rechnungen.find(r => r.id === id);
   try {
-    if (btn.dataset.act === "pdf") window.open(`api/rechnungen/${id}/pdf`, "_blank");
+    if (btn.dataset.act === "pdf") zeigePdf(`api/rechnungen/${id}/pdf`);
     if (btn.dataset.act === "senden") oeffneVersand("rechnung", inv);
     if (btn.dataset.act === "qr") await oeffneQr(inv);
     if (btn.dataset.act === "kopie") await kopiere("rechnung", inv);
@@ -1110,7 +1157,7 @@ $("#tab-liste").addEventListener("click", async e => {
         await loadListe();
         toast(`Stornorechnung ${res.nummer} zu ${rechnungsName(inv)} erstellt`);
         return api(`rechnungen/${res.id}/pdf`);
-      });
+      }, `Stornorechnung_zu_${inv.nummer}.pdf`);
     }
     if (btn.dataset.act === "mahnung") {
       const stufe = NAECHSTE_MAHNUNG[inv.mahnungen.length];
@@ -1121,7 +1168,7 @@ $("#tab-liste").addEventListener("click", async e => {
           await loadListe();
           toast(`${res.bezeichnung} zu ${rechnungsName(inv)} erstellt` + (res.datei ? ` → ${res.datei.split("/").pop()}` : ""));
           return api(`mahnungen/${res.id}/pdf`);
-        });
+        }, `${stufe.replace(". ", "-")}_${inv.nummer}.pdf`);
       }
     }
   } catch (err) { toast(err.message, true); }
@@ -1311,7 +1358,7 @@ $("#angebote-body").addEventListener("click", async e => {
   const id = Number(btn.closest("tr").dataset.id);
   const a = state.angebote.find(x => x.id === id);
   try {
-    if (btn.dataset.act === "pdf") window.open(`api/angebote/${id}/pdf`, "_blank");
+    if (btn.dataset.act === "pdf") zeigePdf(`api/angebote/${id}/pdf`);
     if (btn.dataset.act === "senden") oeffneVersand("angebot", a);
     if (btn.dataset.act === "kopie") await kopiere("angebot", a);
     if (btn.dataset.act === "edit") loadAngebotIntoForm(a);
