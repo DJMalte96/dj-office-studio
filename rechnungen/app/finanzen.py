@@ -1296,7 +1296,7 @@ def _ordner_dateien(ordner, ruhe=5):
             if n.startswith(".") or not (n.lower().endswith(BELEG_ENDUNGEN) or n == "mbox"):
                 continue
             try:
-                if jetzt - os.path.getmtime(pfad) >= ruhe:
+                if ruhe <= 0 or jetzt - os.path.getmtime(pfad) >= ruhe:   # Windows: Zeitstempel kann minimal vorgehen
                     yield pfad
             except OSError:
                 continue
