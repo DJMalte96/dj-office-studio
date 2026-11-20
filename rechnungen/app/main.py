@@ -41,6 +41,12 @@ def _daten():
 app.config["MAX_CONTENT_LENGTH"] = 100 * 1024 * 1024  # Upload alter Rechnungen
 
 
+@app.errorhandler(413)
+def _zu_gross(_e):
+    """Zu großer Upload (über 100 MB oder über 1000 Dateien) – verständliche Meldung statt HTML-Fehlerseite."""
+    return jsonify({"error": "Zu viele oder zu große Dateien auf einmal (höchstens 1000 Dateien bzw. 100 MB)."}), 413
+
+
 # Einstellungen der App: Name → (Typ, Standardwert). Gespeichert in der Datenbank, bearbeitbar unter ⚙ Einstellungen.
 FELDER = {
     "name": (str, ""), "strasse": (str, ""), "plz_ort": (str, ""), "telefon": (str, ""),

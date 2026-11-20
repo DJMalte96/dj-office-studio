@@ -2,6 +2,13 @@
 
 Alle Änderungen an DJ Office Studio. Neueste Version oben.
 
+## 1.1.1 – 2026-11-20
+
+### Verbessert
+- **Belege in großen Mengen hochladen**: Beliebig viele Belege und Kauf-Mails auf einmal hineinziehen – bisher war bei 1000 Dateien bzw. 100 MB Schluss. Die App lädt sie jetzt in Paketen hoch und zeigt den Fortschritt („120 von 800 Belegen gelesen …“). Bei vielen doppelten Belegen nennt die Meldung nur noch die Anzahl statt aller Dateinamen.
+- Bricht das Hochladen ab (z. B. Verbindung weg), sagt die Meldung, wie viele Dateien schon übernommen wurden. Einfach noch einmal hineinziehen – bereits vorhandene werden erkannt.
+- Zu große Uploads (auch beim Einspielen einer Sicherung) bekommen eine verständliche Fehlermeldung statt eines unklaren Fehlers.
+
 ## 1.1.0 – 2026-11-20
 
 **Neu: Finanzen.** Ein neuer Menüpunkt mit allem, was für die Steuererklärung gebraucht wird – Ausgaben, Fahrten, Abschreibungen und die Einnahmen-Überschuss-Rechnung (EÜR) samt Export für den Steuerberater.
