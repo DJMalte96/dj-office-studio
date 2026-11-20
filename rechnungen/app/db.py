@@ -449,7 +449,7 @@ def set_customer_email(kunde_id, email):
 
 # ---------- Datensicherung ----------
 
-GEHEIM = ("smtp_passwort",)   # wird nicht in herunterladbare Sicherungen übernommen
+GEHEIM = ("smtp_passwort", "paperless_token")   # wird nicht in herunterladbare Sicherungen übernommen
 
 def sichern(ziel_pfad):
     """Konsistente Kopie der Datenbank (auch während die App läuft)."""

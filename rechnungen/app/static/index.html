@@ -388,6 +388,21 @@
             <label class="inline"><input type="checkbox" name="paperless_installiert">
               Paperless-ngx ist installiert – „An Paperless senden“ anzeigen</label>
             <label>Paperless-Eingangsordner (consume) <span class="opt nur-desktop">(z. B. Netzlaufwerk von Paperless)</span><input name="paperless_eingangsordner" placeholder="/share/paperless/consume"></label>
+            <div class="pl-belege">
+              <h3>Belege aus Paperless abholen <span class="h2-sub">für Finanzen → Ausgaben</span></h3>
+              <label>Adresse von Paperless <span class="opt">(leer = automatisch suchen)</span>
+                <input name="paperless_url" placeholder="z. B. http://homeassistant.local:8000" autocomplete="off"></label>
+              <label>API-Token <span class="opt" id="pl-token-status"></span>
+                <input name="paperless_token" type="password" autocomplete="new-password"></label>
+              <p class="mini-hinweis">Den Token gibt es in Paperless über das Profil oben rechts → <b>API-Auth-Token</b> (ggf. erst erzeugen). Die App liest nur – in Paperless wird nichts verändert.</p>
+              <div class="row pl-verbinden-zeile">
+                <button type="button" class="small secondary" id="pl-verbinden">Verbindung prüfen &amp; Tags laden</button>
+                <span class="hint" id="pl-verbinden-status"></span>
+              </div>
+              <label>Tag der Ausgaben-Belege
+                <select name="paperless_tag"><option value="0">– erst Verbindung prüfen –</option></select></label>
+              <input type="hidden" name="paperless_tag_name">
+            </div>
           </div>
         </div>
         <div class="card" id="fahrten-karte">
@@ -513,7 +528,10 @@
     <section id="tab-ausgaben" class="tab">
       <div class="kopf">
         <div><h2>Ausgaben</h2><p class="hint">Belege hochladen, prüfen, fertig. Die Originale bleiben unverändert gespeichert.</p></div>
-        <div class="knopf-zeile"><button type="button" class="secondary" id="ausgabe-ohne-beleg">＋ Ausgabe ohne Beleg</button></div>
+        <div class="knopf-zeile">
+          <button type="button" class="secondary hidden" id="paperless-abholen" title="Alle Dokumente mit dem Ausgaben-Tag holen, die noch nicht übernommen sind">⇩ Aus Paperless abholen</button>
+          <button type="button" class="secondary" id="ausgabe-ohne-beleg">＋ Ausgabe ohne Beleg</button>
+        </div>
       </div>
       <div class="card">
         <label class="dropzone" id="beleg-drop">

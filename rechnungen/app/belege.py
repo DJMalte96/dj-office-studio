@@ -324,6 +324,15 @@ def auswerten(name, daten):
     return v
 
 
+def text_vorschlaege(text):
+    """Betrag, Umsatzsteuer und Datum aus reinem Text (z. B. der Texterkennung von Paperless)."""
+    zeilen = zeilen_aus(text or "")
+    betrag, fundstelle = gesamt_vorschlag(zeilen)
+    ust_satz, ust_betrag = steuer_vorschlag(zeilen, betrag)
+    return {"betrag": betrag, "fundstelle": fundstelle, "ust_satz": ust_satz, "ust_betrag": ust_betrag,
+            "belegdatum": datum_vorschlag(zeilen)}
+
+
 def _anzeigename(absender):
     m = re.match(r'\s*"?([^"<]+?)"?\s*<', absender or "")
     return m.group(1).strip() if m else (absender or "").split("@")[0] or None

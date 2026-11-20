@@ -2,6 +2,15 @@
 
 Alle Änderungen an DJ Office Studio. Neueste Version oben.
 
+## 1.2.0 – 2026-11-20
+
+### Neu
+- **Ausgaben-Belege aus Paperless-ngx abholen**: Unter Finanzen → Ausgaben holt **⇩ Aus Paperless abholen** alle Dokumente mit einem bestimmten Tag (z. B. „Ausgaben“), die noch nicht übernommen sind – auch aus früheren Jahren.
+  - Einrichten unter ⚙ Einstellungen → Ablage & Paperless: Adresse (oder automatisch suchen lassen), API-Token aus Paperless, Tag auswählen.
+  - Lieferant und Datum kommen aus Paperless (Korrespondent, Ausstellungsdatum), der Betrag wird gelesen – bei Fotos und Scans aus der Texterkennung von Paperless.
+  - Die App speichert eine Kopie der PDF, Export und Sicherung funktionieren also auch ohne laufendes Paperless. Schon von Hand hochgeladene Belege werden erkannt und nur verknüpft.
+  - In Paperless wird nichts verändert. Der API-Token wird nur lokal gespeichert und ist – wie das E-Mail-Passwort – nicht in der Sicherung enthalten.
+
 ## 1.1.4 – 2026-11-20
 
 ### Neu

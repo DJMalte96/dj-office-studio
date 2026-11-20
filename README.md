@@ -30,7 +30,7 @@ DJ Office Studio ist eine App zum Schreiben von DJ-Rechnungen und -Angeboten –
 - **Angebote**: Im selben Editor wie Rechnungen (Kunde, Rechnungsposten mit von/bis-Zeiten, Preise) – mit eigenem Nummernkreis, Angebotsdatum, **Gültig bis** (Bindefrist, Standard 30 Tage), optionaler Zahlungsbedingung und freien **Hinweisen** (z. B. Verlängerungsstunde, Leistungsumfang, GEMA). Das PDF hat dasselbe Layout wie die Rechnung (`Angebot_001_120627.pdf`). Oben in der Angebotsansicht und auf der Startseite: **Offene Angebote** mit Angebotsdatum und Restlaufzeit („noch 12 Tage“, „seit 3 Tagen abgelaufen“), auf der Startseite zusätzlich ein Hinweis, wenn ein Angebot in den nächsten 3 Tagen abläuft. In der Angebotsliste: mehrere markieren und als ZIP herunterladen oder an Paperless senden, Status (offen / angenommen / abgelehnt), Restlaufzeit bzw. „abgelaufen“ und **→ Rechnung**, das Kunde und Positionen in eine neue Rechnung übernimmt und das Angebot als angenommen markiert.
 - **Import alter Rechnungen und Angebote**: Bisherige PDFs hochladen (gemischt möglich – die App erkennt Rechnung oder Angebot selbst). Empfänger, Positionen und Vorschläge für Rechnungsposten werden erkannt und können übernommen werden, optional auch die Rechnungen selbst als Archiv und die Angebote (mit „gültig bis“ und Hinweisen) in die Angebotsliste.
 - **Finanzen**
-  - **Ausgaben mit Belegen**: PDF-Rechnungen, Fotos (JPG, PNG, HEIC) und Kauf-Mails (.eml, .msg – z. B. von Beatport, iTunes/Apple, Amazon, Qobuz, Bandcamp) per Drag & Drop hochladen – auch ganze Mail-Ordner (Postfach-Export .mbox) oder Finder-Ordner mit Hunderten Mails auf einmal. Die App liest Lieferant, Datum, Betrag und Umsatzsteuer aus und schlägt eine Kategorie vor; man prüft nur noch und übernimmt. Die Originale bleiben unverändert gespeichert, doppelte Belege werden erkannt. Ausgaben ohne Beleg (z. B. Parkautomat) gehen mit Notiz. Privatanteil in Prozent (z. B. Handyvertrag).
+  - **Ausgaben mit Belegen**: PDF-Rechnungen, Fotos (JPG, PNG, HEIC) und Kauf-Mails (.eml, .msg – z. B. von Beatport, iTunes/Apple, Amazon, Qobuz, Bandcamp) per Drag & Drop hochladen – auch ganze Mail-Ordner (Postfach-Export .mbox) oder Finder-Ordner mit Hunderten Mails auf einmal. Die App liest Lieferant, Datum, Betrag und Umsatzsteuer aus und schlägt eine Kategorie vor; man prüft nur noch und übernimmt. Belege, die schon in **Paperless-ngx** liegen, holt die App per Knopf ab (alle Dokumente mit einem Tag, z. B. „Ausgaben“) – Lieferant und Datum kommen aus Paperless, der Betrag wird gelesen, bei Scans aus der Texterkennung von Paperless. Die Originale bleiben unverändert gespeichert, doppelte Belege werden erkannt. Ausgaben ohne Beleg (z. B. Parkautomat) gehen mit Notiz. Privatanteil in Prozent (z. B. Handyvertrag).
   - **Fahrten**: Zu jeder Rechnung wird automatisch die Hin- und Rückfahrt zum Veranstaltungsort erfasst – auf Wunsch mit Kilometern von OpenStreetMap, sonst von Hand. Pro Rechnung abwählbar, eigene Fahrten (z. B. zum Musikladen) lassen sich ergänzen. Mit Privatfahrzeug zählt die Kilometerpauschale (Standard 0,30 €/km).
   - **Anschaffungen & Abschreibung**: Geräte über 800 € netto werden über die Nutzungsdauer abgeschrieben (linear, monatsgenau; Computer im Kaufjahr voll). Anlagenverzeichnis mit Restwerten, Übernahme von Geräten aus Vorjahren und Verkauf/Ausscheiden.
   - **Übersicht** mit Einnahmen, Ausgaben und Gewinn des Jahres, Diagramm je Monat (auch als Tabelle) und Ausgaben nach Kategorie.
@@ -103,7 +103,7 @@ Alle Einstellungen werden **in der App** gemacht: oben rechts auf **⚙** klicke
 | Bankverbindung | Bank, abweichender Kontoinhaber, IBAN, BIC, QR-Code zum Bezahlen (GiroCode) drucken |
 | Steuer | Steuernummer, Kleinunternehmer (§ 19 UStG) – Hinweis auf die Steuerbefreiung (ab Belegdatum 18.11.2026: „Steuerbefreiung nach § 19 UStG (Kleinunternehmerregelung)“, ältere Belege behalten ihre ursprüngliche Formulierung); ohne Kleinunternehmerregelung: Umsatzsteuersatz (19 % / 7 %) und optional USt-IdNr. |
 | Nummern & Fristen | Rechnungen ab Nr., Angebote ab Nr. (danach wird automatisch hochgezählt), Gültigkeit neuer Angebote in Tagen |
-| Ablage & Paperless | Ordner für PDF-Kopien (Standard `/share/rechnungen`), „Paperless-ngx ist installiert“, Paperless-Eingangsordner |
+| Ablage & Paperless | Ordner für PDF-Kopien (Standard `/share/rechnungen`), „Paperless-ngx ist installiert“, Paperless-Eingangsordner; **Belege aus Paperless abholen**: Adresse, API-Token, Tag der Ausgaben-Belege |
 | Fahrten | Fahrzeug (Privatfahrzeug mit Kilometerpauschale / Betriebsfahrzeug), Kilometersatz, Startadresse (Standard: eigene Adresse), Kartendienst OpenStreetMap ein/aus, „Fahrt erfassen“ bei neuen Rechnungen |
 | E-Mail-Versand | eigene E-Mail-Adresse, Anbieter-Vorlage, Postausgangsserver (SMTP), Port, Verschlüsselung, Benutzername, Passwort, „Antworten an“, Kopie an mich, Textvorlagen für Rechnung / Angebot / Mahnung |
 
@@ -128,6 +128,14 @@ Ist unter ⚙ Einstellungen „Paperless-ngx ist installiert“ eingeschaltet, g
 
 - Der Paperless-Eingangsordner muss auf den Eingangsordner (consume) der Paperless-App zeigen – welcher das ist, steht in der Konfiguration der Paperless-App. In Home Assistant muss der Ordner unter `/share` oder `/media` liegen, damit DJ Office Studio darauf zugreifen kann; in der Desktop-Version geht jeder erreichbare Ordner (z. B. ein Netzlaufwerk).
 - Existiert der Ordner nicht, meldet die App einen Fehler, statt ihn anzulegen – so landen keine PDFs unbemerkt im falschen Ordner.
+
+**Ausgaben-Belege aus Paperless abholen** (Finanzen → Ausgaben): Liegen Rechnungen und Quittungen schon in Paperless und tragen dort einen Tag (z. B. „Ausgaben“), holt die App sie mit **⇩ Aus Paperless abholen** in die Ausgaben. Einrichten unter ⚙ Einstellungen → Ablage & Paperless:
+
+1. **Adresse von Paperless** eintragen – oder leer lassen, dann sucht die App das Paperless-Add-on in Home Assistant selbst. Für die Desktop-Version die Adresse im Heimnetz, z. B. `http://homeassistant.local:8000` (dafür muss das Add-on seinen Port freigeben).
+2. **API-Token** eintragen: in Paperless oben rechts über das Profil → *API-Auth-Token* (ggf. erst erzeugen).
+3. **Verbindung prüfen & Tags laden**, den Tag der Ausgaben-Belege wählen, speichern.
+
+Beim Abholen kommen alle Dokumente mit dem Tag – auch aus früheren Jahren –, die noch nicht übernommen sind. Die App speichert eine Kopie (die PDF mit Texterkennung aus Paperless), damit Export und Sicherung auch ohne laufendes Paperless funktionieren. Lieferant (Korrespondent) und Datum kommen aus Paperless, der Betrag wird aus dem Text gelesen; die Belege stehen dann unter **Neu – bitte prüfen**. Wurde ein Beleg schon von Hand hochgeladen, wird er nur verknüpft und nicht doppelt angelegt. In Paperless wird nichts verändert. Der API-Token wird wie das E-Mail-Passwort nur lokal gespeichert und ist nicht in der Sicherung enthalten.
 
 ## Installation
 
@@ -259,6 +267,7 @@ rechnungen/
     mail.py              E-Mail-Versand per SMTP, Textvorlagen
     finanzen.py          Finanzen: Ausgaben, Fahrten, Anschaffungen/Abschreibung, EÜR, Export
     belege.py            Auslesen von Belegen (PDF, Fotos, Kauf-Mails .eml/.msg/.mbox)
+    paperless.py         Abholen von Ausgaben-Belegen aus Paperless-ngx (REST-Schnittstelle, nur lesend)
     strecken.py          Entfernungen über OpenStreetMap (Nominatim, OSRM) mit Zwischenspeicher
     static/              Oberfläche (HTML, CSS, JavaScript)
 desktop/
