@@ -40,6 +40,7 @@ def test_import_erkennt_rechnung_und_angebot(client):
                                                  "bezahlt": True})
     inv = client.get("/api/rechnungen").get_json()[0]
     assert inv["nummer"] == "030" and inv["festgeschrieben"]   # importierte Rechnungen sind abgeschlossen
+    assert inv["bezahlt"] and inv["bezahlt_am"] == inv["datum"]   # Zahlungsdatum unbekannt → Rechnungsdatum
 
 
 def test_download_zip(client):

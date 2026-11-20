@@ -2,6 +2,12 @@
 
 Alle Änderungen an DJ Office Studio. Neueste Version oben.
 
+## 1.1.2 – 2026-11-20
+
+### Verbessert
+- **Bezahlt-Datum mit einem Klick**: Bei bezahlten Rechnungen ohne Zahlungsdatum (z. B. alte Importe) übernimmt „Bei allen das Rechnungsdatum übernehmen“ das Rechnungsdatum für alle auf einmal. Einzeln nachtragen ist nur noch nötig, wenn das Geld erst im neuen Jahr kam.
+- Beim Import alter Rechnungen als „bezahlt“ wird das Rechnungsdatum jetzt automatisch als Bezahlt-Datum eingetragen.
+
 ## 1.1.1 – 2026-11-20
 
 ### Verbessert

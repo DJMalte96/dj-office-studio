@@ -646,3 +646,5 @@ table.euer-tabelle tr.gewinn td { font-weight: 800; font-size: 17px; border-top:
 .export-liste { margin: 8px 0 16px; padding-left: 18px; font-size: 14px; }
 #start-finanzen .stat-gross small { margin-top: 2px; }
 .kopf > select { width: auto; min-width: 120px; }
+.bezahltam-alle { margin: 4px 0 14px; }
+.bezahltam-alle .mini-hinweis { margin-top: 8px; }

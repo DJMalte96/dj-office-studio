@@ -961,6 +961,15 @@ def ohne_bezahltdatum():
                     for r in db.list_invoices() if r["bezahlt"] and not r.get("bezahlt_am") and not r.get("storno_von")])
 
 
+@bp.post("/api/finanzen/bezahlt-am-rechnungsdatum")
+def bezahlt_am_aus_rechnungsdatum():
+    """Alle bezahlten Rechnungen ohne Bezahlt-Datum bekommen ihr Rechnungsdatum (z. B. nach einem Import)."""
+    with db.connect() as con:
+        n = con.execute("UPDATE rechnungen SET bezahlt_am = datum WHERE bezahlt = 1 AND bezahlt_am IS NULL"
+                        " AND storno_von IS NULL").rowcount
+    return jsonify({"anzahl": n})
+
+
 @bp.put("/api/rechnungen/<int:inv_id>/bezahlt_am")
 def bezahlt_am_setzen(inv_id):
     d = (_daten().get("bezahlt_am") or "").strip()
