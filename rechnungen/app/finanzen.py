@@ -185,17 +185,26 @@ def lieferanten():
 def belege_hochladen():
     """Mehrere Belege auf einmal: speichern, auswerten, als „neu“ anlegen. Doppelte werden erkannt."""
     neu, doppelt, fehler = [], [], []
+    dateien = []
     for f in request.files.getlist("dateien"):
-        daten = f.read()
+        daten, name = f.read(), f.filename or "Beleg"
         if not daten:
             continue
+        if belege.ist_mbox(name, daten):          # Postfach-Export → jede Mail ein eigener Beleg
+            try:
+                dateien += belege.mbox_aufteilen(daten)
+            except Exception as e:
+                fehler.append({"datei": name, "fehler": f"Postfach konnte nicht gelesen werden ({type(e).__name__})"})
+        else:
+            dateien.append((name, daten))
+    for name, daten in dateien:
         try:
-            a, vorhanden = beleg_aufnehmen(f.filename or "Beleg", daten)
+            a, vorhanden = beleg_aufnehmen(name, daten)
         except Exception as e:   # defekte Datei darf den Rest nicht aufhalten
-            fehler.append({"datei": f.filename, "fehler": f"Konnte nicht gelesen werden ({type(e).__name__})"})
+            fehler.append({"datei": name, "fehler": f"Konnte nicht gelesen werden ({type(e).__name__})"})
             continue
         if vorhanden:
-            doppelt.append({"datei": f.filename, "id": vorhanden})
+            doppelt.append({"datei": name, "id": vorhanden})
         else:
             neu.append(a)
     return jsonify({"neu": neu, "doppelt": doppelt, "fehler": fehler})

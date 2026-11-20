@@ -78,3 +78,38 @@ def test_mail_mit_pdf_anhang_hat_vorrang():
     v = belege.auswerten("x.eml", m.as_bytes())
     assert v["betrag"] == 119.0 and v["lieferant"] == "Shop" and v["belegdatum"] == "2026-11-13"
     assert any("angehängten PDF" in h for h in v["hinweise"])
+
+
+def _mbox(*mails):
+    """Postfach-Export wie aus Apple Mail: „From “-Zeile vor jeder Mail, Leerzeile dazwischen, „>From “ im Text."""
+    teile = []
+    for m in mails:
+        m = m.replace(b"\r\n", b"\n").rstrip(b"\n") + b"\n"
+        teile.append(b"From ???@??? Fri Nov 20 13:18:00 2026\n" + m)
+    return b"\n".join(teile)
+
+
+def test_postfach_export_mbox(client):
+    import io
+    from pathlib import Path
+    ordner = Path(__file__).parent / "beispiele" / "mails"
+    mails = [(ordner / n).read_bytes() for n in ("beatport.eml", "apple.eml", "qobuz.eml")]
+    mails[0] = mails[0].replace(b"\n\n", b"\n\n>From der Redaktion: Danke!\n\n", 1)    # escapte Zeile im Text
+    mbox = _mbox(*mails)
+    r = client.post("/api/ausgaben/belege", data={"dateien": [(io.BytesIO(mbox), "mbox")]},
+                    content_type="multipart/form-data").get_json()
+    assert len(r["neu"]) == 3 and not r["fehler"]
+    assert {a["lieferant"] for a in r["neu"]} >= {"Beatport", "Qobuz"}
+    assert all(a["beleg_name"].endswith(".eml") for a in r["neu"])
+    # derselbe Export noch einmal (z. B. später mit neuen Mails) → alles doppelt
+    r = client.post("/api/ausgaben/belege", data={"dateien": [(io.BytesIO(mbox), "Musikkäufe.mbox")]},
+                    content_type="multipart/form-data").get_json()
+    assert not r["neu"] and len(r["doppelt"]) == 3
+
+
+def test_mbox_aufteilen_trennt_nur_an_echten_grenzen():
+    import belege
+    mbox = b"From a@b Fri Nov 20 2026\nSubject: Eins\n\nText\nFrom hier geht es weiter\n\nFrom c@d Fri Nov 20 2026\nSubject: Zwei\n\n>From zitiert\n"
+    teile = belege.mbox_aufteilen(mbox)
+    assert [n for n, _ in teile] == ["Eins (1).eml", "Zwei (2).eml"]
+    assert b"From hier geht es weiter" in teile[0][1] and teile[1][1].endswith(b"\nFrom zitiert\n")

@@ -517,11 +517,20 @@
       </div>
       <div class="card">
         <label class="dropzone" id="beleg-drop">
-          <input type="file" id="beleg-dateien" multiple accept=".pdf,.eml,.msg,.jpg,.jpeg,.png,.heic,.heif,.webp,application/pdf,image/*,message/rfc822">
+          <input type="file" id="beleg-dateien" multiple accept=".pdf,.eml,.msg,.mbox,.jpg,.jpeg,.png,.heic,.heif,.webp,application/pdf,image/*,message/rfc822,application/mbox">
           <strong>Belege hierher ziehen</strong>
-          <span>PDF-Rechnungen · Fotos (JPG, PNG, HEIC) · Kauf-Mails direkt aus dem Mailprogramm (.eml, .msg) – auch mehrere auf einmal</span>
+          <span>PDF-Rechnungen · Fotos (JPG, PNG, HEIC) · Kauf-Mails (.eml, .msg) · ganze Mail-Ordner (.mbox) – auch viele auf einmal</span>
           <span class="hint" id="beleg-status">oder klicken zum Auswählen</span>
         </label>
+        <div class="mail-hilfe" id="mail-hilfe" hidden>
+          <div class="row between"><strong id="mail-hilfe-grund"></strong><button type="button" class="icon" id="mail-hilfe-zu" title="Schließen">✕</button></div>
+          <p>Apple Mail gibt Mails beim Ziehen nicht direkt an den Browser weiter. So klappt es:</p>
+          <ol>
+            <li><b>Ganzer Ordner auf einmal:</b> In Apple Mail den Ordner (z. B. „Musikkäufe“) links anklicken → Menü <b>Postfach → Postfach exportieren …</b> → speichern. Den entstandenen Ordner „….mbox“ hierher ziehen.</li>
+            <li><b>Einzelne Mails:</b> Mails markieren und zuerst auf den Schreibtisch oder in einen Finder-Ordner ziehen – dort werden .eml-Dateien daraus. Diese (oder den ganzen Ordner) dann hierher ziehen.</li>
+          </ol>
+          <p class="mini-hinweis">Doppelte Mails werden erkannt – du kannst denselben Ordner später einfach noch einmal importieren.</p>
+        </div>
       </div>
       <div class="card hidden" id="ausgaben-neu-karte">
         <div class="row between"><h2>Neu – bitte prüfen <span class="h2-sub" id="ausgaben-neu-anzahl"></span></h2>
