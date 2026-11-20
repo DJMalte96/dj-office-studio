@@ -102,7 +102,7 @@ jobs:
           # Echte Streckenberechnung über OpenStreetMap mit dem SSL der gebauten App (öffentliche Adressen).
           # Bei einer Störung des öffentlichen Dienstes nur Warnung, kein Abbruch.
           curl -sf -X PUT -H "Content-Type: application/json" -d '{"kartendienst":true,"startadresse":"Rathausmarkt 1, 20095 Hamburg"}' http://127.0.0.1:8765/api/einstellungen > /dev/null
-          STRECKE=$(curl -s -G --max-time 60 --data-urlencode "strasse=Marienplatz 1" --data-urlencode "plz=80331" --data-urlencode "ort=München" http://127.0.0.1:8765/api/fahrten/vorschau || true)
+          STRECKE=$(curl -s -G --max-time 60 --data-urlencode "strasse=Marienplatz 1" --data-urlencode "plz=80331" --data "ort=M%C3%BCnchen" http://127.0.0.1:8765/api/fahrten/vorschau || true)
           echo "Strecke Hamburg → München: $STRECKE"
           if echo "$STRECKE" | grep -q '"km_einfach"'; then echo "Kartendienst ok"; else echo "::warning::Kartendienst nicht erreichbar: $STRECKE"; fi
           kill %1 || true
