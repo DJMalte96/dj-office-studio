@@ -2,6 +2,8 @@
 
 Stand: 18.11.2026 · Status: **Planung** – noch nicht umgesetzt · geplant ab Version 1.1
 
+**Oberflächen-Entwurf** (abgestimmt am 20.11.2026): [`docs/entwurf-finanzen/index.html`](entwurf-finanzen/index.html) – im Browser öffnen; klickbar, mit erfundenen Beispieldaten, nutzt das echte Stylesheet der App.
+
 Ziel: DJ Office Studio bekommt einen Menüpunkt **Finanzen**. Dort werden Ausgaben verwaltet (mit Beleg), Fahrten zu den Veranstaltungen automatisch berechnet und am Jahresende eine **Einnahmen-Überschuss-Rechnung (EÜR)** erstellt und für den Steuerberater exportiert. Eine Anbindung an Paperless-ngx folgt später; bis dahin werden Belege direkt in der App hochgeladen.
 
 Die App soll für verschiedene DJs passen: Kleinunternehmer und umsatzsteuerpflichtig, Auto im Privat- oder im Betriebsvermögen.
