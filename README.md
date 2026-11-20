@@ -2,13 +2,13 @@
 
 # DJ Office Studio
 
-DJ Office Studio ist eine App zum Schreiben von DJ-Rechnungen und -Angeboten – als App für Home Assistant oder eigenständig unter Windows und macOS. Kunden auswählen, Rechnungsposten und Uhrzeiten eintragen, Preis festlegen – fertig ist das PDF.
+DJ Office Studio ist eine App zum Schreiben von DJ-Rechnungen und -Angeboten – als App für Home Assistant oder eigenständig unter Windows und macOS. Kunden auswählen, Rechnungsposten und Uhrzeiten eintragen, Preis festlegen – fertig ist das PDF. Dazu kommen die **Finanzen**: Ausgaben mit Belegen, gefahrene Kilometer, Abschreibungen und eine Einnahmen-Überschuss-Rechnung (EÜR) mit Export für den Steuerberater.
 
 ![Screenshot: Rechnung erstellen](docs/bilder/rechnungseditor.png)
 
 ## Funktionen
 
-- **Startseite** mit Kacheln für alle Aktionen der App und dem aktuellen Stand: offene Rechnungen mit Restzeit und Warnung bei Überfälligkeit, offene Angebote mit Restlaufzeit, Zeit seit der letzten Datensicherung, Umsatz nach Monat/Jahr und die letzten Rechnungen.
+- **Startseite** mit Kacheln für alle Aktionen der App und dem aktuellen Stand: offene Rechnungen mit Restzeit und Warnung bei Überfälligkeit, offene Angebote mit Restlaufzeit, Gewinn des laufenden Jahres, Zeit seit der letzten Datensicherung, Umsatz nach Monat/Jahr und die letzten Rechnungen.
 - **Rechnungseditor**
   - Kunde mit Autovervollständigung aus bisherigen Kunden; neue Kunden werden beim Speichern automatisch angelegt
   - Positionen per **Rechnungsposten** (Hochzeit, Geburtstag, Firmenfeier, …) mit **von/bis-Zeiten** – der Rechnungstext wird daraus erzeugt, z. B. „DJ – Tätigkeit Hochzeit – 17:00 Uhr bis 2:00 Uhr“
@@ -26,15 +26,21 @@ DJ Office Studio ist eine App zum Schreiben von DJ-Rechnungen und -Angeboten –
 - **Umsatzsteuer**: Für Kleinunternehmer ohne Umsatzsteuer mit Hinweis nach § 19 UStG. Ohne Kleinunternehmerregelung sind die Positionspreise Nettopreise; Rechnung und Angebot weisen Nettobetrag, Umsatzsteuer (19 % oder 7 %) und Gesamtbetrag aus, der Export enthält Netto, Steuersatz und Steuer. Die Steuer wird je Beleg gespeichert – ein späterer Wechsel in den Einstellungen ändert bereits geschriebene Rechnungen nicht.
 - **Kopieren**: Eine Rechnung oder ein Angebot mit einem Klick als neuen Beleg übernehmen (Kunde, Texte, Preise, Zahlungsbedingung) – praktisch für Stammkunden und jährlich wiederkehrende Feiern. Neue Nummer, heutiges Datum, das Datum der Veranstaltung trägt man neu ein.
 - **QR-Code zum Bezahlen (GiroCode)**: Auf Rechnungen, Zahlungserinnerungen und Mahnungen steht neben der Zahlungsbedingung ein QR-Code. Der Kunde scannt ihn mit seiner Banking-App, und Empfänger, IBAN, Betrag und Verwendungszweck („Rechnung 037“) sind schon ausgefüllt. Bei offenen Rechnungen zeigt die App den Code auch groß auf dem Bildschirm an, z. B. wenn direkt nach der Feier bezahlt wird. Nicht auf Angeboten, Stornorechnungen und bei „Bar erhalten“ / „Bereits bezahlt“; abschaltbar unter ⚙ Einstellungen.
-- **Datensicherung & Export**: Unter ⚙ Einstellungen alle Daten als eine Sicherungsdatei herunterladen bzw. wieder einspielen. Die Startseite zeigt, wie lange die letzte Sicherung her ist, und erinnert nach einstellbarer Zeit (Standard 30 Tage) an eine neue. Dazu ein **Export für den Steuerberater**: alle Rechnungen eines Jahres als Excel-Tabelle (CSV, mit Bezahlt-Datum, Stornos und ggf. Umsatzsteuer) plus PDFs als ZIP. Die Desktop-Version sichert zusätzlich automatisch einmal pro Tag.
+- **Datensicherung & Export**: Unter ⚙ Einstellungen alle Daten samt Ausgaben-Belegen als eine Sicherungsdatei herunterladen bzw. wieder einspielen. Die Startseite zeigt, wie lange die letzte Sicherung her ist, und erinnert nach einstellbarer Zeit (Standard 30 Tage) an eine neue. Dazu ein **Export für den Steuerberater**: alle Rechnungen eines Jahres als Excel-Tabelle (CSV, mit Bezahlt-Datum, Stornos und ggf. Umsatzsteuer) plus PDFs, dazu EÜR, Ausgaben, Fahrten, Anlagenverzeichnis und alle Belege – als ein ZIP. Die Desktop-Version sichert zusätzlich automatisch einmal pro Tag.
 - **Angebote**: Im selben Editor wie Rechnungen (Kunde, Rechnungsposten mit von/bis-Zeiten, Preise) – mit eigenem Nummernkreis, Angebotsdatum, **Gültig bis** (Bindefrist, Standard 30 Tage), optionaler Zahlungsbedingung und freien **Hinweisen** (z. B. Verlängerungsstunde, Leistungsumfang, GEMA). Das PDF hat dasselbe Layout wie die Rechnung (`Angebot_001_120627.pdf`). Oben in der Angebotsansicht und auf der Startseite: **Offene Angebote** mit Angebotsdatum und Restlaufzeit („noch 12 Tage“, „seit 3 Tagen abgelaufen“), auf der Startseite zusätzlich ein Hinweis, wenn ein Angebot in den nächsten 3 Tagen abläuft. In der Angebotsliste: mehrere markieren und als ZIP herunterladen oder an Paperless senden, Status (offen / angenommen / abgelehnt), Restlaufzeit bzw. „abgelaufen“ und **→ Rechnung**, das Kunde und Positionen in eine neue Rechnung übernimmt und das Angebot als angenommen markiert.
 - **Import alter Rechnungen und Angebote**: Bisherige PDFs hochladen (gemischt möglich – die App erkennt Rechnung oder Angebot selbst). Empfänger, Positionen und Vorschläge für Rechnungsposten werden erkannt und können übernommen werden, optional auch die Rechnungen selbst als Archiv und die Angebote (mit „gültig bis“ und Hinweisen) in die Angebotsliste.
+- **Finanzen**
+  - **Ausgaben mit Belegen**: PDF-Rechnungen, Fotos (JPG, PNG, HEIC) und Kauf-Mails (.eml, .msg – z. B. von Beatport, iTunes/Apple, Amazon, Qobuz, Bandcamp) per Drag & Drop hochladen. Die App liest Lieferant, Datum, Betrag und Umsatzsteuer aus und schlägt eine Kategorie vor; man prüft nur noch und übernimmt. Die Originale bleiben unverändert gespeichert, doppelte Belege werden erkannt. Ausgaben ohne Beleg (z. B. Parkautomat) gehen mit Notiz. Privatanteil in Prozent (z. B. Handyvertrag).
+  - **Fahrten**: Zu jeder Rechnung wird automatisch die Hin- und Rückfahrt zum Veranstaltungsort erfasst – auf Wunsch mit Kilometern von OpenStreetMap, sonst von Hand. Pro Rechnung abwählbar, eigene Fahrten (z. B. zum Musikladen) lassen sich ergänzen. Mit Privatfahrzeug zählt die Kilometerpauschale (Standard 0,30 €/km).
+  - **Anschaffungen & Abschreibung**: Geräte über 800 € netto werden über die Nutzungsdauer abgeschrieben (linear, monatsgenau; Computer im Kaufjahr voll). Anlagenverzeichnis mit Restwerten, Übernahme von Geräten aus Vorjahren und Verkauf/Ausscheiden.
+  - **Übersicht** mit Einnahmen, Ausgaben und Gewinn des Jahres, Diagramm je Monat (auch als Tabelle) und Ausgaben nach Kategorie.
+  - **EÜR & Export**: Einnahmen-Überschuss-Rechnung nach Zahlungseingang und -ausgang mit Vorschlag für die Zeilen der Anlage EÜR, Prüfliste vor dem Export (ungeprüfte Belege, fehlende Bezahlt-Daten, fehlende Kilometer …) und ein ZIP für den Steuerberater mit allen Tabellen, Rechnungen und Belegen. Sonstige Einnahmen ohne Rechnung (z. B. Verkauf eines alten Geräts) lassen sich ergänzen.
 - **Stammdaten** für Kunden, Rechnungsposten und Zahlungsbedingungen.
 - Helles und dunkles Design (folgt der Geräteeinstellung, umschaltbar oben rechts), nutzbar am Computer, Tablet und Handy.
 
 ## Bedienung
 
-Oben in der Kopfzeile gibt es auf jeder Seite das Menü: **Start**, **Rechnungen** (Neue Rechnung, Rechnungen), **Angebote** (Neues Angebot, Angebote) und **Stammdaten** (Kunden, Rechnungsposten, Zahlungsbedingungen).
+Oben in der Kopfzeile gibt es auf jeder Seite das Menü: **Start**, **Rechnungen** (Neue Rechnung, Rechnungen), **Angebote** (Neues Angebot, Angebote), **Finanzen** (Übersicht, Ausgaben, Fahrten, Anschaffungen, EÜR & Export) und **Stammdaten** (Kunden, Rechnungsposten, Zahlungsbedingungen).
 
 
 **Start:** Die Startseite öffnet sich beim Aufruf. Über das Menü oder die Kacheln geht es direkt zu jedem Bereich der App (inkl. Import alter Rechnungen und Angebote). Ein Klick auf das Logo führt zurück zur Startseite. Darunter steht der aktuelle Stand: offene Rechnungen mit Restzeit, offene Angebote mit Restlaufzeit, die Zeit seit der letzten Datensicherung (mit **Jetzt sichern**), Umsatz und die letzten Rechnungen – plus Hinweise bei überfälligen Rechnungen und bald ablaufenden Angeboten.
@@ -63,6 +69,28 @@ Oben in der Kopfzeile gibt es auf jeder Seite das Menü: **Start**, **Rechnungen
 
 **Alte Rechnungen und Angebote importieren:** Unter **Rechnungen** (Archiv) auf **Alte Rechnungen importieren** bzw. unter **Angebote** auf **Alte Angebote importieren** klicken und PDFs hineinziehen – gemischt möglich. Danach auswählen, welche Empfänger, Rechnungsposten, Rechnungen und Angebote übernommen werden. Erkannt werden PDFs mit echtem Text, die so aufgebaut sind wie die PDFs der App (Absenderzeile mit „|“, Adresse, „Rechnung Nr.“ bzw. „Angebot“, Tabelle, „Gesamt“). Eingescannte Dokumente werden nicht unterstützt.
 
+### Finanzen
+
+**Übersicht:** Einnahmen, Ausgaben und Gewinn des gewählten Jahres – so gerechnet wie in der EÜR: Einnahmen zählen am Tag des Zahlungseingangs, Ausgaben am Tag der Bezahlung. Darunter Hinweise auf offene Punkte, das Diagramm je Monat (Maus darüber zeigt die Werte, **Als Tabelle** zeigt alle Zahlen) und die Ausgaben nach Kategorie. Die Abschreibung steht als Jahresbetrag im Dezember.
+
+![Screenshot: Finanzen – Übersicht](docs/bilder/finanzen.png)
+
+**Ausgaben:** Belege in das Feld ziehen – PDFs, Fotos oder Kauf-Mails direkt aus dem Mailprogramm (in Outlook, Apple Mail, Thunderbird die Mail aus der Liste auf das Feld ziehen bzw. als .eml/.msg speichern). Neue Belege stehen unter **Neu – bitte prüfen**. **Alle nacheinander prüfen** öffnet sie der Reihe nach: links der Beleg, rechts die erkannten Angaben. Wo der Betrag gefunden wurde, steht darunter („erkannt: Gesamt … 3,63 €“). Kurz vergleichen, ggf. korrigieren, **Übernehmen**. Erst übernommene Ausgaben zählen in der EÜR. Viele kleine Musikkäufe lassen sich in der Liste je Monat und Shop **zusammengefasst** anzeigen.
+
+![Screenshot: Ausgaben](docs/bilder/ausgaben.png)
+
+![Screenshot: Beleg prüfen](docs/bilder/beleg-pruefen.png)
+
+**Fahrten:** Im Rechnungseditor gibt es die Karte **Veranstaltung & Fahrt** (Veranstaltungsort, Standard: Adresse des Kunden) und den Schalter **Fahrt erfassen**. Beim Speichern der Rechnung legt die App die Fahrt an; ist unter ⚙ Einstellungen → Fahrten der Kartendienst eingeschaltet, berechnet sie die Strecke über OpenStreetMap. Dafür werden Startadresse und Veranstaltungsort an die öffentlichen Dienste von OpenStreetMap (Nominatim, OSRM) geschickt – sonst nichts; ausgeschaltet trägt man die Kilometer selbst ein. Kilometer lassen sich in der Liste korrigieren („korrigiert“), Fahrten ohne Rechnung über **Fahrt ergänzen** hinzufügen. Mit Betriebsfahrzeug zählen statt der Pauschale die echten Kosten (Tanken, Werkstatt …) als Ausgaben.
+
+![Screenshot: Fahrten](docs/bilder/fahrten.png)
+
+**Anschaffungen:** Wird eine Ausgabe als „Anschaffung über 800 €“ eingeordnet, landet das Gerät automatisch im Anlagenverzeichnis und wird abgeschrieben (Nutzungsdauer vorgeschlagen, änderbar). Geräte aus früheren Jahren übernimmt man mit **Gerät aus Vorjahren übernehmen** und dem Restwert zum 1.1. Wird ein Gerät verkauft oder entsorgt, trägt man das Datum und ggf. den Erlös ein.
+
+**EÜR & Export:** Die EÜR des Jahres mit allen Einnahmen- und Ausgabenposten und dem Gewinn. Die Prüfliste daneben zeigt, was vor dem Export noch fehlt – z. B. ungeprüfte Belege oder bezahlte Rechnungen ohne Bezahlt-Datum (alte Importe; mit **nachtragen** direkt ergänzen). **Export herunterladen** erzeugt das ZIP für den Steuerberater. Die Zuordnung zu den Zeilen der Anlage EÜR ist ein Vorschlag – bitte mit dem Steuerberater abgleichen.
+
+![Screenshot: EÜR & Export](docs/bilder/euer.png)
+
 ## Einstellungen
 
 Alle Einstellungen werden **in der App** gemacht: oben rechts auf **⚙** klicken.
@@ -76,6 +104,7 @@ Alle Einstellungen werden **in der App** gemacht: oben rechts auf **⚙** klicke
 | Steuer | Steuernummer, Kleinunternehmer (§ 19 UStG) – Hinweis auf die Steuerbefreiung (ab Belegdatum 18.11.2026: „Steuerbefreiung nach § 19 UStG (Kleinunternehmerregelung)“, ältere Belege behalten ihre ursprüngliche Formulierung); ohne Kleinunternehmerregelung: Umsatzsteuersatz (19 % / 7 %) und optional USt-IdNr. |
 | Nummern & Fristen | Rechnungen ab Nr., Angebote ab Nr. (danach wird automatisch hochgezählt), Gültigkeit neuer Angebote in Tagen |
 | Ablage & Paperless | Ordner für PDF-Kopien (Standard `/share/rechnungen`), „Paperless-ngx ist installiert“, Paperless-Eingangsordner |
+| Fahrten | Fahrzeug (Privatfahrzeug mit Kilometerpauschale / Betriebsfahrzeug), Kilometersatz, Startadresse (Standard: eigene Adresse), Kartendienst OpenStreetMap ein/aus, „Fahrt erfassen“ bei neuen Rechnungen |
 | E-Mail-Versand | eigene E-Mail-Adresse, Anbieter-Vorlage, Postausgangsserver (SMTP), Port, Verschlüsselung, Benutzername, Passwort, „Antworten an“, Kopie an mich, Textvorlagen für Rechnung / Angebot / Mahnung |
 
 Unten auf der Seite steht außerdem die installierte Version mit Link zum Changelog.
@@ -150,9 +179,10 @@ Alternativ im Terminal: `xattr -dr com.apple.quarantine "/Applications/DJ Office
 | Was | Wo |
 |---|---|
 | Kunden, Rechnungsposten, Zahlungsbedingungen, Rechnungen, Angebote, Einstellungen | SQLite-Datenbank `rechnungen.db` im App-Datenordner (`/data`) |
+| Ausgaben-Belege (Originale) | Ordner `belege/` im App-Datenordner, sortiert nach Jahr |
 | PDF-Kopien | Ordner aus den Einstellungen, standardmäßig `/share/rechnungen` (z. B. per Samba erreichbar) |
 
-Beides ist in den normalen Home-Assistant-Backups enthalten. Die Startseite zeigt in der Karte **Datensicherung**, wann zuletzt eine Sicherung heruntergeladen wurde, und färbt sich rot, sobald die eingestellte Zeit (⚙ Einstellungen → Datensicherung & Export, Standard 30 Tage, 0 = keine Erinnerung) überschritten ist – mit **Jetzt sichern** direkt daneben. Zusätzlich gibt es unter **⚙ Einstellungen → Datensicherung & Export** eine Sicherung zum Herunterladen und Einspielen (vor dem Einspielen sichert die App den bisherigen Stand automatisch unter `sicherungen/`).
+Alles ist in den normalen Home-Assistant-Backups enthalten. Die Startseite zeigt in der Karte **Datensicherung**, wann zuletzt eine Sicherung heruntergeladen wurde, und färbt sich rot, sobald die eingestellte Zeit (⚙ Einstellungen → Datensicherung & Export, Standard 30 Tage, 0 = keine Erinnerung) überschritten ist – mit **Jetzt sichern** direkt daneben. Zusätzlich gibt es unter **⚙ Einstellungen → Datensicherung & Export** eine Sicherung zum Herunterladen und Einspielen – mit Datenbank und allen Belegen (vor dem Einspielen sichert die App den bisherigen Stand automatisch unter `sicherungen/`).
 
 In der **Desktop-Version** liegt alles im Dokumente-Ordner unter `DJ Office Studio`; die App legt dort in `Daten/Sicherungen` einmal pro Tag automatisch eine Kopie der Datenbank ab (die letzten 14 bleiben erhalten).
 
@@ -227,6 +257,9 @@ rechnungen/
     pdf.py               PDF-Erzeugung (fpdf2) inkl. QR-Code zum Bezahlen (segno)
     importer.py          Auslesen alter Rechnungs- und Angebots-PDFs (pypdf)
     mail.py              E-Mail-Versand per SMTP, Textvorlagen
+    finanzen.py          Finanzen: Ausgaben, Fahrten, Anschaffungen/Abschreibung, EÜR, Export
+    belege.py            Auslesen von Belegen (PDF, Fotos, Kauf-Mails .eml/.msg)
+    strecken.py          Entfernungen über OpenStreetMap (Nominatim, OSRM) mit Zwischenspeicher
     static/              Oberfläche (HTML, CSS, JavaScript)
 desktop/
   start.py               Starter der Desktop-Version (Server + eigenes App-Fenster mit pywebview, Daten im Dokumente-Ordner)
@@ -238,7 +271,7 @@ desktop/
 docs/
   screenshots.py         Erzeugt die README-Screenshots (docs/bilder/) mit Beispieldaten
 tests/                   Automatische Tests (pytest): API, PDFs, Pflichtangaben, Umsatzsteuer, QR-Code, Festschreiben/Storno,
-                         Mahnungen, E-Mail-Versand, Sicherung, Import …
+                         Mahnungen, E-Mail-Versand, Sicherung, Import, Belege, Fahrten, Abschreibung, EÜR …
 ```
 
 ### Neue Version veröffentlichen

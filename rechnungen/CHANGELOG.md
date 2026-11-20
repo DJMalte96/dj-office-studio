@@ -2,6 +2,31 @@
 
 Alle Änderungen an DJ Office Studio. Neueste Version oben.
 
+## 1.1.0 – 2026-11-20
+
+**Neu: Finanzen.** Ein neuer Menüpunkt mit allem, was für die Steuererklärung gebraucht wird – Ausgaben, Fahrten, Abschreibungen und die Einnahmen-Überschuss-Rechnung (EÜR) samt Export für den Steuerberater.
+
+### Neu
+- **Ausgaben mit Belegen**: PDF-Rechnungen, Fotos (JPG, PNG, HEIC) und Kauf-Mails (.eml, .msg) per Drag & Drop hochladen – auch mehrere auf einmal.
+  - Die App erkennt Lieferant, Datum, Betrag und Umsatzsteuer und zeigt, wo sie den Betrag gefunden hat.
+  - Shops wie Beatport, iTunes/Apple, Amazon, Qobuz und Bandcamp werden am Absender erkannt; die Kategorie wird vorgeschlagen und je Lieferant gelernt.
+  - **Prüfen-Ansicht**: links der Beleg (Mails als sichere Vorschau), rechts die erkannten Angaben – „Alle nacheinander prüfen“.
+  - Originale bleiben unverändert gespeichert, doppelte Belege werden erkannt.
+  - Ausgaben ohne Beleg mit Notiz, Privatanteil in Prozent, Musikkäufe je Monat zusammengefasst.
+- **Fahrten**: Zu jeder Rechnung automatisch die Hin- und Rückfahrt zum Veranstaltungsort.
+  - Neue Karte „Veranstaltung & Fahrt“ im Editor: abweichender Veranstaltungsort (steht auch auf dem PDF) und „Fahrt erfassen“ pro Rechnung abwählbar.
+  - Kilometer optional über OpenStreetMap (ausschaltbar; dann von Hand), korrigierbar, eigene Fahrten ergänzbar.
+  - Privatfahrzeug mit Kilometerpauschale (Satz einstellbar) oder Betriebsfahrzeug.
+- **Anschaffungen & Abschreibung**: Geräte über 800 € netto werden linear und monatsgenau abgeschrieben (Computer im Kaufjahr voll). Anlagenverzeichnis, Geräte aus Vorjahren mit Restwert übernehmen, Verkauf/Ausscheiden. Hinweis beim Erfassen, wenn ein Betrag über bzw. unter der 800-€-Grenze liegt.
+- **Übersicht**: Einnahmen, Ausgaben und Gewinn des Jahres, Diagramm je Monat (auch als Tabelle), Ausgaben nach Kategorie.
+- **EÜR & Export**: EÜR nach Zahlungseingang und -ausgang mit Vorschlag für die Zeilen der Anlage EÜR (Kleinunternehmer brutto, sonst netto mit Umsatzsteuer und Vorsteuer). Prüfliste vor dem Export, Bezahlt-Datum für alte Importe nachtragen, sonstige Einnahmen ohne Rechnung.
+- **Export für den Steuerberater** enthält jetzt zusätzlich EÜR, Einnahmen, Ausgaben, Fahrten und Anlagenverzeichnis als Excel-Tabellen sowie alle Belege (Dateiname `Export_<Jahr>.zip`).
+- **Startseite**: neue Karte „Finanzen“ mit dem Gewinn des laufenden Jahres und einem Hinweis auf ungeprüfte Belege.
+- **Einstellungen → Fahrten**: Fahrzeug, Kilometersatz, Startadresse, Kartendienst, „Fahrt erfassen“ als Standard.
+
+### Geändert
+- Die **Sicherung** enthält jetzt auch alle Ausgaben-Belege; beim Einspielen werden sie wiederhergestellt.
+
 ## 1.0.2 – 2026-11-20
 
 ### Behoben

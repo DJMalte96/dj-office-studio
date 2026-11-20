@@ -21,7 +21,10 @@ os.environ.update(DATA_DIR=tmp, OPTIONS_PATH=os.path.join(tmp, "options.json"))
 sys.path.insert(0, str(ROOT / "rechnungen" / "app"))
 
 import db  # noqa: E402
+import finanzen  # noqa: E402
 import main  # noqa: E402
+
+finanzen.HINTERGRUND = False   # keine Streckenberechnung im Hintergrund (kein Internet nötig)
 
 db.init()
 db.save_settings({
@@ -101,6 +104,45 @@ for k in db.list_items("kunden"):                                               
 r038 = next(r["id"] for r in db.list_invoices() if r["nummer"] == "038")
 c.post(f"/api/rechnungen/{r038}/stornieren")                                    # 038 → Stornorechnung 042
 
+# Finanzen: bezahlte Auftritte übers Jahr, Ausgaben (auch Kauf-Mails), Fahrten, ein Gerät mit Abschreibung
+FRUEHER = [(2, 14, "carla", "Geburtstagsfeier", 650), (4, 26, "verein", "Vereinsfeier", 700), (5, 23, "eva", "Hochzeit", 1100),
+           (6, 13, "firma", "Sommerfest", 850), (7, 18, "dora", "Geburtstagsfeier", 600), (8, 22, "anna", "Hochzeit", 1200),
+           (9, 12, "bernd", "Firmenfeier", 750)]
+nr = 31
+for monat, tag, kunde, anlass, preis in FRUEHER:
+    datum = date(heute.year, monat, tag)
+    if datum >= heute - timedelta(days=40):
+        continue
+    inv = rechnung(f"0{nr}", kunde, datum.isoformat(), [pos(f"DJ – Tätigkeit {anlass} – 19:00 Uhr bis 1:00 Uhr", datum.isoformat(), preis)],
+                   bezahlt=True)
+    c.put(f"/api/rechnungen/{inv}/bezahlt_am", json={"bezahlt_am": (datum + timedelta(days=6)).isoformat()})
+    nr += 1
+with db.connect() as con:                                                       # km wie vom Kartendienst berechnet
+    for i, (fid,) in enumerate(con.execute("SELECT id FROM fahrten ORDER BY datum DESC").fetchall()):
+        con.execute("UPDATE fahrten SET km_einfach = ? WHERE id = ?", ([24.6, 12.3, 38.1, 7.9, 52.4, 18.0, 31.2, 9.6][i % 8], fid))
+db.save_settings({"kartendienst": True})   # erst jetzt einschalten – beim Anlegen oben keine Abfrage ins Internet
+
+
+def ausgabe(datum, lieferant, betrag, kategorie, beschreibung=""):
+    r = c.post("/api/ausgaben", json={"belegdatum": datum, "lieferant": lieferant, "betrag": betrag, "kategorie": kategorie,
+                                      "beschreibung": beschreibung, "notiz": "Beleg in Papierform"})
+    assert r.status_code == 201, r.get_json()
+
+
+j = heute.year
+for datum, lieferant, betrag, kategorie, text in [
+        (f"{j}-01-15", "Mobilfunk Beispiel", 29.99, "telefon", "Handyvertrag"), (f"{j}-02-03", "Versicherung Muster", 186.40, "versicherung", "Betriebshaftpflicht"),
+        (f"{j}-03-12", "Musterhaus Technik", 2380, "anschaffung", "Aktivboxen (Paar)"), (f"{j}-04-08", "Kabelshop Probe", 64.80, "technik", "XLR-Kabel, Adapter"),
+        (f"{j}-05-20", "Druckerei Beispiel", 89.00, "werbung", "Flyer und Visitenkarten"), (f"{j}-07-02", "Musterhaus Technik", 149.00, "technik", "Funkmikrofon"),
+        (f"{j}-09-15", "Webhosting Muster", 59.88, "werbung", "Website (Jahr)")]:
+    if datum < heute.isoformat():
+        ausgabe(datum, lieferant, betrag, kategorie, text)
+BEISPIELMAILS = ROOT / "tests" / "beispiele" / "mails"
+mails = [("dateien", (open(BEISPIELMAILS / n, "rb"), n)) for n in ("beatport.eml", "apple.eml", "qobuz.eml")]
+neu = c.post("/api/ausgaben/belege", data={"dateien": [m[1] for m in mails]}, content_type="multipart/form-data").get_json()["neu"]
+for a in neu[:2]:                                                                   # zwei geprüft, eine wartet noch
+    c.put(f"/api/ausgaben/{a['id']}", json={"uebernehmen": True})
+
 from playwright.sync_api import sync_playwright  # noqa: E402
 from waitress import create_server  # noqa: E402
 
@@ -121,7 +163,7 @@ def oeffne(page, menue, tab):
 with sync_playwright() as p:
     browser = p.chromium.launch(args=["--lang=de-DE"])
     ctx = browser.new_context(viewport={"width": 1240, "height": 900}, device_scale_factor=2, locale="de-DE")
-    ctx.add_init_script("localStorage.setItem('theme','light')")
+    ctx.add_init_script("try { localStorage.setItem('theme','light') } catch (e) {}")
     page = ctx.new_page()
     page.on("pageerror", lambda e: fehler.append(str(e)))
 
@@ -156,9 +198,23 @@ with sync_playwright() as p:
     page.screenshot(path=str(ZIEL / "girocode.png"))
     page.click("#qr-zu")
 
+    # Finanzen
+    oeffne(page, "Finanzen", "finanzen")
+    page.screenshot(path=str(ZIEL / "finanzen.png"), full_page=True)
+    oeffne(page, "Finanzen", "ausgaben")
+    page.screenshot(path=str(ZIEL / "ausgaben.png"), full_page=True)
+    page.click("#alle-pruefen")
+    page.wait_for_timeout(1500)
+    page.mouse.move(5, 890)
+    page.screenshot(path=str(ZIEL / "beleg-pruefen.png"))
+    oeffne(page, "Finanzen", "fahrten")
+    page.screenshot(path=str(ZIEL / "fahrten.png"), full_page=True)
+    oeffne(page, "Finanzen", "euer")
+    page.screenshot(path=str(ZIEL / "euer.png"), full_page=True)
+
     # Rechnungseditor mit Bestandskunde und zwei Positionen
     ctx2 = browser.new_context(viewport={"width": 1240, "height": 1180}, device_scale_factor=2, locale="de-DE")
-    ctx2.add_init_script("localStorage.setItem('theme','light')")
+    ctx2.add_init_script("try { localStorage.setItem('theme','light') } catch (e) {}")
     page = ctx2.new_page()
     page.on("pageerror", lambda e: fehler.append(str(e)))
     page.goto(URL)

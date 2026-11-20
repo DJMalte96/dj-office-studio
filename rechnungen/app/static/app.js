@@ -358,7 +358,8 @@ $("#sicherung-datei").addEventListener("change", async e => {
     const daten = await res.json();
     if (!res.ok) throw new Error(daten.error || `Fehler ${res.status}`);
     const n = daten.anzahl;
-    alert(`Sicherung eingespielt: ${n.rechnungen} Rechnungen, ${n.kunden} Kunden${n.angebote != null ? `, ${n.angebote} Angebote` : ""}.`
+    alert(`Sicherung eingespielt: ${n.rechnungen} Rechnungen, ${n.kunden} Kunden${n.angebote != null ? `, ${n.angebote} Angebote` : ""}`
+      + `${n.ausgaben != null ? `, ${n.ausgaben} Ausgaben` : ""}${daten.belege ? `, ${daten.belege} Belege` : ""}.`
       + "\n\nDie App wird neu geladen.");
     location.reload();
   } catch (err) { toast("Einspielen fehlgeschlagen: " + err.message, true); }
