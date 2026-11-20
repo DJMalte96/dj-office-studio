@@ -66,6 +66,8 @@ FELDER = {
     "pdf_ordner": (str, os.environ.get("STANDARD_PDF_ORDNER", "/share/rechnungen")),
     "paperless_installiert": (bool, False),
     "paperless_eingangsordner": (str, "" if DESKTOP else "/share/paperless/consume"),
+    # Belege aus Paperless abholen (Finanzen → Ausgaben): Adresse, API-Token (geheim) und Tag der Ausgaben-Belege
+    "paperless_url": (str, ""), "paperless_token": (str, ""), "paperless_tag": (int, 0), "paperless_tag_name": (str, ""),
     "update_pruefen": (bool, True),   # nur Desktop-Version: beim Start nach neuer Version suchen
     "mahnfrist_tage": (int, 7),       # Frist in Zahlungserinnerung/Mahnung (Tage ab Datum)
     "sicherung_erinnerung_tage": (int, 30),   # Startseite erinnert an eine Sicherung nach so vielen Tagen (0 = nie)
@@ -79,7 +81,8 @@ GEHEIM = set(db.GEHEIM)   # wird nie an den Browser zurückgegeben
 
 
 def _ohne_geheimnisse(a):
-    return {k: ("" if k in GEHEIM else v) for k, v in a.items()} | {"smtp_passwort_gesetzt": bool(a.get("smtp_passwort"))}
+    return {k: ("" if k in GEHEIM else v) for k, v in a.items()} | {"smtp_passwort_gesetzt": bool(a.get("smtp_passwort")),
+                                                                    "paperless_token_gesetzt": bool(a.get("paperless_token"))}
 
 
 def _app_version():
@@ -184,7 +187,7 @@ def settings_put():
             except (TypeError, ValueError):
                 fehler.append(f"„{k}“ muss eine Zahl sein")
                 continue
-            if werte[k] < (0 if k == "sicherung_erinnerung_tage" else 1):
+            if werte[k] < (0 if k in ("sicherung_erinnerung_tage", "paperless_tag") else 1):
                 fehler.append(f"„{k}“ muss mindestens {0 if k == 'sicherung_erinnerung_tage' else 1} sein")
         elif k.startswith("mail_text_"):
             werte[k] = (v or "").rstrip() if (v or "").strip() else standard   # leere Vorlage → Standardtext
@@ -273,6 +276,8 @@ def get_absender():
                    | {"vollstaendig": not fehlt, "fehlt": fehlt,
                       "kleinunternehmer": bool(a.get("kleinunternehmer")), "ust_satz": a.get("ust_satz") or 19,
                       "paperless": bool(a.get("paperless_installiert")),
+                      "paperless_belege": bool(a.get("paperless_url") and a.get("paperless_token") and a.get("paperless_tag")),
+                      "paperless_tag_name": a.get("paperless_tag_name") or "",
                       "angebot_gueltigkeit_tage": a.get("angebot_gueltigkeit_tage") or 30,
                       "mail": mail.konfiguriert(a),
                       "sicherung": _sicherung_status(a),

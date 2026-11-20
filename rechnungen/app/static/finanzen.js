@@ -798,3 +798,68 @@ async function renderStartFinanzen() {
   $("#start-finanzen-inhalt").innerHTML = `<div class="stat-gross">${euro2(d.gewinn)}<small>${d.gewinn >= 0 ? "Gewinn" : "Verlust"} bis heute · Einnahmen ${euro2(d.einnahmen)} · Ausgaben ${euro2(d.ausgaben)}</small></div>`
     + (neu ? `<ul class="hinweise"><li class="gelb">${esc(neu.text)} – <a href="#" data-pruef="ausgaben">jetzt prüfen</a></li></ul>` : "");
 }
+
+// ---------- Paperless: Einstellungen und Abholen ----------
+
+function plTagAuswahl(tags, gewaehlt, name) {
+  const sel = $("#einstellungen").elements.paperless_tag;
+  const opt = (id, text) => `<option value="${id}"${String(id) === String(gewaehlt) ? " selected" : ""}>${esc(text)}</option>`;
+  if (tags) {
+    sel.innerHTML = opt(0, "– Tag wählen –") + tags.map(t => opt(t.id, t.name + (t.anzahl != null ? ` (${t.anzahl} Dokument${t.anzahl === 1 ? "" : "e"})` : ""))).join("");
+  } else {   // noch nicht verbunden: nur den gespeicherten Tag anzeigen
+    sel.innerHTML = Number(gewaehlt) ? opt(gewaehlt, name || `Tag ${gewaehlt}`) : opt(0, "– erst Verbindung prüfen –");
+  }
+}
+
+function plEinstellungen(werte) {
+  const f = $("#einstellungen").elements;
+  f.paperless_token.value = "";
+  f.paperless_token.placeholder = werte.paperless_token_gesetzt ? "•••••••• gespeichert – nur zum Ändern neu eingeben" : "Token aus Paperless einfügen";
+  $("#pl-token-status").textContent = werte.paperless_token_gesetzt ? "(gespeichert)" : "(wird nur lokal gespeichert)";
+  plTagAuswahl(null, werte.paperless_tag, werte.paperless_tag_name);
+}
+
+$("#einstellungen").elements.paperless_tag.addEventListener("change", e => {
+  const o = e.target.selectedOptions[0];
+  $("#einstellungen").elements.paperless_tag_name.value = Number(o.value) ? o.textContent.replace(/ \(\d+ Dokumente?\)$/, "") : "";
+});
+
+$("#pl-verbinden").addEventListener("click", async e => {
+  const f = $("#einstellungen").elements, btn = e.currentTarget, status = $("#pl-verbinden-status");
+  btn.disabled = true;
+  status.textContent = f.paperless_url.value.trim() ? "Verbinde …" : "Suche Paperless …";
+  try {
+    const r = await api("paperless/verbinden", { method: "POST", body: { url: f.paperless_url.value.trim(), token: f.paperless_token.value.trim() } });
+    f.paperless_url.value = r.url;
+    if (!r.tags) { status.textContent = r.hinweis; return; }
+    plTagAuswahl(r.tags, f.paperless_tag.value, f.paperless_tag_name.value);
+    status.textContent = `✓ Verbunden${r.gefunden ? " (automatisch gefunden)" : ""} – ${r.tags.length} Tags. Tag wählen und speichern.`;
+    if (!Number(f.paperless_tag.value)) {   // naheliegenden Tag vorschlagen
+      const v = r.tags.find(t => /ausgabe|beleg|eür|euer|steuer|rechnung/i.test(t.name));
+      if (v) { f.paperless_tag.value = v.id; f.paperless_tag.dispatchEvent(new Event("change")); }
+    }
+  } catch (err) { status.textContent = ""; toast(err.message, true); }
+  finally { btn.disabled = false; }
+});
+
+$("#paperless-abholen").addEventListener("click", async e => {
+  const btn = e.currentTarget, text = btn.textContent;
+  btn.disabled = true;
+  let st;
+  try {
+    st = await api("paperless/abholen", { method: "POST" });
+    while (st.laeuft) {
+      btn.textContent = st.gesamt == null ? (st.meldung || "Paperless …") : `⇩ ${st.fertig} von ${st.gesamt} geholt …`;
+      await new Promise(ok => setTimeout(ok, 800));
+      st = await api("paperless/abholen");
+    }
+    const teile = [];
+    if (st.neu) teile.push(`${st.neu} neu`);
+    if (st.doppelt) teile.push(`${st.doppelt} schon von Hand hochgeladen`);
+    if (st.fehler?.length) teile.push(`${st.fehler.length} nicht lesbar (${st.fehler.slice(0, 3).join(", ")})`);
+    if (st.abbruch) toast(`${st.abbruch}${teile.length ? " · bis dahin: " + teile.join(" · ") : ""}`, true);
+    else toast(teile.length ? `Paperless: ${teile.join(" · ")}` : `Paperless: keine neuen Belege (${st.vorhanden} schon übernommen)`);
+    if (st.neu || st.doppelt) await ladeAusgaben();
+  } catch (err) { toast(err.message, true); }
+  finally { btn.disabled = false; btn.textContent = text; }
+});

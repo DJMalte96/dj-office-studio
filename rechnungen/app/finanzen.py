@@ -88,21 +88,38 @@ def _dateiname(name):
     return name[-100:]
 
 
-def beleg_aufnehmen(name, daten):
-    """Beleg speichern und auswerten → (neue Ausgabe | None, ID der vorhandenen bei Duplikat)."""
+def beleg_aufnehmen(name, daten, paperless=None):
+    """Beleg speichern und auswerten → (neue Ausgabe | None, ID der vorhandenen bei Duplikat).
+    paperless: Angaben aus Paperless (id, korrespondent, datum, titel, text) – haben Vorrang vor der eigenen Auswertung."""
     pruef = belege.pruefsumme(daten)
     v = belege.auswerten(name, daten)
     vorhanden = _doppelt(pruef, v["message_id"])
     if vorhanden:
         return None, vorhanden
+    pl_id = None
+    if paperless:
+        pl_id = paperless["id"]
+        if v["betrag"] is None and (paperless.get("text") or "").strip():   # z. B. Foto/Scan: Texterkennung von Paperless nutzen
+            t = belege.text_vorschlaege(paperless["text"])
+            v["betrag"], v["ust_satz"], v["ust_betrag"] = t["betrag"], t["ust_satz"], t["ust_betrag"]
+            v["fundstellen"]["betrag"] = t["fundstelle"]
+            v["belegdatum"] = v["belegdatum"] or t["belegdatum"]
+            v["hinweise"] = [h for h in v["hinweise"] if "bitte Betrag eintragen" not in h and "Gesamtbetrag nicht" not in h]
+            v["hinweise"].append("Werte aus der Texterkennung von Paperless" if t["betrag"] is not None
+                                 else "Gesamtbetrag nicht gefunden – bitte eintragen")
+        v["lieferant"] = paperless.get("korrespondent") or v["lieferant"] or paperless.get("titel")
+        v["belegdatum"] = paperless.get("datum") or v["belegdatum"]
+        v["beschreibung"] = v["beschreibung"] or paperless.get("titel")
+        v["hinweise"].append(f"Aus Paperless (Dokument {pl_id})")
     kategorie = _kategorie_fuer(v["lieferant"]) or v["kategorie"] or "sonstiges"
     belegdatum = v["belegdatum"] or date.today().isoformat()
     with db.connect() as con:
         aid = con.execute(
             "INSERT INTO ausgaben (status, belegdatum, bezahlt_am, lieferant, beschreibung, kategorie, betrag, ust_satz,"
-            " beleg_name, beleg_typ, beleg_pruefsumme, mail_message_id, erkannt_json) VALUES ('neu', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            " beleg_name, beleg_typ, beleg_pruefsumme, mail_message_id, erkannt_json, paperless_id)"
+            " VALUES ('neu', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (belegdatum, belegdatum, v["lieferant"] or "", v["beschreibung"] or "", kategorie, v["betrag"], v["ust_satz"],
-             name, v["typ"], pruef, v["message_id"], json.dumps(v))).lastrowid
+             name, v["typ"], pruef, v["message_id"], json.dumps(v), pl_id)).lastrowid
         rel = os.path.join("belege", belegdatum[:4], f"{aid}_{_dateiname(name)}")
         ziel = os.path.join(db.DATA_DIR, rel)
         os.makedirs(os.path.dirname(ziel), exist_ok=True)
@@ -1107,3 +1124,106 @@ def export_finanzen(zf, jahr, a):
                    _b(x["restwert_anfang"]), _b(x["afa"]), _b(x["restwert_ende"]), x.get("abgang_am") or "",
                    _b(x["abgang_restwert"]) if x.get("abgang_am") else "", _b(x["abgang_erloes"]) if x.get("abgang_am") else ""])
     zf.writestr(f"Anlagenverzeichnis_{jahr}.csv", _csv(an))
+
+
+# ---------- Paperless-ngx: Belege mit einem Tag abholen (nur per Knopf) ----------
+
+import paperless  # noqa: E402
+
+_pl_sperre = threading.Lock()
+_pl_status = {"laeuft": False}
+
+
+def _pl_zugang(d=None):
+    """Adresse und Token – aus der Anfrage (Einstellungen noch nicht gespeichert) oder den gespeicherten Einstellungen."""
+    a, d = _einstellungen(), d or {}
+    url = paperless.adresse(d.get("url") if d.get("url") is not None else a.get("paperless_url"))
+    token = (d.get("token") or "").strip() or a.get("paperless_token") or ""
+    return url, token
+
+
+def _pl_https(url):
+    return _ssl() if url.lower().startswith("https") else None
+
+
+def paperless_abholen():
+    """Alle Dokumente mit dem Tag holen, die noch nicht übernommen sind (läuft im Hintergrund, Stand in _pl_status)."""
+    st = _pl_status
+    try:
+        a = _einstellungen()
+        url, token = _pl_zugang()
+        tag = int(a.get("paperless_tag") or 0)
+        if not url or not token or not tag:
+            raise paperless.PaperlessFehler("Paperless ist noch nicht eingerichtet (⚙ Einstellungen → Paperless)")
+        ssl_k = _pl_https(url)
+        st["meldung"] = "Dokumente werden gesucht …"
+        docs = paperless.dokumente(url, token, tag, ssl_k)
+        with db.connect() as con:
+            schon = {r[0] for r in con.execute("SELECT paperless_id FROM ausgaben WHERE paperless_id IS NOT NULL")}
+        offen = [d for d in docs if d["id"] not in schon]
+        st.update(gesamt=len(offen), vorhanden=len(docs) - len(offen), meldung="")
+        namen = paperless.korrespondenten(url, token, ssl_k) if offen else {}
+        for d in offen:
+            try:
+                daten, name, _typ = paperless.herunterladen(url, token, d["id"], ssl_k)
+                name = name or d.get("original_file_name") or f"{d.get('title') or 'Paperless'}.pdf"
+                datum = str(d.get("created_date") or d.get("created") or "")[:10] or None
+                a_neu, vorhanden = beleg_aufnehmen(name, daten, {
+                    "id": d["id"], "korrespondent": namen.get(d.get("correspondent")), "datum": datum,
+                    "titel": (d.get("title") or "").strip() or None, "text": d.get("content") or ""})
+                if a_neu:
+                    st["neu"] += 1
+                else:   # gleicher Beleg schon von Hand hochgeladen → mit Paperless verknüpfen, damit er nicht erneut kommt
+                    with db.connect() as con:
+                        con.execute("UPDATE ausgaben SET paperless_id = ? WHERE id = ? AND paperless_id IS NULL", (d["id"], vorhanden))
+                    st["doppelt"] += 1
+            except paperless.PaperlessFehler:
+                raise
+            except Exception as e:   # ein kaputtes Dokument hält den Rest nicht auf
+                st["fehler"].append(f"{d.get('title') or d['id']} ({type(e).__name__})")
+            st["fertig"] += 1
+    except paperless.PaperlessFehler as e:
+        st["abbruch"] = str(e)
+    except Exception as e:
+        st["abbruch"] = f"Abholen fehlgeschlagen ({type(e).__name__})"
+    finally:
+        st["laeuft"] = False
+        _pl_sperre.release()
+
+
+@bp.post("/api/paperless/abholen")
+def paperless_abholen_start():
+    if not _pl_sperre.acquire(blocking=False):
+        return jsonify(_pl_status)
+    _pl_status.clear()
+    _pl_status.update(laeuft=True, gesamt=None, fertig=0, neu=0, doppelt=0, vorhanden=0, fehler=[], abbruch=None,
+                      meldung="Verbindung zu Paperless …")
+    _im_hintergrund(paperless_abholen)
+    return jsonify(_pl_status)
+
+
+@bp.get("/api/paperless/abholen")
+def paperless_abholen_stand():
+    return jsonify(_pl_status)
+
+
+@bp.post("/api/paperless/verbinden")
+def paperless_verbinden():
+    """Einstellungen: Verbindung prüfen und Tags laden. Ohne Adresse wird nach Paperless gesucht."""
+    d = _daten()
+    url, token = _pl_zugang(d)
+    gefunden = None
+    if not url:
+        url = gefunden = paperless.suchen()
+        if not url:
+            return _fehler("Paperless wurde nicht automatisch gefunden – bitte die Adresse eintragen "
+                           "(z. B. http://homeassistant.local:8000).")
+    if not token:
+        if paperless.erreichbar(url):
+            return jsonify({"url": url, "gefunden": bool(gefunden), "tags": None,
+                            "hinweis": "Paperless gefunden – jetzt noch den API-Token eintragen."})
+        return _fehler(f"Unter {url} antwortet kein Paperless.")
+    try:
+        return jsonify({"url": url, "gefunden": bool(gefunden), "tags": paperless.tags(url, token, _pl_https(url))})
+    except paperless.PaperlessFehler as e:
+        return _fehler(str(e))

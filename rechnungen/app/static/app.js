@@ -225,6 +225,7 @@ async function ladeEinstellungen() {
     if (feld.type === "checkbox") feld.checked = !!v; else feld.value = v ?? "";
   }
   zeigePasswortStatus(werte.smtp_passwort_gesetzt);
+  if (typeof plEinstellungen === "function") plEinstellungen(werte);
   form.elements.km_satz.value = Number(werte.km_satz || 0.3).toFixed(2).replace(".", ",");
   zeigeUstFelder();
   waehleAnbieter(ANBIETER.find(a => a.server && a.server === werte.smtp_server)?.id
@@ -380,6 +381,7 @@ $("#einstellungen").addEventListener("submit", async e => {
   try {
     const res = await api("einstellungen", { method: "PUT", body: daten });
     zeigePasswortStatus(res.einstellungen.smtp_passwort_gesetzt);
+    if (typeof plEinstellungen === "function") plEinstellungen(res.einstellungen);
     await ladeAbsender();
     pruefeUpdate();
     toast(res.hinweise.length ? `Gespeichert. Hinweis: ${res.hinweise.join(" ")}` : "Einstellungen gespeichert", !!res.hinweise.length);
@@ -441,6 +443,7 @@ async function ladeAbsender() {
   document.body.classList.toggle("ust", !abs.kleinunternehmer);   // Preise netto, Umsatzsteuer ausweisen
   updateTotal();
   $$(".pl-button").forEach(b => b.classList.toggle("hidden", !abs.paperless));   // nur mit „Paperless installiert“
+  $("#paperless-abholen")?.classList.toggle("hidden", !abs.paperless_belege);      // nur wenn Abholen eingerichtet
   if (!abs.hinweis_bestaetigt) zeigeHinweis(true);
   return abs;
 }
