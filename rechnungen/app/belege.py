@@ -200,6 +200,27 @@ def mail_lesen(daten):
             "html": html_teil.get_content() if html_teil else ""}, anhaenge
 
 
+def ist_mbox(name, daten):
+    """Postfach-Export (Apple Mail „Postfach exportieren“, Thunderbird …): viele Mails in einer Datei."""
+    n = (name or "").lower().rsplit("/", 1)[-1]
+    return daten[:5] == b"From " and (n.endswith(".mbox") or n == "mbox" or daten.count(b"\nFrom ") > 0)
+
+
+def mbox_aufteilen(daten):
+    """mbox → [(dateiname, bytes)] je Mail. Trenner ist eine „From “-Zeile am Anfang oder nach einer Leerzeile."""
+    daten = daten.replace(b"\r\n", b"\n")
+    teile = re.split(rb"(?:\A|\n\n)From [^\n]*\n", daten)
+    mails = []
+    for teil in teile:
+        if not teil.strip():
+            continue
+        teil = re.sub(rb"(?m)^>(>*From )", rb"\1", teil)          # mboxrd: „>From “ im Text zurückwandeln
+        kopf = email.message_from_bytes(teil.split(b"\n\n", 1)[0] + b"\n\n", policy=policy.default)
+        betreff = re.sub(r"[^\w äöüÄÖÜß.,()+-]+", " ", str(kopf["Subject"] or ""))[:60].strip(" ,.(-") or "Mail"
+        mails.append((f"{betreff} ({len(mails) + 1}).eml", teil))
+    return mails
+
+
 def msg_lesen(daten):
     """Outlook-.msg → wie mail_lesen (benötigt das Paket extract-msg)."""
     import extract_msg

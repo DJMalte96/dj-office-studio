@@ -190,11 +190,47 @@ async function belegeHochladen(dateien) {
 const drop = $("#beleg-drop");
 drop.addEventListener("dragover", e => { e.preventDefault(); drop.classList.add("over"); });
 drop.addEventListener("dragleave", () => drop.classList.remove("over"));
-drop.addEventListener("drop", e => {
+// Ordner (auch Apple-Mail-Export „….mbox“) werden durchsucht; Hilfsdateien wie table_of_contents bleiben draußen.
+const BELEG_ENDUNG = /\.(pdf|eml|msg|mbox|jpe?g|png|heic|heif|webp)$/i;
+const brauchbar = f => BELEG_ENDUNG.test(f.name) || f.name === "mbox";
+
+function eintragLesen(eintrag) {
+  if (eintrag.isFile) return new Promise(ok => eintrag.file(f => ok([f]), () => ok([])));
+  if (!eintrag.isDirectory) return Promise.resolve([]);
+  const leser = eintrag.createReader();
+  return new Promise(ok => {
+    const alle = [];
+    const weiter = () => leser.readEntries(async teil => {
+      if (!teil.length) return ok((await Promise.all(alle.map(eintragLesen))).flat());
+      alle.push(...teil); weiter();           // readEntries liefert große Ordner in Häppchen
+    }, () => ok([]));
+    weiter();
+  });
+}
+
+async function abgelegteDateien(dt) {
+  const eintraege = [...(dt.items || [])].filter(i => i.kind === "file").map(i => i.webkitGetAsEntry && i.webkitGetAsEntry()).filter(Boolean);
+  if (!eintraege.length || !eintraege.some(e => e.isDirectory)) return [...dt.files];
+  return (await Promise.all(eintraege.map(eintragLesen))).flat().filter(f => !f.name.startsWith(".") && brauchbar(f));
+}
+
+drop.addEventListener("drop", async e => {
   e.preventDefault();
   drop.classList.remove("over");
-  belegeHochladen(e.dataTransfer.files);
+  const dt = e.dataTransfer;
+  const dateien = await abgelegteDateien(dt);
+  if (dateien.length) return belegeHochladen(dateien);
+  // Nichts angekommen – typisch beim Ziehen direkt aus Apple Mail (liefert dem Browser keine Datei)
+  const ausMail = [...dt.types].some(t => /uri-list|text\/plain|message/i.test(t));
+  hilfeMails(ausMail ? "Aus dem Mailprogramm ist keine Datei angekommen." : "Es ist keine Datei angekommen.");
 });
+
+function hilfeMails(grund) {
+  $("#mail-hilfe-grund").textContent = grund;
+  $("#mail-hilfe").hidden = false;
+  $("#mail-hilfe").scrollIntoView({ block: "nearest", behavior: "smooth" });
+}
+$("#mail-hilfe-zu").addEventListener("click", () => { $("#mail-hilfe").hidden = true; });
 $("#beleg-dateien").addEventListener("change", e => { belegeHochladen(e.target.files); e.target.value = ""; });
 
 // ---------- Liste: Filter, Ansicht, Aktionen ----------

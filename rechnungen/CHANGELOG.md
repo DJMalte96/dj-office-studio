@@ -2,6 +2,15 @@
 
 Alle Änderungen an DJ Office Studio. Neueste Version oben.
 
+## 1.1.4 – 2026-11-20
+
+### Neu
+- **Ganze Mail-Ordner importieren**: In Apple Mail einen Ordner per *Postfach → Postfach exportieren …* sichern und den Ordner „….mbox“ in die Ausgaben ziehen – jede Mail wird ein eigener Beleg. Thunderbird-Ordner (mbox) gehen genauso. Doppelte Mails werden erkannt, ein Ordner kann also später einfach noch einmal importiert werden.
+- **Ordner aus dem Finder** lassen sich hineinziehen – alle Belege darin (auch in Unterordnern) werden übernommen.
+
+### Behoben
+- Mails direkt aus Apple Mail auf das Feld gezogen: Bisher passierte stumm nichts. Jetzt erscheint eine kurze Anleitung, wie es klappt (Apple Mail gibt Mails beim Ziehen nicht an den Browser weiter).
+
 ## 1.1.3 – 2026-11-20
 
 ### Behoben
