@@ -578,3 +578,21 @@ tr.kind td:first-child { padding-left: 22px; }
 .erkannt b { color: var(--ink); }
 .pruefen-links .hint a { color: var(--text); }
 button.danger-text { color: var(--danger); }
+
+.v-felder { margin-top: 12px; }
+.schalter-zeile { display: flex; gap: 12px; align-items: center; padding: 12px 14px; border-radius: 12px; background: var(--primary-soft); margin-top: 12px; }
+.schalter-zeile .hint { margin: 2px 0 0; }
+.mini-hinweis { font-size: 12.5px; color: var(--muted); margin: 8px 0 0; }
+body.modus-angebot #veranstaltung-karte .nur-rechnung { display: none; }
+.info-zeile { display: flex; gap: 10px 22px; flex-wrap: wrap; font-size: 14px; color: var(--muted); align-items: center; }
+.info-zeile b { color: var(--text); }
+.kacheln { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; margin-bottom: 20px; }
+.kacheln .card { margin: 0; }
+.kachel-titel { font-size: 13px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 8px; }
+@media (max-width: 900px) { .kacheln { grid-template-columns: minmax(0, 1fr); } }
+.chip.q-auto { background: var(--primary-soft); border-color: transparent; }
+.chip.q-hand, .chip.q-korrigiert { background: var(--gelb-soft); border-color: transparent; }
+.chip.q-offen { background: var(--danger-soft); border-color: transparent; color: var(--danger); }
+.fahrten-tabelle td small { display: block; }
+.knopf-zeile select { width: auto; }
+#tab-einstellungen .fahrzeug-hinweis { margin: -6px 0 14px; }

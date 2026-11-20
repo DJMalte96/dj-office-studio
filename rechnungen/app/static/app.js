@@ -225,6 +225,7 @@ async function ladeEinstellungen() {
     if (feld.type === "checkbox") feld.checked = !!v; else feld.value = v ?? "";
   }
   zeigePasswortStatus(werte.smtp_passwort_gesetzt);
+  form.elements.km_satz.value = Number(werte.km_satz || 0.3).toFixed(2).replace(".", ",");
   zeigeUstFelder();
   waehleAnbieter(ANBIETER.find(a => a.server && a.server === werte.smtp_server)?.id
     || (werte.smtp_server ? "andere" : ""), false);
@@ -486,6 +487,7 @@ function setKundeHinweis() {
 }
 
 function fillKunde(k) {
+  setTimeout(() => typeof fahrtVorschau === "function" && fahrtVorschau(), 0);
   state.kundeId = k.id || null;
   $("#k-name").value = k.name || "";
   $("#k-zusatz").value = k.zusatz || "";
@@ -642,6 +644,9 @@ function readForm() {
     gueltig_bis: istAngebot() ? $("#a-gueltig").value : undefined,
     hinweise: istAngebot() ? $("#a-hinweise").value : undefined,
     angebot_id: !istAngebot() && state.ausAngebot ? state.ausAngebot : undefined,
+    veranstaltungsort: $("#v-wie-kunde").checked ? null
+      : { name: $("#v-name").value, strasse: $("#v-strasse").value, plz: $("#v-plz").value, ort: $("#v-ort").value },
+    fahrt_erfassen: istAngebot() ? undefined : $("#r-fahrt").checked,
     kunde: {
       id: state.kundeId,
       name: $("#k-name").value, zusatz: $("#k-zusatz").value, strasse: $("#k-strasse").value,
@@ -673,8 +678,56 @@ async function resetForm() {
   $("#a-hinweise").value = "";
   $("#positionen").innerHTML = "";
   addPosition();
+  setVeranstaltung(null, state.absender ? state.absender.fahrt_standard : true);
   speichernText();
 }
+
+// ---------- Veranstaltungsort & Fahrt (seit 1.1) ----------
+
+/* ort: {name, strasse, plz, ort} oder null (= wie Kundenadresse); fahrt: „Fahrt erfassen“ (nur Rechnungen) */
+function setVeranstaltung(ort, fahrt) {
+  $("#v-wie-kunde").checked = !ort;
+  $("#v-felder").classList.toggle("hidden", !ort);
+  for (const k of ["name", "strasse", "plz", "ort"]) $(`#v-${k}`).value = (ort && ort[k]) || "";
+  if (fahrt !== undefined) $("#r-fahrt").checked = !!fahrt;
+  fahrtVorschau();
+}
+
+let fahrtTimer;
+function fahrtVorschau() {
+  clearTimeout(fahrtTimer);
+  fahrtTimer = setTimeout(async () => {
+    const info = $("#fahrt-info");
+    if (!$("#r-fahrt").checked) { info.textContent = "Für diese Rechnung wird keine Fahrt angelegt."; return; }
+    const a = state.absender || {};
+    const wieKunde = $("#v-wie-kunde").checked;
+    const adr = wieKunde ? { strasse: $("#k-strasse").value, plz: $("#k-plz").value, ort: $("#k-ort").value }
+      : { strasse: $("#v-strasse").value, plz: $("#v-plz").value, ort: $("#v-ort").value };
+    const art = a.fahrzeug === "betrieb" ? "als Nachweis (Betriebsfahrzeug)"
+      : `als Ausgabe (Privatfahrzeug, ${String(Number(a.km_satz || 0.3).toFixed(2)).replace(".", ",")} €/km)`;
+    if (!a.kartendienst) {
+      info.textContent = "Hin- und Rückfahrt wird unter Finanzen → Fahrten erfasst – Kilometer dort eintragen "
+        + "(automatische Berechnung lässt sich unter ⚙ Einstellungen einschalten).";
+      return;
+    }
+    if (!adr.ort && !adr.plz) { info.textContent = "Entfernung wird berechnet, sobald die Adresse eingetragen ist."; return; }
+    info.textContent = "Entfernung wird berechnet …";
+    try {
+      const v = await api(`fahrten/vorschau?${new URLSearchParams(adr)}`);
+      info.textContent = v.km_einfach != null
+        ? `≈ ${String(v.km_einfach).replace(".", ",")} km einfach · hin und zurück ${String(v.km_gesamt).replace(".", ",")} km`
+          + (a.fahrzeug === "betrieb" ? ` · ${art}` : ` · ${fmtEuro(v.betrag)} ${art}`)
+        : `Entfernung konnte nicht berechnet werden (${v.fehler || "Adresse prüfen"}) – Kilometer später unter Finanzen → Fahrten eintragen.`;
+    } catch (e) { info.textContent = "Entfernung konnte nicht berechnet werden."; }
+  }, 600);
+}
+$("#v-wie-kunde").addEventListener("change", e => {
+  $("#v-felder").classList.toggle("hidden", e.target.checked);
+  if (!e.target.checked) $("#v-name").focus();
+  fahrtVorschau();
+});
+$("#r-fahrt").addEventListener("change", fahrtVorschau);
+["#v-strasse", "#v-plz", "#v-ort", "#k-strasse", "#k-plz", "#k-ort"].forEach(s => $(s).addEventListener("input", fahrtVorschau));
 
 /* Hinweis im Editor, wenn eine Rechnung aus einem Angebot erzeugt wird. */
 function setAusAngebot(a) {
@@ -706,6 +759,7 @@ function loadIntoForm(inv) {
   setZahlung(inv.zahlungsbedingung);
   $("#positionen").innerHTML = "";
   inv.positionen.forEach(p => addPosition(p));
+  setVeranstaltung(inv.veranstaltungsort, inv.fahrt_erfassen !== false);
   speichernText();
   showTab("neu");
   window.scrollTo(0, 0);
@@ -724,6 +778,7 @@ function loadAngebotIntoForm(a) {
   setZahlung(a.zahlungsbedingung);
   $("#positionen").innerHTML = "";
   a.positionen.forEach(p => addPosition(p));
+  setVeranstaltung(a.veranstaltungsort);
   speichernText();
   showTab("neu");
   window.scrollTo(0, 0);
@@ -739,6 +794,7 @@ async function kopiere(art, beleg) {
   if (art === "angebot") $("#a-hinweise").value = beleg.hinweise || "";
   $("#positionen").innerHTML = "";
   beleg.positionen.forEach(p => addPosition({ beschreibung: p.beschreibung, preis: p.preis }));
+  setVeranstaltung(beleg.veranstaltungsort);
   updateTotal();
   showTab("neu");
   window.scrollTo(0, 0);
@@ -753,6 +809,7 @@ async function angebotZuRechnung(a) {
   if (a.zahlungsbedingung) setZahlung(a.zahlungsbedingung);
   $("#positionen").innerHTML = "";
   a.positionen.forEach(p => addPosition(p));
+  setVeranstaltung(a.veranstaltungsort);
   setAusAngebot(a);
   showTab("neu");
   window.scrollTo(0, 0);

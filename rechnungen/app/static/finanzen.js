@@ -27,6 +27,7 @@ async function ladeKategorien() {
 /* Wird von showTab() in app.js aufgerufen */
 function finanzenTab(name) {
   if (name === "ausgaben") ladeAusgaben();
+  if (name === "fahrten") ladeFahrten();
 }
 
 async function ladeAusgaben() {
@@ -290,5 +291,116 @@ $("#beleg-verwerfen").addEventListener("click", async () => {
     await api(`ausgaben/${a.id}`, { method: "DELETE" });
     toast(a.status === "neu" ? "Beleg verworfen" : "Ausgabe gelöscht");
     naechsterOderListe();
+  } catch (err) { toast(err.message, true); }
+});
+
+
+// ======================= Fahrten =======================
+
+const fahrt = { jahr: String(new Date().getFullYear()), daten: null, aktuell: null, nachladen: null };
+const km = v => v == null ? "–" : String(v).replace(".", ",");
+
+async function ladeFahrten() {
+  clearTimeout(fahrt.nachladen);
+  try { fahrt.daten = await api(`fahrten?jahr=${fahrt.jahr}`); }
+  catch (e) { return toast("Laden fehlgeschlagen: " + e.message, true); }
+  const jahre = [...new Set([String(new Date().getFullYear()), fahrt.jahr, ...fahrt.daten.fahrten.map(f => f.datum.slice(0, 4))])].sort().reverse();
+  $("#fahrten-jahr").innerHTML = jahre.map(j => `<option${j === fahrt.jahr ? " selected" : ""}>${j}</option>`).join("");
+  renderFahrten();
+  // Läuft noch eine Berechnung im Hintergrund? Dann gleich noch einmal nachsehen.
+  if (fahrt.daten.kartendienst && fahrt.daten.fahrten.some(f => f.km_einfach == null && !f.fehler)) {
+    fahrt.nachladen = setTimeout(() => { if ($("#tab-fahrten").classList.contains("active")) ladeFahrten(); }, 2500);
+  }
+}
+
+function renderFahrten() {
+  const d = fahrt.daten, privat = d.fahrzeug !== "betrieb";
+  $("#fahrten-info").innerHTML = `<span>Fahrzeug: <b>${privat ? "Privat" : "Betrieb"}</b>${privat ? ` (${euro2(d.km_satz)}/km)` : " – Fahrten als Nachweis"}</span>
+    <span>Start: <b>${esc(d.start || "– bitte Absenderadresse eintragen –")}</b></span>
+    <span>Berechnung: <b>${d.kartendienst ? "OpenStreetMap" : "von Hand"}</b></span>
+    <a href="#" class="mehr zu-einstellungen">ändern →</a>`;
+  const liste = d.fahrten;
+  const summeKm = liste.reduce((s, f) => s + (f.km_gesamt || 0), 0);
+  const summe = liste.reduce((s, f) => s + (f.betrag || 0), 0);
+  const offen = liste.filter(f => f.km_einfach == null).length;
+  $("#fahrten-kacheln").innerHTML = `
+    <div class="card"><div class="kachel-titel">Fahrten ${fahrt.jahr}</div><div class="stat-gross">${liste.length}<small>${liste.filter(f => f.quelle === "hand").length} von Hand ergänzt${offen ? ` · ${offen} ohne Kilometer` : ""}</small></div></div>
+    <div class="card"><div class="kachel-titel">Kilometer</div><div class="stat-gross">${Math.round(summeKm).toLocaleString("de-DE")} km<small>Hin- und Rückfahrten</small></div></div>
+    <div class="card"><div class="kachel-titel">${privat ? "Als Ausgabe" : "Nachweis"}</div><div class="stat-gross">${privat ? euro2(summe) : "–"}<small>${privat ? `${Math.round(summeKm).toLocaleString("de-DE")} km × ${euro2(d.km_satz)}` : "Kosten über Belege (Kategorie Fahrzeug)"}</small></div></div>`;
+  const quelle = f => f.km_einfach == null
+    ? (f.fehler ? `<span class="chip q-offen" title="${esc(f.fehler)}">km fehlen</span>` : d.kartendienst ? `<span class="chip">wird berechnet …</span>` : `<span class="chip q-offen">km eintragen</span>`)
+    : `<span class="chip q-${f.quelle}">${{ auto: "automatisch", korrigiert: "korrigiert", hand: "von Hand" }[f.quelle]}</span>`;
+  $("#fahrten-body").innerHTML = liste.map(f => `<tr data-id="${f.id}">
+      <td>${fmtDate(f.datum)}</td>
+      <td>${esc(f.anlass)}${f.rechnung_id ? `<small>${esc(f.kunde)}${f.rechnung_text ? " · " + esc(f.rechnung_text) : ""}${f.rechnung_storniert ? " · <b>storniert</b>" : ""}</small>` : ""}</td>
+      <td>${esc(f.ziel_name || f.ziel.split(", ").slice(-1)[0].replace(/^\d{4,5}\s+/, "") || f.ziel)}<small>${esc(f.ziel)}</small></td>
+      <td class="num">${f.km_einfach == null ? "–" : (f.hin_zurueck ? `2 × ${km(f.km_einfach)} = ${km(f.km_gesamt)}` : km(f.km_gesamt))}</td>
+      <td class="num">${privat && f.betrag != null ? euro2(f.betrag) : "–"}</td>
+      <td>${quelle(f)}</td>
+      <td class="btns"><button type="button" class="small secondary" data-act="bearbeiten" title="Kilometer oder Ziel ändern">✎</button><button type="button" class="icon del" data-act="loeschen" title="${f.rechnung_id && f.quelle !== "hand" ? "Fahrt entfernen – für diese Rechnung wird dann keine Fahrt mehr angelegt" : "Fahrt löschen"}">✕</button></td>
+    </tr>`).join("")
+    || `<tr><td colspan="7" class="hint">Noch keine Fahrten ${fahrt.jahr}. Sie entstehen automatisch mit jeder Rechnung – für ältere Rechnungen „Fahrten nachberechnen“.</td></tr>`;
+  $("#fahrten-ohne").textContent = d.ohne_fahrt.length
+    ? `Ohne Fahrt: ${d.ohne_fahrt.map(r => `Rechnung ${r.nummer} (${r.kunde})`).join(", ")} – „Fahrt erfassen“ ist bei ${d.ohne_fahrt.length === 1 ? "dieser Rechnung" : "diesen Rechnungen"} ausgeschaltet.` : "";
+}
+
+$("#fahrten-jahr").addEventListener("change", e => { fahrt.jahr = e.target.value; ladeFahrten(); });
+$("#fahrten-nachberechnen").addEventListener("click", async () => {
+  try {
+    const r = await api("fahrten/nachberechnen", { method: "POST", body: { jahr: fahrt.jahr } });
+    toast(`${r.angelegt} Fahrt${r.angelegt === 1 ? "" : "en"} angelegt` + (r.offen ? (r.kartendienst ? ` · ${r.offen} werden berechnet …` : ` · ${r.offen} ohne Kilometer – bitte eintragen oder die automatische Berechnung einschalten`) : ""));
+    ladeFahrten();
+  } catch (e) { toast(e.message, true); }
+});
+
+$("#fahrten-body").addEventListener("click", async e => {
+  const b = e.target.closest("button[data-act]");
+  if (!b) return;
+  const f = fahrt.daten.fahrten.find(x => x.id === Number(b.closest("tr").dataset.id));
+  if (b.dataset.act === "bearbeiten") return oeffneFahrt(f);
+  const frage = f.rechnung_id && f.quelle !== "hand"
+    ? `Fahrt zu ${f.anlass} entfernen?\n\nFür diese Rechnung wird dann keine Fahrt mehr angelegt („Fahrt erfassen“ wird ausgeschaltet).`
+    : `Fahrt am ${fmtDate(f.datum)} löschen?`;
+  if (!confirm(frage)) return;
+  try { await api(`fahrten/${f.id}`, { method: "DELETE" }); toast("Fahrt entfernt"); ladeFahrten(); }
+  catch (err) { toast(err.message, true); }
+});
+
+$("#fahrt-ergaenzen").addEventListener("click", () => oeffneFahrt(null));
+
+async function oeffneFahrt(f) {
+  fahrt.aktuell = f;
+  const form = $("#fahrt-form");
+  form.reset();
+  if (!state.rechnungen.length) { try { state.rechnungen = await api("rechnungen"); } catch (_) { /* egal */ } }
+  form.elements.rechnung_id.innerHTML = `<option value="">– keine –</option>` + state.rechnungen.filter(r => !r.storno_von).slice(0, 80)
+    .map(r => `<option value="${r.id}">${esc(r.nummer)} – ${esc(r.kunde.name)}</option>`).join("");
+  $("#fahrt-titel").textContent = f ? "Fahrt bearbeiten" : "Fahrt ergänzen";
+  const w = f || { datum: today(), hin_zurueck: true };
+  form.elements.datum.value = w.datum || "";
+  form.elements.anlass.value = w.anlass || "";
+  form.elements.ziel.value = w.ziel || "";
+  form.elements.start.value = f ? (f.start || "") : "";
+  form.elements.km_einfach.value = w.km_einfach != null ? km(w.km_einfach) : "";
+  form.elements.hin_zurueck.checked = w.hin_zurueck !== false;
+  form.elements.rechnung_id.value = w.rechnung_id || "";
+  $("#fahrt-dialog-hinweis").textContent = f && f.quelle === "auto"
+    ? "Automatisch berechnet. Änderst du die Kilometer (z. B. Umweg), bleibt dein Wert auch beim erneuten Speichern der Rechnung erhalten."
+    : fahrt.daten && !fahrt.daten.kartendienst ? "Kilometer bitte eintragen – die automatische Berechnung ist ausgeschaltet." : "";
+  $("#fahrt-dialog").showModal();
+}
+$("#fahrt-abbrechen").addEventListener("click", () => $("#fahrt-dialog").close());
+$("#fahrt-form").addEventListener("submit", async e => {
+  e.preventDefault();
+  const f = e.target.elements;
+  const d = { datum: f.datum.value, anlass: f.anlass.value, ziel: f.ziel.value, km_einfach: f.km_einfach.value,
+              hin_zurueck: f.hin_zurueck.checked, rechnung_id: f.rechnung_id.value };
+  if (f.start.value.trim()) d.start = f.start.value;
+  try {
+    if (fahrt.aktuell) await api(`fahrten/${fahrt.aktuell.id}`, { method: "PUT", body: d });
+    else await api("fahrten", { method: "POST", body: d });
+    $("#fahrt-dialog").close();
+    toast("Fahrt gespeichert");
+    ladeFahrten();
   } catch (err) { toast(err.message, true); }
 });
