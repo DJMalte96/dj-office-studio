@@ -1,5 +1,5 @@
 name: DJ Office Studio
-version: "1.2.0"
+version: "1.2.1"
 slug: rechnungen
 description: DJ Office Studio – Rechnungen und Angebote schreiben, Kunden und Rechnungsposten verwalten
 url: https://github.com/DJMalte96/dj-office-studio
@@ -9,6 +9,8 @@ arch:
 init: false
 ingress: true
 ingress_port: 8099
+# Nur lesend: installierte Add-ons abfragen, um Paperless-ngx automatisch zu finden (Finanzen → Belege aus Paperless)
+hassio_api: true
 panel_icon: mdi:album
 panel_title: DJ Office Studio
 map:

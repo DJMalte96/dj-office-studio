@@ -1214,16 +1214,21 @@ def paperless_verbinden():
     url, token = _pl_zugang(d)
     gefunden = None
     if not url:
-        url = gefunden = paperless.suchen()
+        url, gefunden = paperless.suchen()
         if not url:
-            return _fehler("Paperless wurde nicht automatisch gefunden – bitte die Adresse eintragen "
-                           "(z. B. http://homeassistant.local:8000).")
-    if not token:
-        if paperless.erreichbar(url):
-            return jsonify({"url": url, "gefunden": bool(gefunden), "tags": None,
-                            "hinweis": "Paperless gefunden – jetzt noch den API-Token eintragen."})
-        return _fehler(f"Unter {url} antwortet kein Paperless.")
+            return _fehler(gefunden)
+        db.save_settings({"paperless_url": url})            # gefundene Adresse gleich merken
+    benutzer, passwort = (d.get("benutzer") or "").strip(), d.get("passwort") or ""
     try:
-        return jsonify({"url": url, "gefunden": bool(gefunden), "tags": paperless.tags(url, token, _pl_https(url))})
+        if benutzer and passwort:                          # Anmeldung statt Token: Token holen und speichern
+            token = paperless.token_holen(url, benutzer, passwort, _pl_https(url))
+            db.save_settings({"paperless_token": token})
+        if not token:
+            if paperless.erreichbar(url):
+                return jsonify({"url": url, "gefunden": gefunden, "tags": None,
+                                "hinweis": f"{gefunden or 'Paperless erreichbar'} – jetzt mit Benutzername und Passwort anmelden."})
+            return _fehler(f"Unter {url} antwortet kein Paperless.")
+        return jsonify({"url": url, "gefunden": gefunden, "token_gespeichert": bool(benutzer and passwort),
+                        "tags": paperless.tags(url, token, _pl_https(url))})
     except paperless.PaperlessFehler as e:
         return _fehler(str(e))

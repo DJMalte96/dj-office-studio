@@ -2,6 +2,13 @@
 
 Alle Änderungen an DJ Office Studio. Neueste Version oben.
 
+## 1.2.1 – 2026-11-20
+
+### Verbessert
+- **Paperless einfacher verbinden**: Statt Adresse und API-Token reicht jetzt die normale Paperless-Anmeldung (Benutzername und Passwort). Die App holt sich damit einen Zugangsschlüssel – das Passwort wird nicht gespeichert.
+- **Paperless-Add-on wird automatisch gefunden**: Die App fragt Home Assistant, welche Add-ons installiert sind, und nimmt Adresse und Port vom Paperless-Add-on. Läuft das Add-on nicht, sagt die Meldung das. Dafür braucht das Add-on die Berechtigung, die Liste der Add-ons zu lesen (`hassio_api`).
+- Der Tag der Ausgaben-Belege wird sofort gespeichert; heißt er z. B. „Ausgaben“ oder „Belege“, ist er schon vorausgewählt. Adresse und Token von Hand gibt es weiterhin unter „Erweitert“ (z. B. für die Desktop-Version).
+
 ## 1.2.0 – 2026-11-20
 
 ### Neu

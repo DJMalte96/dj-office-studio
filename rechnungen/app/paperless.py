@@ -4,6 +4,7 @@ Anmeldung mit dem API-Token aus Paperless (Profil → API-Token). Die App holt D
 als Ausgaben-Belege ab; an Paperless selbst wird nichts geändert.
 """
 import json
+import os
 import re
 import urllib.error
 import urllib.parse
@@ -18,6 +19,9 @@ KANDIDATEN = (
     "http://homeassistant:8000",
     "http://localhost:8000",
 )
+
+
+BEKANNTE_ADDONS = ("ca5234a0_paperless-ngx", "db21ed7f_paperless_ngx")
 
 
 class PaperlessFehler(Exception):
@@ -86,8 +90,76 @@ def erreichbar(url, timeout=3):
         return False
 
 
+def _supervisor(pfad):
+    """Supervisor-Schnittstelle von Home Assistant (nur im Add-on; braucht „hassio_api: true“)."""
+    token = os.environ.get("SUPERVISOR_TOKEN")
+    if not token:
+        return None
+    req = urllib.request.Request("http://supervisor" + pfad, headers={"Authorization": f"Bearer {token}"})
+    try:
+        with urllib.request.urlopen(req, timeout=5) as r:
+            return json.loads(r.read()).get("data")
+    except Exception:
+        return None
+
+
+def addon_kandidaten():
+    """Installierte Paperless-Add-ons → [(name, läuft, [Adressen])]. Hostname und Ports liefert der Supervisor."""
+    # Die Liste der installierten Add-ons steht in /info (für jedes Add-on lesbar; /addons bräuchte mehr Rechte).
+    # Zur Sicherheit auch die bekannten Paperless-Add-ons direkt abfragen.
+    liste = list((_supervisor("/info") or {}).get("addons") or [])
+    for slug in BEKANNTE_ADDONS:
+        if not any(a.get("slug") == slug for a in liste) and _supervisor(f"/addons/{slug}/info"):
+            liste.append({"slug": slug, "name": "Paperless-ngx"})
+    ergebnis = []
+    for a in liste:
+        if "paperless" not in (a.get("slug", "") + " " + a.get("name", "")).lower():
+            continue
+        info = _supervisor(f"/addons/{a['slug']}/info") or {}
+        if not info and a.get("name") == "Paperless-ngx" and a["slug"] in BEKANNTE_ADDONS:
+            continue
+        hosts = [h for h in (info.get("hostname"), info.get("ip_address"), a["slug"].replace("_", "-")) if h]
+        ports = [int(str(k).split("/")[0]) for k in (info.get("network") or {})]   # Ports im Container, z. B. „8000/tcp“
+        ports += [p for p in (8000, info.get("ingress_port")) if p and p not in ports]
+        ergebnis.append((a.get("name") or a["slug"], (info.get("state") or a.get("state")) == "started",
+                         [f"http://{h}:{p}" for h in dict.fromkeys(hosts) for p in ports]))
+    return ergebnis
+
+
 def suchen():
-    return next((u for u in KANDIDATEN if erreichbar(u)), None)
+    """Paperless finden → (adresse | None, hinweis). Zuerst über Home Assistant, dann übliche Adressen im Heimnetz."""
+    addons = addon_kandidaten()
+    for name, laeuft, adressen in addons:
+        for u in adressen:
+            if erreichbar(u):
+                return u, f"Add-on „{name}“ gefunden"
+    if addons and not any(laeuft for _, laeuft, _ in addons):
+        return None, f"Das Add-on „{addons[0][0]}“ ist installiert, läuft aber nicht – bitte in Home Assistant starten."
+    for u in KANDIDATEN:
+        if erreichbar(u):
+            return u, "Paperless gefunden"
+    if addons:
+        return None, f"Das Add-on „{addons[0][0]}“ antwortet nicht – bitte die Adresse von Hand eintragen."
+    return None, "Paperless wurde nicht gefunden – bitte die Adresse eintragen (z. B. http://homeassistant.local:8000)."
+
+
+def token_holen(url, benutzer, passwort, ssl_kontext=None):
+    """API-Token mit Benutzername und Passwort von Paperless abrufen (das Passwort wird nicht gespeichert)."""
+    req = urllib.request.Request(adresse(url) + "/api/token/", method="POST",
+                                 data=urllib.parse.urlencode({"username": benutzer, "password": passwort}).encode(),
+                                 headers={"Accept": "application/json", "Content-Type": "application/x-www-form-urlencoded"})
+    try:
+        with urllib.request.urlopen(req, timeout=15, context=ssl_kontext) as r:
+            token = json.loads(r.read()).get("token")
+    except urllib.error.HTTPError as e:
+        if e.code == 400:
+            raise PaperlessFehler("Benutzername oder Passwort stimmt nicht") from e
+        raise PaperlessFehler(f"Paperless meldet Fehler {e.code}") from e
+    except (urllib.error.URLError, OSError, ValueError) as e:
+        raise PaperlessFehler("Paperless ist nicht erreichbar") from e
+    if not token:
+        raise PaperlessFehler("Paperless hat keinen Token geliefert")
+    return token
 
 
 def tags(url, token, ssl_kontext=None):

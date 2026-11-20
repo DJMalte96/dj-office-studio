@@ -49,6 +49,15 @@ class FakePaperless(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(roh)
 
+    def do_POST(self):
+        if self.path == "/api/token/":
+            laenge = int(self.headers.get("Content-Length") or 0)
+            q = {k: v[0] for k, v in parse_qs(self.rfile.read(laenge).decode()).items()}
+            if q.get("username") == "max" and q.get("password") == "pw":
+                return self._json({"token": TOKEN})
+            return self._json({"non_field_errors": ["Unable to log in with provided credentials."]}, 400)
+        self._json({"detail": "Nicht gefunden."}, 404)
+
     def do_GET(self):
         teile = urlsplit(self.path)
         q = {k: v[0] for k, v in parse_qs(teile.query).items()}
@@ -101,7 +110,7 @@ def test_verbinden_laedt_tags_und_prueft_token(client, paperless_server):
     r = client.post("/api/paperless/verbinden", json={"url": paperless_server, "token": TOKEN}).get_json()
     assert [t["name"] for t in r["tags"]] == ["Ausgaben DJ", "Privat"]
     r = client.post("/api/paperless/verbinden", json={"url": paperless_server}).get_json()      # ohne Token
-    assert r["tags"] is None and "Token" in r["hinweis"]
+    assert r["tags"] is None and "anmelden" in r["hinweis"]
     r = client.post("/api/paperless/verbinden", json={"url": "http://127.0.0.1:9", "token": TOKEN})
     assert r.status_code == 400 and "nicht erreichbar" in r.get_json()["error"]
 
@@ -150,3 +159,46 @@ def test_abholen_ohne_einrichtung_und_mit_falschem_token(client, paperless_serve
     st = client.post("/api/paperless/abholen").get_json()
     assert "Token" in st["abbruch"] and not st["laeuft"]
     assert client.post("/api/paperless/abholen").get_json()["abbruch"]                         # Sperre wieder frei
+
+
+def _supervisor_mit(monkeypatch, port, state="started"):
+    """Home Assistant nachbilden: ein installiertes Paperless-Add-on, dessen Container-Port auf den Testserver zeigt."""
+    import paperless
+    monkeypatch.setenv("SUPERVISOR_TOKEN", "sv")
+    antworten = {"/info": {"addons": [{"slug": "dbcd1234_samba", "name": "Samba share"},
+                                        {"slug": "ca5234a0_paperless-ngx", "name": "Paperless-ngx", "state": state}]},
+                 "/addons/ca5234a0_paperless-ngx/info": {"hostname": "127.0.0.1", "network": {f"{port}/tcp": None},
+                                                         "ingress_port": 8099, "state": state}}
+    monkeypatch.setattr(paperless, "_supervisor", lambda pfad: antworten.get(pfad))
+    monkeypatch.setattr(paperless, "KANDIDATEN", ())
+
+
+def test_findet_addon_und_meldet_mit_benutzer_an(client, paperless_server, monkeypatch):
+    _supervisor_mit(monkeypatch, paperless_server.rsplit(":", 1)[1])
+    r = client.post("/api/paperless/verbinden", json={"benutzer": "max", "passwort": "pw"}).get_json()
+    assert r["url"] == paperless_server and "Paperless-ngx" in r["gefunden"] and r["token_gespeichert"]
+    assert [t["name"] for t in r["tags"]] == ["Ausgaben DJ", "Privat"]
+    r = client.post("/api/paperless/verbinden", json={"benutzer": "max", "passwort": "falsch"})   # Adresse jetzt gemerkt
+    assert r.status_code == 400 and "Passwort" in r.get_json()["error"]
+    e = client.get("/api/einstellungen").get_json()                                          # Adresse und Token gemerkt,
+    assert e["paperless_url"] == paperless_server and e["paperless_token_gesetzt"]           # Passwort nicht
+    import db
+    assert "pw" not in json.dumps(db.get_settings())
+    client.put("/api/einstellungen", json={"paperless_tag": "7", "paperless_tag_name": "Ausgaben DJ"})
+    import finanzen
+    monkeypatch.setattr(finanzen, "HINTERGRUND", False)
+    assert client.post("/api/paperless/abholen").get_json()["neu"] == 2
+
+
+def test_addon_laeuft_nicht(client, monkeypatch):
+    _supervisor_mit(monkeypatch, 9, state="stopped")
+    r = client.post("/api/paperless/verbinden", json={"benutzer": "max", "passwort": "pw"})
+    assert r.status_code == 400 and "läuft aber nicht" in r.get_json()["error"]
+
+
+def test_ohne_home_assistant_klare_meldung(client, monkeypatch):
+    import paperless
+    monkeypatch.delenv("SUPERVISOR_TOKEN", raising=False)
+    monkeypatch.setattr(paperless, "KANDIDATEN", ())
+    r = client.post("/api/paperless/verbinden", json={})
+    assert r.status_code == 400 and "nicht gefunden" in r.get_json()["error"]
