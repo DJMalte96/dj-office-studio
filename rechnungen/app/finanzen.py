@@ -92,6 +92,9 @@ def beleg_aufnehmen(name, daten, paperless=None):
     """Beleg speichern und auswerten → (neue Ausgabe | None, ID der vorhandenen bei Duplikat).
     paperless: Angaben aus Paperless (id, korrespondent, datum, titel, text) – haben Vorrang vor der eigenen Auswertung."""
     pruef = belege.pruefsumme(daten)
+    schon = _doppelt(pruef, None)
+    if schon:
+        return None, schon
     v = belege.auswerten(name, daten)
     vorhanden = _doppelt(pruef, v["message_id"])
     if vorhanden:
@@ -201,10 +204,14 @@ def lieferanten():
 @bp.post("/api/ausgaben/belege")
 def belege_hochladen():
     """Mehrere Belege auf einmal: speichern, auswerten, als „neu“ anlegen. Doppelte werden erkannt."""
+    return jsonify(dateien_aufnehmen((f.filename or "Beleg", f.read()) for f in request.files.getlist("dateien")))
+
+
+def dateien_aufnehmen(eingang):
+    """[(name, bytes)] → {neu, doppelt, fehler}. Postfach-Exporte (.mbox) werden in einzelne Mails aufgeteilt."""
     neu, doppelt, fehler = [], [], []
     dateien = []
-    for f in request.files.getlist("dateien"):
-        daten, name = f.read(), f.filename or "Beleg"
+    for name, daten in eingang:
         if not daten:
             continue
         if belege.ist_mbox(name, daten):          # Postfach-Export → jede Mail ein eigener Beleg
@@ -224,7 +231,7 @@ def belege_hochladen():
             doppelt.append({"datei": name, "id": vorhanden})
         else:
             neu.append(a)
-    return jsonify({"neu": neu, "doppelt": doppelt, "fehler": fehler})
+    return {"neu": neu, "doppelt": doppelt, "fehler": fehler}
 
 
 @bp.post("/api/ausgaben")
@@ -1212,23 +1219,238 @@ def paperless_verbinden():
     """Einstellungen: Verbindung prüfen und Tags laden. Ohne Adresse wird nach Paperless gesucht."""
     d = _daten()
     url, token = _pl_zugang(d)
-    gefunden = None
-    if not url:
-        url, gefunden = paperless.suchen()
-        if not url:
-            return _fehler(gefunden)
-        db.save_settings({"paperless_url": url})            # gefundene Adresse gleich merken
     benutzer, passwort = (d.get("benutzer") or "").strip(), d.get("passwort") or ""
-    try:
-        if benutzer and passwort:                          # Anmeldung statt Token: Token holen und speichern
-            token = paperless.token_holen(url, benutzer, passwort, _pl_https(url))
-            db.save_settings({"paperless_token": token})
-        if not token:
-            if paperless.erreichbar(url):
+    versucht, gefunden, erster_fehler = [], None, None
+    # Zuerst die eingetragene/gespeicherte Adresse; antwortet dort kein Paperless, wird gesucht (eine früher
+    # automatisch gefundene, aber falsche Adresse blockiert so nichts). Gespeichert wird erst nach Erfolg.
+    while True:
+        if not url or (versucht and url in versucht):
+            url, gefunden = paperless.suchen(ausser=versucht)
+            if not url:
+                return _fehler(erster_fehler or gefunden)
+        versucht.append(url)
+        if not paperless.erreichbar(url):
+            erster_fehler = erster_fehler or f"Unter {url} antwortet kein Paperless."
+            url = None
+            continue
+        try:
+            neu = paperless.token_holen(url, benutzer, passwort, _pl_https(url)) if benutzer and passwort else None
+            if not (neu or token):
                 return jsonify({"url": url, "gefunden": gefunden, "tags": None,
                                 "hinweis": f"{gefunden or 'Paperless erreichbar'} – jetzt mit Benutzername und Passwort anmelden."})
-            return _fehler(f"Unter {url} antwortet kein Paperless.")
-        return jsonify({"url": url, "gefunden": gefunden, "token_gespeichert": bool(benutzer and passwort),
-                        "tags": paperless.tags(url, token, _pl_https(url))})
-    except paperless.PaperlessFehler as e:
-        return _fehler(str(e))
+            tags = paperless.tags(url, neu or token, _pl_https(url))
+        except paperless.PaperlessFehler as e:
+            return _fehler(str(e))
+        db.save_settings({"paperless_url": url} | ({"paperless_token": neu} if neu else {}))
+        return jsonify({"url": url, "gefunden": gefunden, "token_gespeichert": bool(neu), "tags": tags})
+
+
+# ---------- Belege-Ordner: alles, was dort landet, automatisch einlesen ----------
+
+import glob  # noqa: E402
+import shutil  # noqa: E402
+import time  # noqa: E402
+
+BELEG_ENDUNGEN = (".pdf", ".eml", ".msg", ".mbox", ".jpg", ".jpeg", ".png", ".heic", ".heif", ".webp")
+UEBERNOMMEN, NICHT_LESBAR = "übernommen", "nicht lesbar"
+ORDNER_TAKT = 60          # Sekunden zwischen zwei Durchläufen im Hintergrund
+_ordner_sperre = threading.Lock()
+_ordner_stand = {"laeuft": False, "geprueft": None, "neu": 0, "doppelt": 0, "fehler": [], "problem": None}
+
+
+def belege_ordner(a=None):
+    return ((a or _einstellungen()).get("belege_ordner") or "").strip()
+
+
+def _ordner_liste(muster):
+    """Pfad mit Platzhaltern (z. B. …/DJ/*/Ausgaben für alle Jahre) → vorhandene Ordner."""
+    if glob.has_magic(muster):
+        return sorted(p for p in glob.glob(muster) if os.path.isdir(p))
+    return [muster] if os.path.isdir(muster) else []
+
+
+def _schon_gesehen(pfad):
+    """Nur-lesen-Modus: Datei unverändert seit dem letzten Einlesen?"""
+    s = os.stat(pfad)
+    with db.connect() as con:
+        r = con.execute("SELECT groesse, geaendert FROM belege_ordner_dateien WHERE pfad = ?", (pfad,)).fetchone()
+    return bool(r) and r["groesse"] == s.st_size and r["geaendert"] == s.st_mtime
+
+
+def _gesehen_merken(pfad):
+    s = os.stat(pfad)
+    with db.connect() as con:
+        con.execute("INSERT OR REPLACE INTO belege_ordner_dateien (pfad, groesse, geaendert) VALUES (?, ?, ?)",
+                    (pfad, s.st_size, s.st_mtime))
+
+
+def _ordner_dateien(ordner, ruhe=5):
+    """Belegdateien im Ordner (auch in Unterordnern), ohne „übernommen“/„nicht lesbar“, versteckte Dateien und
+    Dateien, die gerade noch geschrieben werden (in den letzten Sekunden geändert)."""
+    jetzt = time.time()
+    for wurzel, ordner_namen, namen in os.walk(ordner):
+        ordner_namen[:] = [o for o in ordner_namen if not o.startswith(".") and
+                           not (wurzel == ordner and o in (UEBERNOMMEN, NICHT_LESBAR))]
+        for n in sorted(namen):
+            pfad = os.path.join(wurzel, n)
+            if n.startswith(".") or not (n.lower().endswith(BELEG_ENDUNGEN) or n == "mbox"):
+                continue
+            try:
+                if jetzt - os.path.getmtime(pfad) >= ruhe:
+                    yield pfad
+            except OSError:
+                continue
+
+
+def _verschieben(pfad, ordner, ziel_name):
+    """Datei nach <ordner>/<ziel_name>/<relativer Pfad> verschieben, ohne etwas zu überschreiben."""
+    rel = os.path.relpath(pfad, ordner)
+    ziel = os.path.join(ordner, ziel_name, rel)
+    os.makedirs(os.path.dirname(ziel), exist_ok=True)
+    stamm, endung = os.path.splitext(ziel)
+    n = 2
+    while os.path.exists(ziel):
+        ziel = f"{stamm} ({n}){endung}"
+        n += 1
+    shutil.move(pfad, ziel)
+    quelle = os.path.dirname(pfad)          # leer gewordene Unterordner aufräumen (nur leere, nie den Ordner selbst)
+    while os.path.abspath(quelle) != os.path.abspath(ordner):
+        try:
+            os.rmdir(quelle)
+        except OSError:
+            break
+        quelle = os.path.dirname(quelle)
+
+
+def ordner_einlesen(ruhe=5):
+    """Einen Durchlauf machen. Gibt den Stand zurück; läuft schon einer, passiert nichts."""
+    st = _ordner_stand
+    if not _ordner_sperre.acquire(blocking=False):
+        return st
+    try:
+        st["laeuft"] = True
+        a = _einstellungen()
+        muster = belege_ordner(a)
+        verschieben = a.get("belege_ordner_verschieben", True)
+        st["problem"] = None
+        if not muster:
+            return st
+        if not glob.has_magic(muster) and not os.path.isdir(muster) and verschieben:
+            try:   # z. B. /share/belege beim ersten Start anlegen, wenn /share existiert
+                if os.path.isdir(os.path.dirname(os.path.abspath(muster))):
+                    os.makedirs(muster, exist_ok=True)
+            except OSError:
+                pass
+        ordner_liste = _ordner_liste(muster)
+        eigene = os.path.realpath(os.path.join(db.DATA_DIR, "belege"))   # Belegablage der App selbst
+        if any(os.path.realpath(o) == eigene or os.path.realpath(o).startswith(eigene + os.sep) or
+               eigene.startswith(os.path.realpath(o) + os.sep) for o in ordner_liste):
+            st["problem"] = "Der Belege-Ordner darf nicht die Ablage der App selbst sein – bitte einen anderen Ordner wählen"
+            return st
+        if not ordner_liste:
+            st["problem"] = f"Belege-Ordner {muster} wurde nicht gefunden"
+            return st
+        for ordner, pfad in [(o, p) for o in ordner_liste for p in _ordner_dateien(o, ruhe)]:
+            if not verschieben and _schon_gesehen(pfad):
+                continue
+            name = os.path.basename(pfad)
+            if name == "mbox":   # Apple-Mail-Export „Name.mbox/mbox“ → Name des Postfachs verwenden
+                name = os.path.basename(os.path.dirname(pfad)) or name
+            try:
+                with open(pfad, "rb") as f:
+                    daten = f.read()
+                e = dateien_aufnehmen([(name, daten)])
+            except Exception as x:
+                e = {"neu": [], "doppelt": [], "fehler": [{"datei": name, "fehler": type(x).__name__}]}
+            st["neu"] += len(e["neu"])
+            st["doppelt"] += len(e["doppelt"])
+            st["fehler"] = (st["fehler"] + [f["datei"] for f in e["fehler"]])[-20:]
+            if not verschieben:   # fremde Ablage (z. B. Paperless): nichts anfassen, nur merken
+                _gesehen_merken(pfad)
+                continue
+            try:
+                _verschieben(pfad, ordner, NICHT_LESBAR if e["fehler"] and not (e["neu"] or e["doppelt"]) else UEBERNOMMEN)
+            except OSError as x:
+                st["problem"] = f"Konnte {name} nicht verschieben ({type(x).__name__}) – bitte Schreibrechte des Ordners prüfen"
+                break
+        return st
+    finally:
+        st["laeuft"] = False
+        st["geprueft"] = time.strftime("%Y-%m-%dT%H:%M:%S")
+        _ordner_sperre.release()
+
+
+_ordner_waechter = []
+
+
+def _ordner_schleife():
+    while True:
+        try:
+            ordner_einlesen()
+        except Exception:   # der Wächter darf nie sterben
+            pass
+        time.sleep(ORDNER_TAKT)
+
+
+@bp.before_app_request
+def _ordner_waechter_starten():
+    """Beim ersten Aufruf der App den Hintergrund-Wächter starten (in Tests ausgeschaltet)."""
+    if HINTERGRUND and not _ordner_waechter:
+        t = threading.Thread(target=_ordner_schleife, daemon=True, name="belege-ordner")
+        _ordner_waechter.append(t)
+        t.start()
+
+
+@bp.post("/api/belege-ordner/einlesen")
+def ordner_jetzt_einlesen():
+    """Beim Öffnen der Ausgaben: sofort nachsehen (im Hintergrund), Stand zurückgeben."""
+    vorher = (_ordner_stand["neu"], _ordner_stand["doppelt"])
+    if HINTERGRUND:
+        threading.Thread(target=ordner_einlesen, daemon=True).start()
+        time.sleep(0.05)
+    else:
+        ordner_einlesen(ruhe=0)
+    return jsonify(_ordner_status(vorher))
+
+
+@bp.get("/api/belege-ordner")
+def ordner_stand():
+    return jsonify(_ordner_status())
+
+
+def _ordner_status(vorher=None):
+    return {**_ordner_stand, "ordner": belege_ordner(),
+            "start_neu": vorher[0] if vorher else None, "start_doppelt": vorher[1] if vorher else None}
+
+
+SUCH_WURZELN = ("/share", "/media")
+
+
+@bp.post("/api/belege-ordner/suchen")
+def ordner_suchen():
+    """Ablage von Paperless finden: Ordner „Ausgaben“ unterhalb von …/documents/originals (in /share oder /media).
+    Liegen sie je Jahr (DJ/2025/Ausgaben, DJ/2026/Ausgaben), wird daraus ein Muster mit * für alle Jahre."""
+    wurzeln = [w for w in (_daten().get("wurzeln") or SUCH_WURZELN) if os.path.isdir(w)]
+    funde = []
+    for w in wurzeln:
+        for wurzel, ordner_namen, _ in os.walk(w):
+            tiefe = wurzel[len(w):].count(os.sep)
+            if tiefe > 8 or os.path.basename(wurzel) in ("thumbnails", "archive", "consume", "trash", UEBERNOMMEN):
+                ordner_namen[:] = []
+                continue
+            ordner_namen[:] = [o for o in ordner_namen if not o.startswith(".")]
+            if "originals" in wurzel.split(os.sep):
+                for o in ordner_namen:
+                    if o.lower() == "ausgaben":
+                        funde.append(os.path.join(wurzel, o))
+    muster = []
+    for p in funde:   # Jahreszahl im Pfad → *
+        teile = p.split(os.sep)
+        m = os.sep.join("*" if re.fullmatch(r"(19|20)\d\d", t) else t for t in teile)
+        if m not in muster:
+            muster.append(m)
+    if not muster:
+        return _fehler("Kein Ordner „Ausgaben“ in der Ablage von Paperless gefunden (gesucht in "
+                       + ", ".join(wurzeln or SUCH_WURZELN) + "). Bitte den Pfad von Hand eintragen.")
+    return jsonify({"muster": muster, "ordner": muster[0], "anzahl": sum(len(list(_ordner_dateien(o, 0)))
+                                                                       for o in _ordner_liste(muster[0]))})

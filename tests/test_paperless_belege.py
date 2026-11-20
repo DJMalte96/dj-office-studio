@@ -99,7 +99,7 @@ def paperless_server():
 def eingerichtet(client, paperless_server, monkeypatch):
     import finanzen
     monkeypatch.setattr(finanzen, "HINTERGRUND", False)
-    client.put("/api/einstellungen", json={"paperless_url": paperless_server + "/api/", "paperless_token": TOKEN,
+    client.put("/api/einstellungen", json={"paperless_installiert": True, "paperless_url": paperless_server + "/api/", "paperless_token": TOKEN,
                                            "paperless_tag": "7", "paperless_tag_name": "Ausgaben DJ"})
     return paperless_server
 
@@ -112,13 +112,15 @@ def test_verbinden_laedt_tags_und_prueft_token(client, paperless_server):
     r = client.post("/api/paperless/verbinden", json={"url": paperless_server}).get_json()      # ohne Token
     assert r["tags"] is None and "anmelden" in r["hinweis"]
     r = client.post("/api/paperless/verbinden", json={"url": "http://127.0.0.1:9", "token": TOKEN})
-    assert r.status_code == 400 and "nicht erreichbar" in r.get_json()["error"]
+    assert r.status_code == 400 and "antwortet kein Paperless" in r.get_json()["error"]
 
 
 def test_token_bleibt_geheim(client, eingerichtet):
     e = client.get("/api/einstellungen").get_json()
     assert e["paperless_token"] == "" and e["paperless_token_gesetzt"] and e["paperless_url"].endswith("/api/")
     assert client.get("/api/absender").get_json()["paperless_belege"]
+    client.put("/api/einstellungen", json={"paperless_installiert": False})                    # ohne Haken kein Knopf
+    assert not client.get("/api/absender").get_json()["paperless_belege"]
     client.put("/api/einstellungen", json={"paperless_token": ""})                             # leer = behalten
     assert client.get("/api/einstellungen").get_json()["paperless_token_gesetzt"]
     import db
@@ -202,3 +204,40 @@ def test_ohne_home_assistant_klare_meldung(client, monkeypatch):
     monkeypatch.setattr(paperless, "KANDIDATEN", ())
     r = client.post("/api/paperless/verbinden", json={})
     assert r.status_code == 400 and "nicht gefunden" in r.get_json()["error"]
+
+
+class IngressSperre(BaseHTTPRequestHandler):
+    """Wie der Ingress-Eingang vieler Add-ons: nur Home Assistant darf rein, alle anderen bekommen 403 als HTML."""
+    def log_message(self, *a):
+        pass
+
+    def _sperre(self):
+        self.send_response(403)
+        self.send_header("Content-Type", "text/html")
+        self.end_headers()
+        self.wfile.write(b"<html><body><h1>403 Forbidden</h1>nginx</body></html>")
+
+    do_GET = do_POST = _sperre
+
+
+def test_ingress_eingang_wird_uebersprungen(client, paperless_server, monkeypatch):
+    """403 vom Ingress-Eingang zählt nicht als Paperless; eine früher falsch gespeicherte Adresse blockiert nicht."""
+    import paperless
+    sperre = ThreadingHTTPServer(("127.0.0.1", 0), IngressSperre)
+    threading.Thread(target=sperre.serve_forever, daemon=True).start()
+    try:
+        gesperrt = f"http://127.0.0.1:{sperre.server_address[1]}"
+        assert not paperless.erreichbar(gesperrt) and paperless.erreichbar(paperless_server)
+        monkeypatch.setenv("SUPERVISOR_TOKEN", "sv")
+        antworten = {"/info": {"addons": [{"slug": "ca5234a0_paperless-ngx", "name": "Paperless-ngx", "state": "started"}]},
+                     "/addons/ca5234a0_paperless-ngx/info": {   # Ingress-Port zuerst im „network“, echter Port danach
+                         "hostname": "127.0.0.1", "state": "started",
+                         "network": {f"{sperre.server_address[1]}/tcp": None, f"{paperless_server.rsplit(':', 1)[1]}/tcp": None}}}
+        monkeypatch.setattr(paperless, "_supervisor", lambda pfad: antworten.get(pfad))
+        monkeypatch.setattr(paperless, "KANDIDATEN", ())
+        client.put("/api/einstellungen", json={"paperless_url": gesperrt})                  # wie nach Version 1.2.1
+        r = client.post("/api/paperless/verbinden", json={"url": gesperrt, "benutzer": "max", "passwort": "pw"}).get_json()
+        assert r["url"] == paperless_server and r["tags"]
+        assert client.get("/api/einstellungen").get_json()["paperless_url"] == paperless_server
+    finally:
+        sperre.shutdown()

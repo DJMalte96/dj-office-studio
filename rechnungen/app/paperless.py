@@ -51,8 +51,11 @@ def _anfrage(url, token, pfad, roh=False, timeout=30, ssl_kontext=None):
                 return daten, name, r.headers.get_content_type()
             return json.loads(daten)
     except urllib.error.HTTPError as e:
-        if e.code in (401, 403):
-            raise PaperlessFehler("Paperless lehnt den Zugriff ab – bitte den API-Token prüfen") from e
+        if e.code in (401, 403) and "json" in (e.headers.get_content_type() or ""):
+            raise PaperlessFehler("Paperless lehnt den Zugriff ab – bitte neu anmelden bzw. den API-Token prüfen") from e
+        if e.code == 403:
+            raise PaperlessFehler(f"Unter {adresse(url)} wird der Zugriff verweigert (403) – das ist vermutlich nicht "
+                                  "die Paperless-Schnittstelle selbst") from e
         if e.code == 404:
             raise PaperlessFehler("Unter dieser Adresse antwortet kein Paperless (404)") from e
         raise PaperlessFehler(f"Paperless meldet Fehler {e.code}") from e
@@ -79,13 +82,15 @@ def _alle(url, token, pfad, ssl_kontext=None):
 
 
 def erreichbar(url, timeout=3):
-    """Antwortet unter der Adresse ein Paperless? (auch ohne Token: die API antwortet dann mit 401)"""
+    """Antwortet unter der Adresse wirklich die Paperless-Schnittstelle? Ohne Anmeldung antwortet sie mit 401/403,
+    aber immer als JSON. Eine HTML-Seite (z. B. 403 vom Ingress-Eingang eines Add-ons, der nur Home Assistant
+    durchlässt) zählt nicht."""
+    req = urllib.request.Request(adresse(url) + "/api/", headers={"Accept": "application/json"})
     try:
-        with urllib.request.urlopen(urllib.request.Request(adresse(url) + "/api/", headers={"Accept": "application/json"}),
-                                    timeout=timeout):
-            return True
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            return "json" in (r.headers.get_content_type() or "")
     except urllib.error.HTTPError as e:
-        return e.code in (401, 403)
+        return e.code in (401, 403) and "json" in (e.headers.get_content_type() or "")
     except Exception:
         return False
 
@@ -120,23 +125,26 @@ def addon_kandidaten():
             continue
         hosts = [h for h in (info.get("hostname"), info.get("ip_address"), a["slug"].replace("_", "-")) if h]
         ports = [int(str(k).split("/")[0]) for k in (info.get("network") or {})]   # Ports im Container, z. B. „8000/tcp“
-        ports += [p for p in (8000, info.get("ingress_port")) if p and p not in ports]
+        # übliche Ports von Paperless; der Ingress-Port zuletzt (dort lassen viele Add-ons nur Home Assistant durch)
+        ports += [p for p in (8000, 8010, 8080, 80, info.get("ingress_port")) if p and p not in ports]
         ergebnis.append((a.get("name") or a["slug"], (info.get("state") or a.get("state")) == "started",
                          [f"http://{h}:{p}" for h in dict.fromkeys(hosts) for p in ports]))
     return ergebnis
 
 
-def suchen():
-    """Paperless finden → (adresse | None, hinweis). Zuerst über Home Assistant, dann übliche Adressen im Heimnetz."""
+def suchen(ausser=()):
+    """Paperless finden → (adresse | None, hinweis). Zuerst über Home Assistant, dann übliche Adressen im Heimnetz.
+    ausser: Adressen, die schon nicht funktioniert haben."""
+    ausser = {adresse(u) for u in ausser if u}
     addons = addon_kandidaten()
     for name, laeuft, adressen in addons:
         for u in adressen:
-            if erreichbar(u):
+            if u not in ausser and erreichbar(u):
                 return u, f"Add-on „{name}“ gefunden"
     if addons and not any(laeuft for _, laeuft, _ in addons):
         return None, f"Das Add-on „{addons[0][0]}“ ist installiert, läuft aber nicht – bitte in Home Assistant starten."
     for u in KANDIDATEN:
-        if erreichbar(u):
+        if u not in ausser and erreichbar(u):
             return u, "Paperless gefunden"
     if addons:
         return None, f"Das Add-on „{addons[0][0]}“ antwortet nicht – bitte die Adresse von Hand eintragen."
@@ -154,7 +162,7 @@ def token_holen(url, benutzer, passwort, ssl_kontext=None):
     except urllib.error.HTTPError as e:
         if e.code == 400:
             raise PaperlessFehler("Benutzername oder Passwort stimmt nicht") from e
-        raise PaperlessFehler(f"Paperless meldet Fehler {e.code}") from e
+        raise PaperlessFehler(f"Paperless unter {adresse(url)} meldet Fehler {e.code}") from e
     except (urllib.error.URLError, OSError, ValueError) as e:
         raise PaperlessFehler("Paperless ist nicht erreichbar") from e
     if not token:
