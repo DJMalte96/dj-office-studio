@@ -2,6 +2,18 @@
 
 Alle Änderungen an DJ Office Studio. Neueste Version oben.
 
+## 1.0.1 – 2026-11-20
+
+### Geändert
+- **Desktop-Version (Windows/macOS) im eigenen Fenster**: DJ Office Studio öffnet sich jetzt in einem eigenen Programmfenster statt im Browser – ohne Adresszeile und Tabs. Fenster schließen beendet die App; das kleine Statusfenster entfällt.
+  - PDFs (Vorschau, Rechnungen, Mahnungen, Stornos) öffnen sich im PDF-Programm des Computers.
+  - Sicherung, Export und ZIP-Downloads werden über „Speichern unter“ abgelegt.
+  - Links (Changelog, Update, Lizenz) öffnen sich im Standardbrowser.
+  - Neu unter ⚙ Einstellungen: **Daten- und PDF-Ordner öffnen**.
+  - Texte lassen sich markieren und kopieren, Zoomen mit ⌘/Strg + und −.
+  - Unter Windows nutzt das Fenster Microsoft Edge WebView2 (bei Windows 10/11 vorhanden). Ist kein eigenes Fenster möglich, öffnet sich die App wie bisher im Browser.
+- Für die Home-Assistant-App ändert sich nichts.
+
 ## 1.0.0 – 2026-11-17
 
 **Erste stabile Version.** DJ Office Studio deckt jetzt alles ab, was für Rechnungen und Angebote im DJ-Alltag gebraucht wird: Rechnungen und Angebote mit Pflichtangaben-Prüfung, Kleinunternehmerregelung oder Umsatzsteuer, QR-Code zum Bezahlen, E-Mail-Versand, Zahlungserinnerungen und Mahnungen, Festschreiben und Storno, Kopieren, Paperless-Anbindung, Import alter PDFs, Datensicherung mit Erinnerung und Export für den Steuerberater – in Home Assistant und als Desktop-App für Windows und macOS. Ab jetzt gilt: Updates ändern nichts an bestehenden Daten, ohne dass die App sie automatisch anpasst; 1.0.x enthält nur Fehlerbehebungen, neue Funktionen kommen mit 1.1, 1.2 …
