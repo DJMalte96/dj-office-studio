@@ -273,6 +273,13 @@ def build_invoice_pdf(inv, absender):
         total.cell("")
         total.cell(fmt_euro(gesamt), style=bold if satz else None)
 
+    ort = inv.get("veranstaltungsort")
+    if ort:   # abweichender Veranstaltungsort (seit 1.1)
+        teile = [ort.get("name"), ort.get("strasse"), " ".join(x for x in (ort.get("plz"), ort.get("ort")) if x)]
+        pdf.ln(3)
+        pdf.set_font("Body", "", BODY_PT)
+        pdf.multi_cell(0, 5, "Veranstaltungsort: " + ", ".join(t for t in teile if t), align="L", new_x="LMARGIN", new_y="NEXT")
+
     if angebot:
         # Gültigkeit, Hinweise (z. B. Verlängerung, Anfahrt, GEMA), optional Zahlungsbedingung
         pdf.ln(6)

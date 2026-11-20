@@ -50,6 +50,12 @@ FELDER = {
     "steuernummer": (str, ""), "kleinunternehmer": (bool, True),
     "ust_satz": (int, 19),            # nur ohne Kleinunternehmerregelung: Umsatzsteuersatz in %
     "ust_idnr": (str, ""),            # Umsatzsteuer-Identifikationsnummer (optional)
+    # Finanzen: Fahrten
+    "fahrzeug": (str, "privat"),      # privat (0,30 €/km) | betrieb (tatsächliche Kosten)
+    "km_satz": (float, 0.30),
+    "startadresse": (str, ""),        # leer = Absenderadresse
+    "kartendienst": (bool, False),    # Strecken über OpenStreetMap berechnen (überträgt Adressen)
+    "fahrt_standard": (bool, True),   # neue Rechnungen: „Fahrt erfassen“ an
     "startnummer": (int, 1), "angebot_startnummer": (int, 1), "angebot_gueltigkeit_tage": (int, 30),
     "pdf_ordner": (str, os.environ.get("STANDARD_PDF_ORDNER", "/share/rechnungen")),
     "paperless_installiert": (bool, False),
@@ -156,7 +162,15 @@ def settings_put():
             elif v:                # leeres Feld = gespeichertes Passwort behalten
                 werte[k] = v
             continue
-        if typ is bool:
+        if typ is float:
+            try:
+                werte[k] = round(float(str(v).replace(",", ".")), 2)
+            except (TypeError, ValueError):
+                fehler.append(f"„{k}“ muss eine Zahl sein")
+                continue
+            if not 0 < werte[k] <= 5:
+                fehler.append(f"„{k}“ muss zwischen 0 und 5 liegen")
+        elif typ is bool:
             werte[k] = bool(v)
         elif typ is int:
             try:
@@ -172,6 +186,8 @@ def settings_put():
             werte[k] = (v or "").strip()
             if k.startswith("mail_betreff_") and not werte[k]:
                 werte[k] = standard
+    if werte.get("fahrzeug", "privat") not in ("privat", "betrieb"):
+        fehler.append("Fahrzeug muss „privat“ oder „betrieb“ sein")
     if werte.get("smtp_sicherheit", "starttls") not in mail.SICHERHEIT:
         fehler.append("Unbekannte Verschlüsselung")
     for k in ("absender_email", "mail_antwort_an"):
@@ -255,6 +271,8 @@ def get_absender():
                       "mail": mail.konfiguriert(a),
                       "sicherung": _sicherung_status(a),
                       "hinweis_bestaetigt": db.get_settings().get("_hinweis_bestaetigt", 0) >= HINWEIS_VERSION,
+                      "fahrt_standard": bool(a.get("fahrt_standard")), "kartendienst": bool(a.get("kartendienst")),
+                      "fahrzeug": a.get("fahrzeug"), "km_satz": a.get("km_satz"),
                       "version": APP_VERSION,
                       "fenster": DESKTOP and os.environ.get("DJOS_FENSTER") == "1",
                       "desktop": DESKTOP})
@@ -371,12 +389,23 @@ def _validate_invoice(data, inv_id=None, check_number=True, art="rechnung", pfli
         "zahlungsbedingung": (data.get("zahlungsbedingung") or "").strip(),
     }
     doc |= _steuer(sum(p["preis"] for p in positionen))
+    doc["veranstaltungsort"] = _veranstaltungsort(data.get("veranstaltungsort"))
+    if not angebot:
+        doc["fahrt_erfassen"] = bool(data["fahrt_erfassen"]) if "fahrt_erfassen" in data else bool(absender()["fahrt_standard"])
     if angebot:
         doc |= {"art": "angebot", "gueltig_bis": data.get("gueltig_bis") or "",
                 "hinweise": (data.get("hinweise") or "").strip()}
     else:
         doc["bezahlt"] = bool(data.get("bezahlt"))
     return doc
+
+
+def _veranstaltungsort(d):
+    """Abweichender Veranstaltungsort {name, strasse, plz, ort} – leer bzw. None = wie Kundenadresse."""
+    if not isinstance(d, dict):
+        return None
+    ort = {k: (d.get(k) or "").strip() for k in ("name", "strasse", "plz", "ort")}
+    return ort if any(ort.values()) else None
 
 
 def _steuer(netto, a=None):
@@ -428,6 +457,7 @@ def invoices_create():
     angebot_id = _daten().get("angebot_id")
     if angebot_id and db.get_offer(angebot_id):
         db.set_offer_status(angebot_id, "angenommen", inv_id)
+    finanzen.fahrt_aktualisieren(inv_id, absender())
     return jsonify({"id": inv_id, "datei": _write_pdf_file(inv)}), 201
 
 
@@ -447,6 +477,7 @@ def invoices_update(inv_id):
     inv = _validate_invoice(_daten(), inv_id)
     inv["kunde_id"] = db.upsert_customer({**inv["kunde"], "id": inv["kunde_id"]})
     db.save_invoice(inv, inv_id)
+    finanzen.fahrt_aktualisieren(inv_id, absender())
     return jsonify({"id": inv_id, "datei": _write_pdf_file(inv)})
 
 
@@ -477,6 +508,7 @@ def invoices_delete(inv_id):
     inv = db.get_invoice(inv_id) or abort(404)
     if inv["festgeschrieben"]:
         return _fehler(FESTGESCHRIEBEN, 409)
+    finanzen.fahrten_der_rechnung_entfernen(inv_id)
     db.delete_invoice(inv_id)
     return "", 204
 
@@ -503,6 +535,7 @@ def invoices_cancel(inv_id):
         "positionen": [{**p, "preis": -round(float(p.get("preis") or 0), 2)} for p in inv["positionen"]],
         "zahlungsbedingung": "", "gesamt": -inv["gesamt"],
         "kleinunternehmer": inv.get("kleinunternehmer"), "ust_satz": inv.get("ust_satz"),
+        "veranstaltungsort": inv.get("veranstaltungsort"), "fahrt_erfassen": False,
         "bezahlt": True, "festgeschrieben": True, "storno_von": inv_id,
     }
     storno_id = db.save_invoice(storno)

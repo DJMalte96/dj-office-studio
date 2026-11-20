@@ -52,6 +52,7 @@
         <button type="button" class="menu-kopf" aria-haspopup="true">Finanzen <span class="pfeil">▾</span></button>
         <div class="menu-liste">
           <button type="button" data-tab="ausgaben">↧ Ausgaben</button>
+          <button type="button" data-tab="fahrten">➜ Fahrten</button>
         </div>
       </div>
       <div class="menu">
@@ -189,6 +190,26 @@
             <p id="r-zahlung-text" class="hint"></p>
             <p id="aus-angebot" class="aus-angebot hidden"></p>
           </div>
+        </div>
+
+        <div class="card" id="veranstaltung-karte">
+          <h2>Veranstaltung<span class="nur-rechnung"> &amp; Fahrt</span></h2>
+          <label class="inline"><input type="checkbox" id="v-wie-kunde" checked> Veranstaltungsort wie Kundenadresse</label>
+          <div id="v-felder" class="hidden v-felder">
+            <div class="row">
+              <label class="grow">Name des Ortes <span class="opt">(optional, z. B. Hof Lindenhof)</span><input id="v-name"></label>
+              <label class="grow">Straße und Hausnummer<input id="v-strasse"></label>
+            </div>
+            <div class="row">
+              <label class="plz">PLZ <input id="v-plz" inputmode="numeric" maxlength="5"></label>
+              <label class="grow">Ort <input id="v-ort"></label>
+            </div>
+          </div>
+          <div class="schalter-zeile nur-rechnung">
+            <input type="checkbox" id="r-fahrt" checked aria-label="Fahrt erfassen">
+            <div><b>Fahrt erfassen</b><p class="hint" id="fahrt-info"></p></div>
+          </div>
+          <p class="mini-hinweis nur-rechnung">Ausschalten, wenn keine Fahrt anfällt – dann wird für diese Rechnung auch später keine angelegt.</p>
         </div>
 
         <div class="card">
@@ -360,6 +381,28 @@
             <label class="inline"><input type="checkbox" name="paperless_installiert">
               Paperless-ngx ist installiert – „An Paperless senden“ anzeigen</label>
             <label>Paperless-Eingangsordner (consume) <span class="opt nur-desktop">(z. B. Netzlaufwerk von Paperless)</span><input name="paperless_eingangsordner" placeholder="/share/paperless/consume"></label>
+          </div>
+        </div>
+        <div class="card" id="fahrten-karte">
+          <h2>Finanzen &amp; Fahrten <span class="h2-sub">für die Fahrten zu Veranstaltungen (Finanzen → Fahrten)</span></h2>
+          <div class="grid2">
+            <div>
+              <label>Fahrzeug
+                <select name="fahrzeug">
+                  <option value="privat">Privatfahrzeug – Kilometerpauschale je gefahrenem km</option>
+                  <option value="betrieb">Betriebsfahrzeug – tatsächliche Kosten (Tanken, Werkstatt …)</option>
+                </select></label>
+              <p class="hint fahrzeug-hinweis">Beim Privatfahrzeug dürfen Tankbelege nicht zusätzlich als Ausgabe angesetzt werden. Beim Betriebsfahrzeug werden die Fahrten nur als Nachweis geführt.</p>
+              <div class="row">
+                <label>Kilometersatz <span class="opt">(€ je km)</span><input name="km_satz" inputmode="decimal"></label>
+              </div>
+              <label class="inline"><input type="checkbox" name="fahrt_standard"> Bei neuen Rechnungen „Fahrt erfassen“ einschalten</label>
+            </div>
+            <div>
+              <label>Startadresse der Fahrten <span class="opt">(leer = Absenderadresse)</span><input name="startadresse" placeholder="z. B. Lager, Musterweg 5, 12345 Musterstadt"></label>
+              <label class="inline"><input type="checkbox" name="kartendienst"> Strecke automatisch berechnen (OpenStreetMap)</label>
+              <p class="hint">Dafür werden Start- und Zieladresse an die Kartendienste von OpenStreetMap übertragen – keine Namen, keine Beträge. Ohne Häkchen trägst du die Kilometer unter Finanzen → Fahrten selbst ein.</p>
+            </div>
           </div>
         </div>
         <div class="card" id="mail-karte">
@@ -536,6 +579,27 @@
       </div>
     </section>
 
+    <!-- ================= Finanzen: Fahrten ================= -->
+    <section id="tab-fahrten" class="tab">
+      <div class="kopf">
+        <div><h2>Fahrten</h2><p class="hint">Automatisch aus jeder Rechnung: Hin- und Rückfahrt zum Veranstaltungsort.</p></div>
+        <div class="knopf-zeile">
+          <select id="fahrten-jahr" aria-label="Jahr"></select>
+          <button type="button" class="secondary" id="fahrten-nachberechnen">↻ Fahrten nachberechnen</button>
+          <button type="button" id="fahrt-ergaenzen">＋ Fahrt ergänzen</button>
+        </div>
+      </div>
+      <div class="card"><div class="info-zeile" id="fahrten-info"></div></div>
+      <div class="kacheln" id="fahrten-kacheln"></div>
+      <div class="card">
+        <table class="list fahrten-tabelle">
+          <thead><tr><th>Datum</th><th>Anlass</th><th>Ziel</th><th class="num">km</th><th class="num">Betrag</th><th>Quelle</th><th></th></tr></thead>
+          <tbody id="fahrten-body"></tbody>
+        </table>
+        <p class="hint" id="fahrten-ohne"></p>
+      </div>
+    </section>
+
     <section id="tab-kunden" class="tab" data-stamm="kunden"></section>
     <section id="tab-textbausteine" class="tab" data-stamm="textbausteine"></section>
     <section id="tab-zahlungsbedingungen" class="tab" data-stamm="zahlungsbedingungen"></section>
@@ -554,6 +618,29 @@
     <div class="actions">
       <button type="button" id="hinweis-ok" autofocus>Verstanden</button>
     </div>
+  </dialog>
+
+  <!-- ================= Fahrt ergänzen / korrigieren ================= -->
+  <dialog id="fahrt-dialog" class="dialog">
+    <form id="fahrt-form" autocomplete="off">
+      <h2 id="fahrt-titel">Fahrt ergänzen</h2>
+      <div class="row">
+        <label>Datum<input name="datum" type="date" required></label>
+        <label class="grow">Anlass<input name="anlass" placeholder="z. B. Aufbau am Vortag"></label>
+      </div>
+      <label>Ziel <span class="opt">(Adresse)</span><input name="ziel" required placeholder="Straße, PLZ Ort"></label>
+      <label>Start <span class="opt">(leer = Startadresse aus den Einstellungen)</span><input name="start"></label>
+      <div class="row">
+        <label>Kilometer einfach<input name="km_einfach" inputmode="decimal" placeholder="leer = berechnen"></label>
+        <label>Zur Rechnung <span class="opt">(optional)</span><select name="rechnung_id"><option value="">– keine –</option></select></label>
+      </div>
+      <label class="inline"><input type="checkbox" name="hin_zurueck" checked> Hin- und Rückfahrt</label>
+      <p class="hint" id="fahrt-dialog-hinweis"></p>
+      <div class="actions">
+        <button type="button" class="secondary" id="fahrt-abbrechen">Abbrechen</button>
+        <button type="submit">Speichern</button>
+      </div>
+    </form>
   </dialog>
 
   <!-- ================= QR-Code zum Bezahlen ================= -->

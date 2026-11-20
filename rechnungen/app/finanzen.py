@@ -364,3 +364,253 @@ def _heic_als_jpeg(daten):
         return out.getvalue()
     except Exception:
         return None
+
+
+# ======================= Fahrten =======================
+
+import threading  # noqa: E402
+
+import strecken  # noqa: E402
+
+
+def _einstellungen():
+    from main import absender   # zur Laufzeit (main bindet dieses Modul ein)
+    return absender()
+
+
+def _ssl():
+    from main import _ssl_kontext
+    return _ssl_kontext()
+
+
+HINTERGRUND = True   # Tests: False → Berechnung sofort statt im Hintergrund-Thread
+
+
+def _im_hintergrund(funktion, *args):
+    if HINTERGRUND:
+        threading.Thread(target=funktion, args=args, daemon=True).start()
+    else:
+        funktion(*args)
+
+
+def startadresse(a):
+    return (a.get("startadresse") or "").strip() or strecken.adresse_text({"strasse": a.get("strasse"), "plz_ort": a.get("plz_ort")})
+
+
+def zieladresse(beleg):
+    """Veranstaltungsort, sonst Kundenadresse."""
+    return strecken.adresse_text(beleg.get("veranstaltungsort") or beleg.get("kunde") or {})
+
+
+def _fahrt_zeile(r):
+    d = dict(r)
+    d["hin_zurueck"] = bool(d["hin_zurueck"])
+    d["km_gesamt"] = None if d["km_einfach"] is None else round(d["km_einfach"] * (2 if d["hin_zurueck"] else 1), 1)
+    d["betrag"] = None if d["km_gesamt"] is None else round(d["km_gesamt"] * (d["km_satz"] or 0), 2)
+    return d
+
+
+def fahrten_liste(jahr=None):
+    with db.connect() as con:
+        rows = con.execute(
+            "SELECT f.*, r.nummer AS rechnung_nummer, r.kunde_json, r.storniert_durch, r.positionen_json, r.veranstaltungsort_json"
+            " FROM fahrten f LEFT JOIN rechnungen r ON r.id = f.rechnung_id"
+            + (" WHERE f.datum LIKE ?" if jahr else "") + " ORDER BY f.datum DESC, f.id DESC", ((f"{jahr}%",) if jahr else ()))
+        out = []
+        for r in rows:
+            d = _fahrt_zeile(r)
+            kunde = json.loads(d.pop("kunde_json") or "{}")
+            d["kunde"] = kunde.get("name", "")
+            pos = json.loads(d.pop("positionen_json") or "[]")
+            text = pos[0]["beschreibung"].split(" – ")[1] if pos and " – " in pos[0].get("beschreibung", "") else ""
+            d["rechnung_text"] = re.sub(r"^(DJ[- ]?)?Tätigkeit\s+", "", text).strip()
+            ort = json.loads(d.pop("veranstaltungsort_json") or "null") or {}
+            d["ziel_name"] = ort.get("name") or ""
+            d["rechnung_storniert"] = bool(d.pop("storniert_durch"))
+            out.append(d)
+        return out
+
+
+def _fahrt_holen(fid):
+    with db.connect() as con:
+        r = con.execute("SELECT * FROM fahrten WHERE id = ?", (fid,)).fetchone()
+        return _fahrt_zeile(r) if r else None
+
+
+def fahrt_aktualisieren(inv_id, a, berechnen=True):
+    """Automatische Fahrt zur Rechnung anlegen bzw. anpassen (nach dem Speichern einer Rechnung)."""
+    inv = db.get_invoice(inv_id)
+    if not inv or inv.get("storno_von"):
+        return None
+    with db.connect() as con:
+        vorhanden = con.execute("SELECT * FROM fahrten WHERE rechnung_id = ? AND quelle IN ('auto', 'korrigiert')"
+                                " ORDER BY id LIMIT 1", (inv_id,)).fetchone()
+        if not inv.get("fahrt_erfassen"):
+            con.execute("DELETE FROM fahrten WHERE rechnung_id = ? AND quelle IN ('auto', 'korrigiert')", (inv_id,))
+            return None
+        datum = next((p.get("lieferdatum") for p in inv["positionen"] if p.get("lieferdatum")), inv["datum"])
+        ziel, start = zieladresse(inv), startadresse(a)
+        anlass = f"Rechnung {inv['nummer']}"
+        if vorhanden:
+            neu_berechnen = vorhanden["quelle"] == "auto" and (vorhanden["ziel"] != ziel or vorhanden["start"] != start)
+            con.execute("UPDATE fahrten SET datum = ?, anlass = ?, ziel = ?, start = ?" + (", km_einfach = NULL, fehler = NULL" if neu_berechnen else "")
+                        + " WHERE id = ?", (datum, anlass, ziel, start, vorhanden["id"]))
+            fid = vorhanden["id"]
+        else:
+            fid = con.execute("INSERT INTO fahrten (rechnung_id, datum, anlass, start, ziel, km_satz, quelle) VALUES (?, ?, ?, ?, ?, ?, 'auto')",
+                              (inv_id, datum, anlass, start, ziel, float(a.get("km_satz") or 0.30))).lastrowid
+    if berechnen and a.get("kartendienst"):
+        _im_hintergrund(offene_berechnen, [fid])
+    return fid
+
+
+def fahrten_der_rechnung_entfernen(inv_id):
+    """Rechnung wird gelöscht: automatische Fahrt entfernen, von Hand ergänzte behalten (ohne Bezug)."""
+    with db.connect() as con:
+        con.execute("DELETE FROM fahrten WHERE rechnung_id = ? AND quelle IN ('auto', 'korrigiert')", (inv_id,))
+        con.execute("UPDATE fahrten SET rechnung_id = NULL WHERE rechnung_id = ?", (inv_id,))
+
+
+_berechnung = threading.Lock()
+
+
+def offene_berechnen(ids=None):
+    """Fahrten ohne Kilometer über den Kartendienst berechnen (nur wenn eingeschaltet)."""
+    if not _einstellungen().get("kartendienst"):
+        return 0
+    with _berechnung:
+        with db.connect() as con:
+            sql = "SELECT id, start, ziel FROM fahrten WHERE km_einfach IS NULL"
+            rows = [dict(r) for r in con.execute(sql + (f" AND id IN ({','.join('?' * len(ids))})" if ids else ""), ids or ())]
+        fertig = 0
+        for f in rows:
+            try:
+                km, fehler = strecken.strecke_km(f["start"], f["ziel"], _ssl()), None
+            except strecken.StreckenFehler as e:
+                km, fehler = None, str(e)
+            with db.connect() as con:
+                con.execute("UPDATE fahrten SET km_einfach = ?, fehler = ? WHERE id = ?", (km, fehler, f["id"]))
+            fertig += km is not None
+        return fertig
+
+
+@bp.get("/api/fahrten")
+def fahrten_api_liste():
+    jahr = request.args.get("jahr")
+    a = _einstellungen()
+    liste_ = fahrten_liste(jahr if jahr and jahr.isdigit() else None)
+    ohne = []
+    if jahr and jahr.isdigit():
+        with db.connect() as con:
+            mit = {r[0] for r in con.execute("SELECT rechnung_id FROM fahrten WHERE rechnung_id IS NOT NULL")}
+            ohne = [{"id": r["id"], "nummer": r["nummer"], "kunde": json.loads(r["kunde_json"]).get("name", "")}
+                    for r in con.execute("SELECT id, nummer, kunde_json FROM rechnungen WHERE datum LIKE ? AND storno_von IS NULL"
+                                         " AND fahrt_erfassen = 0 ORDER BY nummer", (f"{jahr}%",)) if r["id"] not in mit]
+    return jsonify({"fahrten": liste_, "ohne_fahrt": ohne, "fahrzeug": a.get("fahrzeug"), "km_satz": a.get("km_satz"),
+                    "start": startadresse(a), "kartendienst": bool(a.get("kartendienst"))})
+
+
+def _fahrt_werte(d):
+    fehler, w = [], {}
+    if "datum" in d:
+        w["datum"] = (d.get("datum") or "").strip()
+        if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", w["datum"]):
+            fehler.append("Bitte ein Datum angeben")
+    for k in ("anlass", "ziel", "start"):
+        if k in d:
+            w[k] = (d.get(k) or "").strip()
+    if "km_einfach" in d:
+        v = d.get("km_einfach")
+        if v in (None, ""):
+            w["km_einfach"] = None
+        else:
+            try:
+                w["km_einfach"] = round(float(str(v).replace(",", ".")), 1)
+                if not 0 <= w["km_einfach"] <= 2000:
+                    fehler.append("Kilometer zwischen 0 und 2000")
+            except ValueError:
+                fehler.append("Kilometer müssen eine Zahl sein")
+    if "hin_zurueck" in d:
+        w["hin_zurueck"] = int(bool(d.get("hin_zurueck")))
+    if "rechnung_id" in d:
+        w["rechnung_id"] = int(d["rechnung_id"]) if str(d.get("rechnung_id") or "").isdigit() else None
+    return w, fehler
+
+
+@bp.post("/api/fahrten")
+def fahrt_anlegen():
+    """Fahrt von Hand ergänzen (z. B. Aufbau am Vortag). Ohne km und mit Kartendienst wird berechnet."""
+    a = _einstellungen()
+    w, fehler = _fahrt_werte(_daten())
+    if not w.get("ziel"):
+        fehler.append("Bitte ein Ziel angeben")
+    if fehler:
+        return _fehler("; ".join(fehler))
+    w.setdefault("start", startadresse(a))
+    w.setdefault("hin_zurueck", 1)
+    w["km_satz"], w["quelle"] = float(a.get("km_satz") or 0.30), "hand"
+    with db.connect() as con:
+        fid = con.execute(f"INSERT INTO fahrten ({', '.join(w)}) VALUES ({', '.join('?' * len(w))})", list(w.values())).lastrowid
+    if w.get("km_einfach") is None and a.get("kartendienst"):
+        offene_berechnen([fid])
+    return jsonify(_fahrt_holen(fid)), 201
+
+
+@bp.put("/api/fahrten/<int:fid>")
+def fahrt_aendern(fid):
+    alt = _fahrt_holen(fid) or abort(404)
+    w, fehler = _fahrt_werte(_daten())
+    if fehler:
+        return _fehler("; ".join(fehler))
+    if alt["quelle"] == "auto" and "km_einfach" in w and w["km_einfach"] != alt["km_einfach"]:
+        w["quelle"] = "korrigiert"   # von Hand geändert → bleibt beim erneuten Speichern der Rechnung erhalten
+    if w:
+        with db.connect() as con:
+            con.execute(f"UPDATE fahrten SET {', '.join(k + ' = ?' for k in w)} WHERE id = ?", [*w.values(), fid])
+    return jsonify(_fahrt_holen(fid))
+
+
+@bp.delete("/api/fahrten/<int:fid>")
+def fahrt_loeschen(fid):
+    """Fahrt entfernen. Gehört sie automatisch zu einer Rechnung, wird dort „Fahrt erfassen“ ausgeschaltet,
+    damit sie nicht wieder angelegt wird."""
+    f = _fahrt_holen(fid) or abort(404)
+    with db.connect() as con:
+        con.execute("DELETE FROM fahrten WHERE id = ?", (fid,))
+        if f["rechnung_id"] and f["quelle"] in ("auto", "korrigiert"):
+            con.execute("UPDATE rechnungen SET fahrt_erfassen = 0 WHERE id = ?", (f["rechnung_id"],))
+    return "", 204
+
+
+@bp.post("/api/fahrten/nachberechnen")
+def fahrten_nachberechnen():
+    """Fahrten für Rechnungen des Jahres anlegen, die noch keine haben (außer „Fahrt erfassen“ aus), und offene berechnen."""
+    jahr = str(_daten().get("jahr") or date.today().year)
+    a = _einstellungen()
+    with db.connect() as con:
+        ids = [r[0] for r in con.execute(
+            "SELECT id FROM rechnungen WHERE datum LIKE ? AND storno_von IS NULL AND fahrt_erfassen != 0"
+            " AND id NOT IN (SELECT rechnung_id FROM fahrten WHERE rechnung_id IS NOT NULL)", (f"{jahr}%",))]
+    for inv_id in ids:
+        fahrt_aktualisieren(inv_id, a, berechnen=False)
+    with db.connect() as con:
+        offen = con.execute("SELECT COUNT(*) FROM fahrten WHERE km_einfach IS NULL").fetchone()[0]
+    if a.get("kartendienst") and offen:
+        _im_hintergrund(offene_berechnen)
+    return jsonify({"angelegt": len(ids), "offen": offen, "kartendienst": bool(a.get("kartendienst"))})
+
+
+@bp.get("/api/fahrten/vorschau")
+def fahrt_vorschau():
+    """Für den Editor: Entfernung zu einer Adresse (nur mit Kartendienst; meist aus dem Zwischenspeicher)."""
+    a = _einstellungen()
+    ziel = strecken.adresse_text({k: request.args.get(k, "") for k in ("strasse", "plz", "ort")})
+    satz = float(a.get("km_satz") or 0.30)
+    antwort = {"kartendienst": bool(a.get("kartendienst")), "fahrzeug": a.get("fahrzeug"), "km_satz": satz, "ziel": ziel}
+    if not a.get("kartendienst") or not ziel:
+        return jsonify(antwort)
+    try:
+        km = strecken.strecke_km(startadresse(a), ziel, _ssl())
+        return jsonify(antwort | {"km_einfach": km, "km_gesamt": round(km * 2, 1), "betrag": round(km * 2 * satz, 2)})
+    except strecken.StreckenFehler as e:
+        return jsonify(antwort | {"fehler": str(e)})

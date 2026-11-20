@@ -97,6 +97,25 @@ CREATE TABLE IF NOT EXISTS ausgaben (
     erstellt TEXT DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS ausgaben_pruefsumme ON ausgaben(beleg_pruefsumme);
+-- Fahrten zu Veranstaltungen (automatisch je Rechnung oder von Hand)
+CREATE TABLE IF NOT EXISTS fahrten (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    rechnung_id INTEGER REFERENCES rechnungen(id) ON DELETE SET NULL,
+    datum TEXT NOT NULL,
+    anlass TEXT DEFAULT '',
+    start TEXT DEFAULT '',
+    ziel TEXT DEFAULT '',
+    km_einfach REAL,                             -- NULL = noch nicht berechnet
+    hin_zurueck INTEGER DEFAULT 1,
+    km_satz REAL DEFAULT 0.30,
+    quelle TEXT DEFAULT 'auto',                  -- auto | korrigiert | hand
+    fehler TEXT,                                 -- letzte Meldung der automatischen Berechnung
+    erstellt TEXT DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS strecken_cache (
+    schluessel TEXT PRIMARY KEY,                 -- geo:<adresse> bzw. km:<start>→<ziel>
+    wert TEXT
+);
 CREATE TABLE IF NOT EXISTS angebote (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     nummer TEXT NOT NULL UNIQUE,
@@ -173,6 +192,13 @@ def init():
                 con.execute(f"ALTER TABLE rechnungen ADD COLUMN {spalte} {typ}")
         if "paperless_am" not in {r["name"] for r in con.execute("PRAGMA table_info(angebote)")}:
             con.execute("ALTER TABLE angebote ADD COLUMN paperless_am TEXT")   # seit 0.8.4
+        # seit 1.1: Veranstaltungsort (Rechnung/Angebot) und „Fahrt erfassen“ (Rechnung)
+        for tabelle, felder in (("rechnungen", (("veranstaltungsort_json", "TEXT"), ("fahrt_erfassen", "INTEGER DEFAULT 1"))),
+                                ("angebote", (("veranstaltungsort_json", "TEXT"),))):
+            vorhanden = {r["name"] for r in con.execute(f"PRAGMA table_info({tabelle})")}
+            for spalte, typ in felder:
+                if spalte not in vorhanden:
+                    con.execute(f"ALTER TABLE {tabelle} ADD COLUMN {spalte} {typ}")
         # seit 0.18.0: Steuer je Beleg festhalten (NULL = älterer Beleg → wie bisher nach aktueller Einstellung, ohne USt.)
         for tabelle in ("rechnungen", "angebote"):
             vorhanden = {r["name"] for r in con.execute(f"PRAGMA table_info({tabelle})")}
@@ -243,6 +269,8 @@ def _invoice_from_row(r):
     d["positionen"] = json.loads(d.pop("positionen_json"))
     d["bezahlt"] = bool(d["bezahlt"])
     d["festgeschrieben"] = bool(d.get("festgeschrieben"))
+    d["veranstaltungsort"] = json.loads(d.pop("veranstaltungsort_json", None) or "null")
+    d["fahrt_erfassen"] = d.get("fahrt_erfassen", 1) != 0
     return d
 
 
@@ -312,17 +340,20 @@ def save_invoice(inv, inv_id=None):
             int(bool(inv.get("bezahlt"))))
     with connect() as con:
         steuer = (_ku(inv.get("kleinunternehmer")), inv.get("ust_satz"))
+        ort = (json.dumps(inv["veranstaltungsort"]) if inv.get("veranstaltungsort") else None,
+               int(inv.get("fahrt_erfassen", True) is not False))
         if inv_id:
             con.execute(
                 "UPDATE rechnungen SET nummer=?, datum=?, kunde_id=?, kunde_json=?,"
-                " positionen_json=?, zahlungsbedingung=?, gesamt=?, bezahlt=?, kleinunternehmer=?, ust_satz=? WHERE id=?",
-                vals + steuer + (inv_id,))
+                " positionen_json=?, zahlungsbedingung=?, gesamt=?, bezahlt=?, kleinunternehmer=?, ust_satz=?,"
+                " veranstaltungsort_json=?, fahrt_erfassen=? WHERE id=?",
+                vals + steuer + ort + (inv_id,))
             return inv_id
         return con.execute(
             "INSERT INTO rechnungen (nummer, datum, kunde_id, kunde_json, positionen_json,"
-            " zahlungsbedingung, gesamt, bezahlt, festgeschrieben, storno_von, bezahlt_am, kleinunternehmer, ust_satz)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            vals + (int(bool(inv.get("festgeschrieben"))), inv.get("storno_von"), inv.get("bezahlt_am")) + steuer).lastrowid
+            " zahlungsbedingung, gesamt, bezahlt, festgeschrieben, storno_von, bezahlt_am, kleinunternehmer, ust_satz,"
+            " veranstaltungsort_json, fahrt_erfassen) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            vals + (int(bool(inv.get("festgeschrieben"))), inv.get("storno_von"), inv.get("bezahlt_am")) + steuer + ort).lastrowid
 
 
 def _ku(wert):
@@ -469,6 +500,7 @@ def _offer_from_row(r):
     d = dict(r)
     d["kunde"] = json.loads(d.pop("kunde_json"))
     d["positionen"] = json.loads(d.pop("positionen_json"))
+    d["veranstaltungsort"] = json.loads(d.pop("veranstaltungsort_json", None) or "null")
     d["art"] = "angebot"
     return d
 
@@ -495,18 +527,20 @@ def get_offer(offer_id):
 def save_offer(a, offer_id=None):
     vals = (a["nummer"], a["datum"], a["gueltig_bis"], a.get("kunde_id"), json.dumps(a["kunde"]),
             json.dumps(a["positionen"]), a["zahlungsbedingung"], a["hinweise"], a["gesamt"],
-            _ku(a.get("kleinunternehmer")), a.get("ust_satz"))
+            _ku(a.get("kleinunternehmer")), a.get("ust_satz"),
+            json.dumps(a["veranstaltungsort"]) if a.get("veranstaltungsort") else None)
     with connect() as con:
         if offer_id:
             con.execute(
                 "UPDATE angebote SET nummer=?, datum=?, gueltig_bis=?, kunde_id=?, kunde_json=?,"
-                " positionen_json=?, zahlungsbedingung=?, hinweise=?, gesamt=?, kleinunternehmer=?, ust_satz=? WHERE id=?",
+                " positionen_json=?, zahlungsbedingung=?, hinweise=?, gesamt=?, kleinunternehmer=?, ust_satz=?,"
+                " veranstaltungsort_json=? WHERE id=?",
                 vals + (offer_id,))
             return offer_id
         return con.execute(
             "INSERT INTO angebote (nummer, datum, gueltig_bis, kunde_id, kunde_json, positionen_json,"
-            " zahlungsbedingung, hinweise, gesamt, kleinunternehmer, ust_satz) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            vals).lastrowid
+            " zahlungsbedingung, hinweise, gesamt, kleinunternehmer, ust_satz, veranstaltungsort_json)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", vals).lastrowid
 
 
 def set_offer_status(offer_id, status, rechnung_id=None):
