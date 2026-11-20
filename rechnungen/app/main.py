@@ -19,6 +19,7 @@ from datetime import date, datetime, timedelta
 from flask import Flask, Response, abort, jsonify, request, send_from_directory
 
 import db
+import finanzen
 import importer
 import mail
 from pdf import MAHNSTUFEN, build_invoice_pdf, girocode_fuer_rechnung, girocode_svg, build_mahnung_pdf, fmt_euro, mahnung_filename, pdf_filename
@@ -28,6 +29,9 @@ DESKTOP = os.environ.get("DJOS_DESKTOP") == "1"   # Desktop-Version (Windows/Mac
 STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 
 app = Flask(__name__, static_folder=None)
+
+
+app.register_blueprint(finanzen.bp)   # Finanzen: Ausgaben, Belege (seit 1.1)
 
 
 def _daten():
@@ -119,7 +123,7 @@ def _asset_version(name):
 def index():
     with open(os.path.join(STATIC_DIR, "index.html"), encoding="utf-8") as f:
         html = f.read()
-    for name in ("style.css", "app.js"):
+    for name in ("style.css", "app.js", "finanzen.js"):
         html = html.replace(f'"static/{name}"', f'"static/{name}?v={_asset_version(name)}"')
     return Response(html, mimetype="text/html", headers={"Cache-Control": "no-cache"})
 
