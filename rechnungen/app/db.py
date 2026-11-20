@@ -483,7 +483,7 @@ def pruefe_sicherung(pfad):
         if not {"rechnungen", "kunden"} <= tabellen:
             raise ValueError("Die Datei enthält keine Daten von DJ Office Studio.")
         return {t: con.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0]
-                for t in ("rechnungen", "kunden", "angebote") if t in tabellen}
+                for t in ("rechnungen", "kunden", "angebote", "ausgaben") if t in tabellen}
     except sqlite3.DatabaseError as e:
         raise ValueError("Die Datei ist keine gültige Sicherung.") from e
     finally:

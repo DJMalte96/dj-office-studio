@@ -94,3 +94,41 @@ def test_desktop_kennt_automatische_sicherung(app_modul, client, tmp_path, monke
         (ordner / f"rechnungen_{tag}.db").write_bytes(b"")
     (ordner / "vor-wiederherstellung_2026-12-01_10-00-00.db").write_bytes(b"")
     assert client.get("/api/absender").get_json()["sicherung"]["automatisch"] == "2026-11-17"
+
+
+def test_sicherung_enthaelt_belege(client):
+    import db
+    mail = (os.path.join(os.path.dirname(__file__), "beispiele", "mails", "beatport.eml"))
+    with open(mail, "rb") as f:
+        inhalt = f.read()
+    a = client.post("/api/ausgaben/belege", data={"dateien": [(io.BytesIO(inhalt), "beatport.eml")]},
+                    content_type="multipart/form-data").get_json()["neu"][0]
+    r = client.get("/api/backup")
+    zf = zipfile.ZipFile(io.BytesIO(r.data))
+    belege = [n for n in zf.namelist() if n.startswith("belege/")]
+    assert len(belege) == 1 and zf.read(belege[0]) == inhalt
+    sicherung = r.data
+
+    # Beleg geht verloren (z. B. neuer Computer) → Sicherung einspielen holt ihn zurück
+    client.delete(f"/api/ausgaben/{a['id']}")
+    assert not os.path.exists(os.path.join(db.DATA_DIR, belege[0]))
+    r = client.post("/api/backup", data={"datei": (io.BytesIO(sicherung), "s.zip")}, content_type="multipart/form-data")
+    assert r.status_code == 200 and r.get_json()["belege"] == 1 and r.get_json()["anzahl"]["ausgaben"] == 1
+    assert client.get(f"/api/ausgaben/{a['id']}/beleg").data == inhalt
+
+
+def test_sicherung_mit_boesen_pfaden(client, tmp_path):
+    import db
+    gut = client.get("/api/backup").data
+    buf = io.BytesIO()
+    with zipfile.ZipFile(io.BytesIO(gut)) as alt, zipfile.ZipFile(buf, "w") as neu:
+        neu.writestr("rechnungen.db", alt.read("rechnungen.db"))
+        neu.writestr("belege/../../boese.txt", "x")
+        neu.writestr("belege/2026/../../../boese2.txt", "x")
+        neu.writestr("anderes/datei.txt", "x")
+        neu.writestr("belege/2026/1_ok.pdf", "%PDF")
+    r = client.post("/api/backup", data={"datei": (io.BytesIO(buf.getvalue()), "s.zip")}, content_type="multipart/form-data")
+    assert r.status_code == 200 and r.get_json()["belege"] == 1
+    assert os.path.exists(os.path.join(db.DATA_DIR, "belege", "2026", "1_ok.pdf"))
+    assert not any(os.path.exists(os.path.join(p, n)) for p in (db.DATA_DIR, os.path.dirname(db.DATA_DIR))
+                   for n in ("boese.txt", "boese2.txt", "anderes"))

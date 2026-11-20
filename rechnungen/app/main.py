@@ -611,7 +611,7 @@ def _sicherung_status(a):
 
 @app.get("/api/backup")
 def backup_download():
-    """Komplette Datenbank als ZIP (Kunden, Rechnungen, Angebote, Einstellungen …)."""
+    """Komplette Sicherung als ZIP: Datenbank (Kunden, Rechnungen, Angebote, Finanzen, Einstellungen) und alle Belege."""
     with tempfile.TemporaryDirectory() as tmp:
         pfad = os.path.join(tmp, "rechnungen.db")
         db.sichern(pfad)
@@ -619,8 +619,16 @@ def backup_download():
         buf = io.BytesIO()
         with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
             zf.write(pfad, "rechnungen.db")
+            belege = os.path.join(db.DATA_DIR, "belege")
+            anzahl_belege = 0
+            for wurzel, _, dateien in os.walk(belege):
+                for n in sorted(dateien):
+                    voll = os.path.join(wurzel, n)
+                    zf.write(voll, "belege/" + os.path.relpath(voll, belege).replace(os.sep, "/"))
+                    anzahl_belege += 1
             zf.writestr("info.json", json.dumps({"app": "DJ Office Studio", "version": APP_VERSION,
-                                                 "erstellt": datetime.now().isoformat(timespec="seconds")}))
+                                                 "erstellt": datetime.now().isoformat(timespec="seconds"),
+                                                 "belege": anzahl_belege}))
     db.save_settings({"_letzte_sicherung": datetime.now().isoformat(timespec="seconds")})   # für die Erinnerung
     name = f"DJ-Office-Studio-Sicherung_{date.today():%Y-%m-%d}.zip"
     return Response(buf.getvalue(), mimetype="application/zip",
@@ -634,11 +642,13 @@ def backup_restore():
     with tempfile.TemporaryDirectory() as tmp:
         pfad = os.path.join(tmp, "upload.db")
         inhalt = datei.read()
+        belege_tmp = os.path.join(tmp, "belege")
         if inhalt[:2] == b"PK":   # ZIP
             try:
                 with zipfile.ZipFile(io.BytesIO(inhalt)) as zf:
                     with zf.open("rechnungen.db") as src, open(pfad, "wb") as dst:
                         shutil.copyfileobj(src, dst)
+                    _belege_entpacken(zf, belege_tmp)
             except (KeyError, zipfile.BadZipFile):
                 return _fehler("Die ZIP-Datei enthält keine Sicherung von DJ Office Studio.")
         else:
@@ -654,9 +664,38 @@ def backup_restore():
         db.sichern(vorher)
         letzte = db.get_settings().get("_letzte_sicherung")
         db.wiederherstellen(pfad)
+        belege = _belege_uebernehmen(belege_tmp)
         if letzte and letzte > (db.get_settings().get("_letzte_sicherung") or ""):
             db.save_settings({"_letzte_sicherung": letzte})   # Zeitpunkt der letzten Sicherung nicht zurückdrehen
-    return jsonify({"anzahl": anzahl, "vorher_gesichert": vorher})
+    return jsonify({"anzahl": anzahl, "belege": belege, "vorher_gesichert": vorher})
+
+
+def _belege_entpacken(zf, ziel):
+    """Nur Dateien unter belege/ aus der Sicherung, ohne Pfad-Tricks (.., absolute Pfade)."""
+    for info in zf.infolist():
+        name = info.filename
+        if info.is_dir() or not name.startswith("belege/"):
+            continue
+        teile = name.split("/")[1:]
+        if not teile or any(t in ("", ".", "..") or ":" in t or "\\" in t for t in teile):
+            continue
+        pfad = os.path.join(ziel, *teile)
+        os.makedirs(os.path.dirname(pfad), exist_ok=True)
+        with zf.open(info) as src, open(pfad, "wb") as dst:
+            shutil.copyfileobj(src, dst)
+
+
+def _belege_uebernehmen(quelle):
+    """Belege aus der Sicherung in den Datenordner kopieren. Vorhandene Dateien bleiben, nichts wird gelöscht."""
+    ziel = os.path.join(db.DATA_DIR, "belege")
+    anzahl = 0
+    for wurzel, _, dateien in os.walk(quelle):
+        for n in dateien:
+            rel = os.path.relpath(os.path.join(wurzel, n), quelle)
+            os.makedirs(os.path.dirname(os.path.join(ziel, rel)), exist_ok=True)
+            shutil.copy2(os.path.join(wurzel, n), os.path.join(ziel, rel))
+            anzahl += 1
+    return anzahl
 
 
 def _betrag(v):
