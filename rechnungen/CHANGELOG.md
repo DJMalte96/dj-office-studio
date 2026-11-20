@@ -2,6 +2,11 @@
 
 Alle Änderungen an DJ Office Studio. Neueste Version oben.
 
+## 1.0.2 – 2026-11-20
+
+### Behoben
+- **Windows: App öffnete sich trotz 1.0.1 im Browser statt im eigenen Fenster.** Ursache: Wird die App als ZIP heruntergeladen und mit Windows entpackt, markiert Windows alle Dateien als „aus dem Internet geladen“; der Baustein für das Edge-Fenster wurde dann nicht geladen (im Protokoll: „Failed to resolve Python.Runtime.Loader.Initialize“). Die App entfernt diese Markierung jetzt beim Start von ihren eigenen Programmdateien – wie „Eigenschaften → Zulassen“, nur automatisch. Ein automatischer Test stellt diesen Fall bei jedem Windows-Build nach.
+
 ## 1.0.1 – 2026-11-20
 
 ### Geändert
