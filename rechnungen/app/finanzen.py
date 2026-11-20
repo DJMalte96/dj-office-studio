@@ -29,6 +29,7 @@ KATEGORIEN = {
     "versicherung": ("Versicherungen & Beiträge", "Versicherungen und Beiträge"),
     "fortbildung": ("Fortbildung", "Fortbildungskosten"),
     "buero": ("Bürobedarf & Gebühren", "Bürobedarf, Porto, Kontoführung"),
+    "ust": ("Umsatzsteuer an das Finanzamt", "Gezahlte Umsatzsteuer (nur ohne Kleinunternehmerregelung)"),
     "sonstiges": ("Sonstiges", "Übrige Betriebsausgaben"),
 }
 
@@ -813,3 +814,271 @@ def anlage_zur_ausgabe(aid):
             nid = con.execute("INSERT INTO anlagen (bezeichnung, anschaffung_am, kosten, nutzungsdauer, ausgabe_id) VALUES (?, ?, ?, ?, ?)",
                               (bezeichnung, datum, kosten, nutzungsdauer_vorschlag(f"{bezeichnung} {a['lieferant']}"), aid)).lastrowid
             con.execute("UPDATE ausgaben SET anlage_id = ? WHERE id = ?", (nid, aid))
+
+
+# ======================= EÜR (Einnahmen-Überschuss-Rechnung) =======================
+
+def _r2(v):
+    return round(v + 0.0, 2)
+
+
+def euer(jahr, a=None):
+    """EÜR eines Jahres: Einnahmen nach Zahlungseingang, Ausgaben nach Bezahlt-Datum, Fahrten, Abschreibung.
+    Kleinunternehmer rechnen brutto; Umsatzsteuerpflichtige netto mit Umsatzsteuer/Vorsteuer als eigenen Zeilen."""
+    a = a or _einstellungen()
+    jahr = str(jahr)
+    ku = bool(a.get("kleinunternehmer"))
+    monate = {m: {"einnahmen": 0.0, "ausgaben": 0.0} for m in range(1, 13)}
+
+    # --- Einnahmen ---
+    rechnungen = db.list_invoices()
+    erloese = umsatzsteuer = 0.0
+    anzahl = 0
+    for r in rechnungen:
+        netto = sum(float(p.get("preis") or 0) for p in r["positionen"])
+        ust = r["gesamt"] - netto if r.get("ust_satz") else 0.0
+        if r.get("storno_von"):
+            orig = next((x for x in rechnungen if x["id"] == r["storno_von"]), None)
+            if not (orig and orig["bezahlt"] and r["datum"].startswith(jahr)):
+                continue                      # unbezahlte Rechnung storniert → keine Geldbewegung
+            datum = r["datum"]
+        elif r["bezahlt"] and r.get("bezahlt_am", "") and r["bezahlt_am"].startswith(jahr):
+            datum = r["bezahlt_am"]
+            anzahl += 1
+        else:
+            continue
+        erloese += netto if not ku else r["gesamt"]
+        umsatzsteuer += 0 if ku else ust
+        monate[int(datum[5:7])]["einnahmen"] += r["gesamt"]
+    with db.connect() as con:
+        sonstige = [dict(x) for x in con.execute("SELECT * FROM einnahmen_sonstige WHERE datum LIKE ? ORDER BY datum", (f"{jahr}%",))]
+    sonstige_summe = 0.0
+    for e in sonstige:
+        brutto = e["betrag"]
+        netto = brutto / (1 + e["ust_satz"] / 100) if e.get("ust_satz") and not ku else brutto
+        sonstige_summe += netto
+        umsatzsteuer += brutto - netto
+        monate[int(e["datum"][5:7])]["einnahmen"] += brutto
+
+    # --- Anschaffungen: Abschreibung, Abgänge ---
+    anlagen = anlagen_liste(jahr)
+    afa = sum(x["afa"] for x in anlagen)
+    abgang_restwert = sum(x["abgang_restwert"] for x in anlagen)
+    abgang_erloes = sum(x["abgang_erloes"] for x in anlagen)
+    monate[12]["ausgaben"] += afa + abgang_restwert
+    monate[12]["einnahmen"] += abgang_erloes
+
+    # --- Ausgaben ---
+    kategorien = {k: 0.0 for k in KATEGORIEN}
+    vorsteuer = 0.0
+    with db.connect() as con:
+        ausgaben = [dict(x) for x in con.execute(
+            "SELECT * FROM ausgaben WHERE status = 'ok' AND COALESCE(bezahlt_am, belegdatum) LIKE ?", (f"{jahr}%",))]
+    for x in ausgaben:
+        if x["kategorie"] == "anschaffung":
+            continue                          # über die Abschreibung
+        brutto = (x["betrag"] or 0) * (1 - (x.get("privatanteil") or 0) / 100)
+        netto = brutto / (1 + x["ust_satz"] / 100) if x.get("ust_satz") and not ku and x["kategorie"] != "ust" else brutto
+        kategorien[x["kategorie"]] = kategorien.get(x["kategorie"], 0) + netto
+        vorsteuer += brutto - netto
+        monate[int((x["bezahlt_am"] or x["belegdatum"])[5:7])]["ausgaben"] += brutto
+
+    privat = a.get("fahrzeug", "privat") != "betrieb"
+    fahrten = fahrten_liste(jahr)
+    fahrtkosten = sum(f["betrag"] or 0 for f in fahrten) if privat else 0.0
+    if privat:
+        for f in fahrten:
+            monate[int(f["datum"][5:7])]["ausgaben"] += f["betrag"] or 0
+
+    zeilen_aus = [{"id": k, "name": KATEGORIEN[k][0], "euer": KATEGORIEN[k][1], "betrag": _r2(v)}
+                  for k, v in kategorien.items() if v and k != "anschaffung"]
+    if fahrtkosten:
+        zeilen_aus.append({"id": "fahrten", "name": "Fahrten (Kilometerpauschale)", "euer": "Fahrten mit dem Privatfahrzeug", "betrag": _r2(fahrtkosten)})
+    if afa:
+        zeilen_aus.append({"id": "afa", "name": "Abschreibungen", "euer": "Absetzung für Abnutzung (AfA)", "betrag": _r2(afa)})
+    if abgang_restwert:
+        zeilen_aus.append({"id": "abgang", "name": "Restwert verkaufter/verschrotteter Geräte", "euer": "Restbuchwert ausgeschiedener Anlagegüter", "betrag": _r2(abgang_restwert)})
+    if vorsteuer:
+        zeilen_aus.append({"id": "vorsteuer", "name": "Gezahlte Vorsteuer", "euer": "Vorsteuerbeträge", "betrag": _r2(vorsteuer)})
+    zeilen_aus.sort(key=lambda z: -z["betrag"])
+    zeilen_ein = [z for z in (
+        {"id": "rechnungen", "name": "Rechnungen (nach Zahlungseingang)" + ("" if ku else ", netto"), "betrag": _r2(erloese)},
+        {"id": "sonstige", "name": "Sonstige Einnahmen", "betrag": _r2(sonstige_summe)},
+        {"id": "abgang_erloes", "name": "Verkauf von Geräten", "betrag": _r2(abgang_erloes)},
+        {"id": "umsatzsteuer", "name": "Vereinnahmte Umsatzsteuer", "betrag": _r2(umsatzsteuer)}) if z["betrag"] or z["id"] == "rechnungen"]
+    einnahmen = _r2(sum(z["betrag"] for z in zeilen_ein))
+    ausgaben_summe = _r2(sum(z["betrag"] for z in zeilen_aus))
+    return {"jahr": int(jahr), "kleinunternehmer": ku, "einnahmen": einnahmen, "ausgaben": ausgaben_summe,
+            "gewinn": _r2(einnahmen - ausgaben_summe), "einnahmen_zeilen": zeilen_ein, "ausgaben_zeilen": zeilen_aus,
+            "anzahl_rechnungen": anzahl, "fahrtkosten": _r2(fahrtkosten), "afa": _r2(afa), "sonstige": sonstige,
+            "monate": [{"monat": m, "einnahmen": _r2(v["einnahmen"]), "ausgaben": _r2(v["ausgaben"])} for m, v in monate.items()],
+            "pruefliste": pruefliste(jahr, a, rechnungen)}
+
+
+def pruefliste(jahr, a, rechnungen=None):
+    """Hinweise vor dem Export: (stufe ok|warn|info, text, aktion)."""
+    rechnungen = rechnungen if rechnungen is not None else db.list_invoices()
+    jahr = str(jahr)
+    p = []
+    with db.connect() as con:
+        neu = con.execute("SELECT COUNT(*) FROM ausgaben WHERE status = 'neu'").fetchone()[0]
+        ohne_beleg = con.execute("SELECT COUNT(*) FROM ausgaben WHERE status = 'ok' AND beleg_datei IS NULL"
+                                 " AND COALESCE(bezahlt_am, belegdatum) LIKE ?", (f"{jahr}%",)).fetchone()[0]
+        tank = con.execute("SELECT COUNT(*) FROM ausgaben WHERE status = 'ok' AND kategorie = 'fahrzeug'"
+                           " AND COALESCE(bezahlt_am, belegdatum) LIKE ?", (f"{jahr}%",)).fetchone()[0]
+        km_fehlen = con.execute("SELECT COUNT(*) FROM fahrten WHERE km_einfach IS NULL AND datum LIKE ?", (f"{jahr}%",)).fetchone()[0]
+    ohne_datum = [r for r in rechnungen if r["bezahlt"] and not r.get("bezahlt_am") and not r.get("storno_von")
+                  and r["datum"][:4] in (jahr, str(int(jahr) - 1))]
+    offen = [r for r in rechnungen if not r["bezahlt"] and not r.get("storno_von") and not r.get("storniert_durch") and r["datum"].startswith(jahr)]
+    p.append(("warn", f"{neu} Beleg{'' if neu == 1 else 'e'} noch nicht geprüft", "ausgaben") if neu else ("ok", "Alle Belege geprüft", None))
+    if ohne_datum:
+        p.append(("warn", f"{len(ohne_datum)} bezahlte Rechnung{'' if len(ohne_datum) == 1 else 'en'} ohne Bezahlt-Datum – zählen erst, wenn das Datum nachgetragen ist", "bezahlt_am"))
+    if km_fehlen:
+        p.append(("warn", f"{km_fehlen} Fahrt{'' if km_fehlen == 1 else 'en'} ohne Kilometer", "fahrten"))
+    if a.get("fahrzeug", "privat") != "betrieb":
+        p.append(("warn", f"{tank} Ausgabe{'' if tank == 1 else 'n'} in der Kategorie „Fahrzeug“ – beim Privatfahrzeug dürfen Tankbelege usw. "
+                          "nicht zusätzlich zur Kilometerpauschale angesetzt werden", "ausgaben") if tank else ("ok", "Keine Tankbelege (Privatfahrzeug)", None))
+    if ohne_beleg:
+        p.append(("info", f"{ohne_beleg} Ausgabe{'' if ohne_beleg == 1 else 'n'} ohne Beleg – mit Notiz", None))
+    if offen:
+        p.append(("info", f"{len(offen)} Rechnung{'' if len(offen) == 1 else 'en'} des Jahres noch offen – zählen erst bei Zahlung", None))
+    if not a.get("kleinunternehmer"):
+        p.append(("info", "Umsatzsteuer-Zahlungen an das Finanzamt bitte als Ausgabe (Kategorie „Umsatzsteuer an das Finanzamt“) erfassen", None))
+    return [{"stufe": s, "text": t, "aktion": x} for s, t, x in p]
+
+
+@bp.get("/api/finanzen/euer")
+def euer_api():
+    jahr = request.args.get("jahr") or str(date.today().year)
+    if not jahr.isdigit():
+        abort(400)
+    return jsonify(euer(jahr))
+
+
+@bp.get("/api/finanzen/ohne-bezahltdatum")
+def ohne_bezahltdatum():
+    return jsonify([{"id": r["id"], "nummer": r["nummer"], "datum": r["datum"], "kunde": r["kunde"].get("name", ""), "gesamt": r["gesamt"]}
+                    for r in db.list_invoices() if r["bezahlt"] and not r.get("bezahlt_am") and not r.get("storno_von")])
+
+
+@bp.put("/api/rechnungen/<int:inv_id>/bezahlt_am")
+def bezahlt_am_setzen(inv_id):
+    d = (_daten().get("bezahlt_am") or "").strip()
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", d):
+        return _fehler("Bitte ein Datum angeben")
+    with db.connect() as con:
+        if not con.execute("UPDATE rechnungen SET bezahlt_am = ? WHERE id = ? AND bezahlt = 1", (d, inv_id)).rowcount:
+            return _fehler("Nur bei bezahlten Rechnungen möglich", 404)
+    return "", 204
+
+
+@bp.get("/api/einnahmen")
+def einnahmen_liste():
+    jahr = request.args.get("jahr") or str(date.today().year)
+    with db.connect() as con:
+        return jsonify([dict(x) for x in con.execute("SELECT * FROM einnahmen_sonstige WHERE datum LIKE ? ORDER BY datum DESC", (f"{jahr}%",))])
+
+
+@bp.post("/api/einnahmen")
+def einnahme_anlegen():
+    d = _daten()
+    datum, text = (d.get("datum") or "").strip(), (d.get("beschreibung") or "").strip()
+    try:
+        betrag = round(float(str(d.get("betrag")).replace(".", "").replace(",", ".") if "," in str(d.get("betrag")) else d.get("betrag")), 2)
+    except (TypeError, ValueError):
+        return _fehler("Bitte einen Betrag angeben")
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", datum) or not text:
+        return _fehler("Bitte Datum und Beschreibung angeben")
+    satz = float(d["ust_satz"]) if str(d.get("ust_satz") or "").replace(".", "").isdigit() else None
+    with db.connect() as con:
+        eid = con.execute("INSERT INTO einnahmen_sonstige (datum, beschreibung, betrag, ust_satz) VALUES (?, ?, ?, ?)",
+                          (datum, text, betrag, satz)).lastrowid
+    return jsonify({"id": eid}), 201
+
+
+@bp.delete("/api/einnahmen/<int:eid>")
+def einnahme_loeschen(eid):
+    with db.connect() as con:
+        con.execute("DELETE FROM einnahmen_sonstige WHERE id = ?", (eid,))
+    return "", 204
+
+
+# ======================= Export für den Steuerberater =======================
+
+def _csv(zeilen):
+    import csv
+    import io
+    buf = io.StringIO()
+    csv.writer(buf, delimiter=";").writerows(zeilen)
+    return "﻿" + buf.getvalue()           # BOM: Excel erkennt Umlaute
+
+
+def _b(v):
+    return "" if v is None else f"{v:.2f}".replace(".", ",")
+
+
+def export_finanzen(zf, jahr, a):
+    """EÜR, Einnahmen, Ausgaben, Fahrten, Anlagenverzeichnis als CSV und alle Ausgaben-Belege in die Export-ZIP."""
+    e = euer(jahr, a)
+    zeilen = [["Bereich", "Position", "Zuordnung Anlage EÜR", "Betrag (EUR)"]]
+    zeilen += [["Betriebseinnahmen", z["name"], "", _b(z["betrag"])] for z in e["einnahmen_zeilen"]]
+    zeilen.append(["Betriebseinnahmen", "Summe", "", _b(e["einnahmen"])])
+    zeilen += [["Betriebsausgaben", z["name"], z.get("euer", ""), _b(z["betrag"])] for z in e["ausgaben_zeilen"]]
+    zeilen.append(["Betriebsausgaben", "Summe", "", _b(e["ausgaben"])])
+    zeilen += [[], ["Gewinn", "", "", _b(e["gewinn"])], [],
+               [f"Erstellt mit DJ Office Studio am {date.today():%d.%m.%Y} – "
+                f"{'Kleinunternehmer (brutto)' if e['kleinunternehmer'] else 'umsatzsteuerpflichtig (netto)'}; ohne Gewähr, bitte prüfen."]]
+    zf.writestr(f"EUeR_{jahr}.csv", _csv(zeilen))
+
+    ein = [["Zahlungsdatum", "Art", "Nummer / Beschreibung", "Kunde", "Betrag (EUR)"]]
+    for r in sorted(db.list_invoices(), key=lambda r: r.get("bezahlt_am") or r["datum"]):
+        if r["bezahlt"] and not r.get("storno_von") and (r.get("bezahlt_am") or "").startswith(str(jahr)):
+            ein.append([r["bezahlt_am"], "Rechnung", r["nummer"], r["kunde"].get("name", ""), _b(r["gesamt"])])
+        elif r.get("storno_von") and r["datum"].startswith(str(jahr)) and r["gesamt"]:
+            orig = db.get_invoice(r["storno_von"])
+            if orig and orig["bezahlt"]:
+                ein.append([r["datum"], "Storno (Erstattung)", r["nummer"], r["kunde"].get("name", ""), _b(r["gesamt"])])
+    ein += [[x["datum"], "Sonstige Einnahme", x["beschreibung"], "", _b(x["betrag"])] for x in e["sonstige"]]
+    zf.writestr(f"Einnahmen_{jahr}.csv", _csv(ein))
+
+    aus = [["Bezahlt am", "Belegdatum", "Lieferant", "Beschreibung", "Kategorie", "Betrag brutto (EUR)", "USt-Satz",
+            "Privatanteil %", "Betrieblich (EUR)", "Beleg-Datei", "Notiz"]]
+    benutzt = set()
+    with db.connect() as con:
+        liste_ = [_zeile(x) for x in con.execute("SELECT * FROM ausgaben WHERE status = 'ok' AND COALESCE(bezahlt_am, belegdatum) LIKE ?"
+                                                 " ORDER BY COALESCE(bezahlt_am, belegdatum), id", (f"{jahr}%",))]
+    for x in liste_:
+        datei = ""
+        if x.get("beleg_datei"):
+            pfad = os.path.join(db.DATA_DIR, x["beleg_datei"])
+            if os.path.isfile(pfad):
+                endung = os.path.splitext(x["beleg_name"] or x["beleg_datei"])[1].lower() or ".dat"
+                stamm = _dateiname(f"{x['bezahlt_am'] or x['belegdatum']}_{x['lieferant']}_{_b(x['betrag'])}")
+                datei, n = f"{stamm}{endung}", 2
+                while datei in benutzt:
+                    datei, n = f"{stamm}_{n}{endung}", n + 1
+                benutzt.add(datei)
+                zf.write(pfad, f"Belege/{datei}")
+        betrieblich = (x["betrag"] or 0) * (1 - (x.get("privatanteil") or 0) / 100)
+        aus.append([x["bezahlt_am"] or "", x["belegdatum"] or "", x["lieferant"], x["beschreibung"], x["kategorie_name"],
+                    _b(x["betrag"]), f"{x['ust_satz']:g} %" if x.get("ust_satz") else "", f"{x.get('privatanteil') or 0:g}",
+                    _b(betrieblich), datei, x.get("notiz") or ""])
+    zf.writestr(f"Ausgaben_{jahr}.csv", _csv(aus))
+
+    fa = [["Datum", "Anlass", "Kunde", "Start", "Ziel", "km einfach", "Hin und zurück", "km gesamt", "Satz (EUR/km)", "Betrag (EUR)", "Quelle"]]
+    for f in sorted(fahrten_liste(jahr), key=lambda f: f["datum"]):
+        fa.append([f["datum"], f["anlass"], f.get("kunde") or "", f["start"], f["ziel"], _b(f["km_einfach"]).replace(",00", ""),
+                   "ja" if f["hin_zurueck"] else "nein", _b(f["km_gesamt"]).replace(",00", ""), _b(f["km_satz"]),
+                   _b(f["betrag"]), {"auto": "automatisch", "korrigiert": "korrigiert", "hand": "von Hand"}.get(f["quelle"], f["quelle"])])
+    if a.get("fahrzeug") == "betrieb":
+        fa.append(["Hinweis: Betriebsfahrzeug – Fahrten nur als Nachweis, nicht als Ausgabe angesetzt."])
+    zf.writestr(f"Fahrten_{jahr}.csv", _csv(fa))
+
+    an = [["Gerät", "Kaufdatum", "Kosten (EUR)", "Nutzungsdauer (Jahre)", "Wert 1.1. bzw. Zugang (EUR)", f"Abschreibung {jahr} (EUR)",
+           "Restwert 31.12. (EUR)", "Abgang am", "Restwert bei Abgang (EUR)", "Verkaufserlös (EUR)"]]
+    for x in anlagen_liste(jahr):
+        an.append([x["bezeichnung"], x.get("anschaffung_am") or f"(übernommen, Restwert 1.1.{x.get('start_jahr')})", _b(x.get("kosten")),
+                   x.get("nutzungsdauer") or (f"noch {x.get('rest_nutzungsdauer')}" if x.get("rest_nutzungsdauer") else ""),
+                   _b(x["restwert_anfang"]), _b(x["afa"]), _b(x["restwert_ende"]), x.get("abgang_am") or "",
+                   _b(x["abgang_restwert"]) if x.get("abgang_am") else "", _b(x["abgang_erloes"]) if x.get("abgang_am") else ""])
+    zf.writestr(f"Anlagenverzeichnis_{jahr}.csv", _csv(an))
