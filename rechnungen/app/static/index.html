@@ -49,6 +49,12 @@
         </div>
       </div>
       <div class="menu">
+        <button type="button" class="menu-kopf" aria-haspopup="true">Finanzen <span class="pfeil">▾</span></button>
+        <div class="menu-liste">
+          <button type="button" data-tab="ausgaben">↧ Ausgaben</button>
+        </div>
+      </div>
+      <div class="menu">
         <button type="button" class="menu-kopf" aria-haspopup="true">Stammdaten <span class="pfeil">▾</span></button>
         <div class="menu-liste">
           <button type="button" data-tab="kunden">◉ Kunden</button>
@@ -453,6 +459,83 @@
     </section>
 
     <!-- ================= Stammdaten (generisch) ================= -->
+    <!-- ================= Finanzen: Ausgaben ================= -->
+    <section id="tab-ausgaben" class="tab">
+      <div class="kopf">
+        <div><h2>Ausgaben</h2><p class="hint">Belege hochladen, prüfen, fertig. Die Originale bleiben unverändert gespeichert.</p></div>
+        <div class="knopf-zeile"><button type="button" class="secondary" id="ausgabe-ohne-beleg">＋ Ausgabe ohne Beleg</button></div>
+      </div>
+      <div class="card">
+        <label class="dropzone" id="beleg-drop">
+          <input type="file" id="beleg-dateien" multiple accept=".pdf,.eml,.msg,.jpg,.jpeg,.png,.heic,.heif,.webp,application/pdf,image/*,message/rfc822">
+          <strong>Belege hierher ziehen</strong>
+          <span>PDF-Rechnungen · Fotos (JPG, PNG, HEIC) · Kauf-Mails direkt aus dem Mailprogramm (.eml, .msg) – auch mehrere auf einmal</span>
+          <span class="hint" id="beleg-status">oder klicken zum Auswählen</span>
+        </label>
+      </div>
+      <div class="card hidden" id="ausgaben-neu-karte">
+        <div class="row between"><h2>Neu – bitte prüfen <span class="h2-sub" id="ausgaben-neu-anzahl"></span></h2>
+          <button type="button" id="alle-pruefen">Alle nacheinander prüfen →</button></div>
+        <div class="neu-liste" id="ausgaben-neu"></div>
+      </div>
+      <div class="card">
+        <div class="filterzeile">
+          <input id="ausgaben-suche" placeholder="Ausgaben durchsuchen …">
+          <select id="ausgaben-jahr" aria-label="Jahr"></select>
+          <select id="ausgaben-kategorie" aria-label="Kategorie"><option value="">Alle Kategorien</option></select>
+          <div class="umschalter" id="ausgaben-ansicht"><button type="button" data-ansicht="einzeln">Einzeln</button><button type="button" data-ansicht="gruppiert">Zusammengefasst</button></div>
+        </div>
+        <table class="list ausgaben-tabelle">
+          <thead><tr><th>Bezahlt am</th><th>Lieferant</th><th>Beschreibung</th><th>Kategorie</th><th class="num">Betrag</th><th>Beleg</th><th></th></tr></thead>
+          <tbody id="ausgaben-body"></tbody>
+        </table>
+        <p class="hint" id="ausgaben-summe"></p>
+      </div>
+    </section>
+
+    <!-- ================= Finanzen: Beleg prüfen / Ausgabe bearbeiten ================= -->
+    <section id="tab-beleg" class="tab">
+      <div class="kopf">
+        <div><h2 id="beleg-titel">Beleg prüfen</h2><p class="hint" id="beleg-fortschritt"></p></div>
+        <button type="button" class="secondary" id="beleg-schliessen">✕ Schließen</button>
+      </div>
+      <div class="card">
+        <div class="pruefen">
+          <div class="pruefen-links">
+            <div id="beleg-vorschau" class="beleg-rahmen"></div>
+            <p class="hint" id="beleg-original"></p>
+          </div>
+          <form id="beleg-form" autocomplete="off">
+            <ul class="hinweise" id="beleg-hinweise"></ul>
+            <label>Lieferant<input name="lieferant" list="lieferanten-liste" required></label>
+            <datalist id="lieferanten-liste"></datalist>
+            <p class="erkannt" id="erkannt-lieferant"></p>
+            <div class="row">
+              <label>Belegdatum<input name="belegdatum" type="date" required></label>
+              <label>Bezahlt am <span class="opt">(zählt für die EÜR)</span><input name="bezahlt_am" type="date"></label>
+            </div>
+            <div class="row">
+              <label>Betrag brutto (€)<input name="betrag" inputmode="decimal" required class="betrag-feld"></label>
+              <label>Umsatzsteuer auf dem Beleg<select name="ust_satz"><option value="">keine / unbekannt</option><option value="19">19 %</option><option value="7">7 %</option></select></label>
+            </div>
+            <p class="erkannt" id="erkannt-betrag"></p>
+            <label>Kategorie<select name="kategorie" required></select></label>
+            <p class="erkannt" id="erkannt-kategorie"></p>
+            <label>Beschreibung<input name="beschreibung" placeholder="z. B. 2 × XLR-Kabel 10 m"></label>
+            <div class="row">
+              <label>Privatanteil <span class="opt">(%)</span><input name="privatanteil" type="number" min="0" max="100" step="1" value="0"></label>
+              <label>Zu einer Rechnung gehörig <span class="opt">(optional)</span><select name="rechnung_id"><option value="">– keine –</option></select></label>
+            </div>
+            <label id="beleg-notiz-label">Notiz <span class="opt" id="notiz-hinweis">(optional)</span><input name="notiz"></label>
+            <div class="actions">
+              <button type="button" class="secondary danger-text" id="beleg-verwerfen">Verwerfen</button>
+              <button type="submit" id="beleg-speichern">✓ Übernehmen</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </section>
+
     <section id="tab-kunden" class="tab" data-stamm="kunden"></section>
     <section id="tab-textbausteine" class="tab" data-stamm="textbausteine"></section>
     <section id="tab-zahlungsbedingungen" class="tab" data-stamm="zahlungsbedingungen"></section>
@@ -540,5 +623,6 @@
   </template>
 
   <script src="static/app.js"></script>
+  <script src="static/finanzen.js"></script>
 </body>
 </html>

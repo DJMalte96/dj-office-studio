@@ -72,6 +72,31 @@ CREATE TABLE IF NOT EXISTS einstellungen (
     schluessel TEXT PRIMARY KEY,
     wert TEXT                              -- JSON-Wert
 );
+-- Finanzen (seit 1.1): Ausgaben mit Belegen
+CREATE TABLE IF NOT EXISTS ausgaben (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    status TEXT NOT NULL DEFAULT 'neu',          -- neu (hochgeladen, noch nicht geprüft) | ok
+    belegdatum TEXT,
+    bezahlt_am TEXT,
+    lieferant TEXT DEFAULT '',
+    beschreibung TEXT DEFAULT '',
+    kategorie TEXT DEFAULT 'sonstiges',
+    betrag REAL,                                 -- brutto, wie auf dem Beleg
+    ust_satz REAL,                               -- Umsatzsteuer auf dem Beleg (für Vorsteuer), NULL = keine/unbekannt
+    privatanteil REAL DEFAULT 0,                 -- Prozent
+    beleg_datei TEXT,                            -- relativ zum Datenordner
+    beleg_name TEXT,
+    beleg_typ TEXT,                              -- pdf | mail | msg | bild | unbekannt
+    beleg_pruefsumme TEXT,
+    mail_message_id TEXT,
+    erkannt_json TEXT,                           -- Vorschläge und Fundstellen der Auswertung
+    notiz TEXT DEFAULT '',
+    rechnung_id INTEGER REFERENCES rechnungen(id) ON DELETE SET NULL,
+    anlage_id INTEGER,
+    paperless_id INTEGER,                        -- für die spätere Paperless-Anbindung
+    erstellt TEXT DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS ausgaben_pruefsumme ON ausgaben(beleg_pruefsumme);
 CREATE TABLE IF NOT EXISTS angebote (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     nummer TEXT NOT NULL UNIQUE,

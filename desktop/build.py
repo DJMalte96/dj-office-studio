@@ -23,6 +23,8 @@ args = [
     "--noconfirm", "--clean",
     "--paths", str(APP),
     "--hidden-import", "main", "--hidden-import", "db", "--hidden-import", "pdf", "--hidden-import", "importer", "--hidden-import", "mail", "--hidden-import", "segno",
+    "--hidden-import", "finanzen", "--hidden-import", "belege", "--hidden-import", "extract_msg", "--hidden-import", "pillow_heif",
+    "--collect-data", "extract_msg",
     "--add-data", f"{APP / 'static'}{SEP}static",
     "--add-data", f"{ROOT / 'rechnungen' / 'config.yaml'}{SEP}.",
     "--icon", str(ROOT / "rechnungen" / "icon.png"),

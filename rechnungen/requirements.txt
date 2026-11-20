@@ -4,3 +4,5 @@ fpdf2==2.8.1
 pypdf==5.1.0
 certifi>=2024.2.2
 segno==1.6.6
+extract-msg>=0.48,<1
+pillow-heif>=0.18,<2

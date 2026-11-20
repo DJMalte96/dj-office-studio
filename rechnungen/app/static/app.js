@@ -132,6 +132,7 @@ function showTab(name) {
   if (name === "einstellungen") ladeEinstellungen();
   $("#einstellungen-btn").classList.toggle("active", name === "einstellungen");
   if (name === "start") renderStart();
+  if (typeof finanzenTab === "function") finanzenTab(name);   // finanzen.js
   const stamm = $(`#tab-${name}[data-stamm]`);
   if (stamm) renderStamm(stamm.dataset.stamm);
 }
