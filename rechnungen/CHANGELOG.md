@@ -2,6 +2,12 @@
 
 Alle Änderungen an DJ Office Studio. Neueste Version oben.
 
+## 1.1.3 – 2026-11-20
+
+### Behoben
+- **Fahrten blieben bei „wird berechnet …“ stehen**, wenn die automatische Kilometer-Berechnung erst nachträglich eingeschaltet wurde oder die App während der Berechnung neu gestartet ist (z. B. durch ein Update). Beim Öffnen der Fahrtenliste werden offene Fahrten jetzt automatisch berechnet.
+- Geht bei der Berechnung etwas Unerwartetes schief, zeigt die Fahrt „km fehlen“ mit dem Grund, statt dauerhaft „wird berechnet …“.
+
 ## 1.1.2 – 2026-11-20
 
 ### Verbessert

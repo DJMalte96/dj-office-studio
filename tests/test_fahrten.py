@@ -152,3 +152,25 @@ def test_veranstaltungsort_auf_pdf(client):
                                            "positionen": [{"beschreibung": "DJ", "preis": 500}]}).get_json()["id"]
     assert client.get(f"/api/angebote/{a}").get_json()["veranstaltungsort"] == ORT
     assert "Veranstaltungsort: Hof Lindenhof" in " ".join(pdf_text(client.get(f"/api/angebote/{a}/pdf").data).split())
+
+
+def test_offene_fahrten_werden_beim_oeffnen_berechnet(client, monkeypatch):
+    """Kartendienst nachträglich eingeschaltet bzw. App neu gestartet: Die Liste stößt die Berechnung selbst an."""
+    import finanzen
+    import strecken
+    rechnung(client, "037")                               # Kartendienst aus → Fahrt ohne km
+    monkeypatch.setattr(finanzen, "HINTERGRUND", False)
+    monkeypatch.setattr(strecken, "strecke_km", lambda s, z, ssl_kontext=None: 21.5)
+    client.put("/api/einstellungen", json={"kartendienst": True})
+    assert fahrten(client)["fahrten"][0]["km_einfach"] == 21.5
+
+
+def test_unerwarteter_fehler_beendet_berechnung_nicht_lautlos(client, monkeypatch):
+    import finanzen
+    import strecken
+    rechnung(client, "037")
+    monkeypatch.setattr(finanzen, "HINTERGRUND", False)
+    monkeypatch.setattr(strecken, "strecke_km", lambda *a, **k: {}["kaputt"])
+    client.put("/api/einstellungen", json={"kartendienst": True})
+    f = fahrten(client)["fahrten"][0]
+    assert f["km_einfach"] is None and "KeyError" in f["fehler"]   # → „km fehlen“ statt ewig „wird berechnet …“
