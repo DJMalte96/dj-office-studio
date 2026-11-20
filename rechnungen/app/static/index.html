@@ -51,9 +51,11 @@
       <div class="menu">
         <button type="button" class="menu-kopf" aria-haspopup="true">Finanzen <span class="pfeil">▾</span></button>
         <div class="menu-liste">
+          <button type="button" data-tab="finanzen">◔ Übersicht</button>
           <button type="button" data-tab="ausgaben">↧ Ausgaben</button>
           <button type="button" data-tab="fahrten">➜ Fahrten</button>
           <button type="button" data-tab="anschaffungen">▣ Anschaffungen</button>
+          <button type="button" data-tab="euer">§ EÜR &amp; Export</button>
         </div>
       </div>
       <div class="menu">
@@ -136,6 +138,10 @@
         </div>
 
         <div class="start-spalte">
+          <div class="card" id="start-finanzen">
+            <div class="row between"><h2 id="start-finanzen-titel">Finanzen</h2><a href="#" class="mehr" data-goto-tab="finanzen">Übersicht →</a></div>
+            <div id="start-finanzen-inhalt"></div>
+          </div>
           <div class="card sicherung-karte" id="start-sicherung-karte">
             <div class="row between"><h2>Datensicherung</h2><a href="#" class="mehr zu-einstellungen">Einstellungen →</a></div>
             <div id="start-sicherung"></div>
@@ -620,6 +626,64 @@
       </div>
     </section>
 
+    <!-- ================= Finanzen: Übersicht ================= -->
+    <section id="tab-finanzen" class="tab">
+      <div class="kopf">
+        <div><h2>Finanzen</h2><p class="hint">Einnahmen nach Zahlungseingang, Ausgaben nach Bezahlt-Datum – so wie in der EÜR.</p></div>
+        <select id="finanzen-jahr" aria-label="Jahr"></select>
+      </div>
+      <div class="kacheln" id="finanzen-kacheln"></div>
+      <ul class="hinweise" id="finanzen-hinweise"></ul>
+      <div class="zwei">
+        <div class="card">
+          <div class="row between"><h2>Einnahmen und Ausgaben je Monat</h2><a href="#" class="mehr" id="diagramm-umschalten">Als Tabelle</a></div>
+          <div class="legende" id="diagramm-legende"><span><i class="farbe-ein"></i>Einnahmen</span><span><i class="farbe-aus"></i>Ausgaben</span></div>
+          <div id="finanzen-diagramm"></div>
+          <div id="finanzen-tabelle" hidden></div>
+        </div>
+        <div class="card">
+          <h2>Ausgaben nach Kategorie</h2>
+          <div id="finanzen-kategorien"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= Finanzen: EÜR & Export ================= -->
+    <section id="tab-euer" class="tab">
+      <div class="kopf">
+        <div><h2>EÜR &amp; Export</h2><p class="hint">Einnahmen-Überschuss-Rechnung – Grundlage für die Anlage EÜR und den Steuerberater.</p></div>
+        <select id="euer-jahr" aria-label="Jahr"></select>
+      </div>
+      <div class="zwei">
+        <div class="card">
+          <h2 id="euer-titel">EÜR</h2>
+          <table class="list euer-tabelle"><tbody id="euer-body"></tbody></table>
+          <p class="hint">Die Zuordnung zur Anlage EÜR ist ein Vorschlag – die genauen Zeilen bitte mit dem Steuerberater bzw. im ELSTER-Formular des Jahres abgleichen.</p>
+        </div>
+        <div>
+          <div class="card">
+            <h2>Prüfliste vor dem Export</h2>
+            <ul class="pruefliste" id="euer-pruefliste"></ul>
+          </div>
+          <div class="card">
+            <h2>Export für den Steuerberater</h2>
+            <ul class="export-liste">
+              <li>EÜR, Einnahmen, Ausgaben, Fahrten, Anlagenverzeichnis als Excel-Tabellen</li>
+              <li>alle Rechnungen des Jahres (Tabelle und PDFs)</li>
+              <li>alle Ausgaben-Belege (PDFs, Fotos, Original-Mails)</li>
+            </ul>
+            <button type="button" id="euer-export">⇩ Export <span id="euer-export-jahr"></span> herunterladen</button>
+            <p class="mini-hinweis">Derselbe Export steht auch unter ⚙ Einstellungen → Datensicherung &amp; Export.</p>
+          </div>
+          <div class="card">
+            <div class="row between"><h2>Sonstige Einnahmen</h2><button type="button" class="small secondary" id="einnahme-neu">＋ Einnahme</button></div>
+            <p class="hint">Einnahmen ohne Rechnung, z. B. der Verkauf eines alten Geräts.</p>
+            <table class="list"><tbody id="einnahmen-body"></tbody></table>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <section id="tab-kunden" class="tab" data-stamm="kunden"></section>
     <section id="tab-textbausteine" class="tab" data-stamm="textbausteine"></section>
     <section id="tab-zahlungsbedingungen" class="tab" data-stamm="zahlungsbedingungen"></section>
@@ -695,6 +759,30 @@
       <div class="actions">
         <button type="button" class="secondary danger-text" id="anlage-loeschen">Löschen</button>
         <button type="button" class="secondary" id="anlage-abbrechen">Abbrechen</button>
+        <button type="submit">Speichern</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- ================= Bezahlt-Datum nachtragen ================= -->
+  <dialog id="bezahltam-dialog" class="dialog">
+    <h2>Bezahlt-Datum nachtragen</h2>
+    <p class="hint">Diese Rechnungen sind als bezahlt markiert, haben aber kein Zahlungsdatum (z. B. alte Importe). Für die EÜR zählt das Datum des Zahlungseingangs.</p>
+    <table class="list"><tbody id="bezahltam-body"></tbody></table>
+    <div class="actions"><button type="button" id="bezahltam-zu">Fertig</button></div>
+  </dialog>
+
+  <!-- ================= Sonstige Einnahme ================= -->
+  <dialog id="einnahme-dialog" class="dialog">
+    <form id="einnahme-form" autocomplete="off">
+      <h2>Sonstige Einnahme</h2>
+      <div class="row">
+        <label>Datum<input name="datum" type="date" required></label>
+        <label>Betrag (€)<input name="betrag" inputmode="decimal" required></label>
+      </div>
+      <label>Beschreibung<input name="beschreibung" required placeholder="z. B. Altes Mischpult verkauft"></label>
+      <div class="actions">
+        <button type="button" class="secondary" id="einnahme-abbrechen">Abbrechen</button>
         <button type="submit">Speichern</button>
       </div>
     </form>

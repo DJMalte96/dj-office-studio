@@ -128,6 +128,15 @@ CREATE TABLE IF NOT EXISTS anlagen (
     notiz TEXT DEFAULT '',
     erstellt TEXT DEFAULT CURRENT_TIMESTAMP
 );
+-- Einnahmen ohne Rechnung (z. B. Verkauf eines alten Geräts)
+CREATE TABLE IF NOT EXISTS einnahmen_sonstige (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    datum TEXT NOT NULL,
+    beschreibung TEXT NOT NULL,
+    betrag REAL NOT NULL,
+    ust_satz REAL,
+    erstellt TEXT DEFAULT CURRENT_TIMESTAMP
+);
 CREATE TABLE IF NOT EXISTS strecken_cache (
     schluessel TEXT PRIMARY KEY,                 -- geo:<adresse> bzw. km:<start>→<ziel>
     wert TEXT

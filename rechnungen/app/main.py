@@ -665,7 +665,7 @@ def _betrag(v):
 
 @app.get("/api/export")
 def export_year():
-    """Export für den Steuerberater: alle Rechnungen eines Jahres als CSV (Excel) + PDFs."""
+    """Export für den Steuerberater: Rechnungen (CSV + PDFs) und Finanzen (EÜR, Listen, Belege) eines Jahres."""
     jahr = request.args.get("jahr") or str(date.today().year)
     if not jahr.isdigit():
         abort(400)
@@ -698,8 +698,9 @@ def export_year():
         w.writerow(["davon bezahlt (ohne Stornorechnungen)", "", "", "", "", "", "", "", _betrag(bezahlt)])
         # BOM, damit Excel die Umlaute richtig erkennt
         zf.writestr(f"Rechnungen_{jahr}.csv", "\ufeff" + csv_buf.getvalue())
+        finanzen.export_finanzen(zf, jahr, a)   # seit 1.1: EÜR, Einnahmen, Ausgaben, Fahrten, Anlagen, Belege
     return Response(buf.getvalue(), mimetype="application/zip",
-                    headers={"Content-Disposition": f'attachment; filename="Export_Rechnungen_{jahr}.zip"'})
+                    headers={"Content-Disposition": f'attachment; filename="Export_{jahr}.zip"'})
 
 
 # ---------- E-Mail-Versand ----------

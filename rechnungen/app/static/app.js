@@ -1883,6 +1883,7 @@ function renderSicherung() {
 }
 
 async function renderStart() {
+  if (typeof renderStartFinanzen === "function") renderStartFinanzen();   // finanzen.js
   const jetzt = new Date();
   const h = jetzt.getHours();
   const vorname = (state.absender?.name || "").trim().split(/\s+/)[0];

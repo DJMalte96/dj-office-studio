@@ -29,6 +29,8 @@ function finanzenTab(name) {
   if (name === "ausgaben") ladeAusgaben();
   if (name === "fahrten") ladeFahrten();
   if (name === "anschaffungen") ladeAnlagen();
+  if (name === "finanzen") ladeUebersicht();
+  if (name === "euer") ladeEuer();
 }
 
 async function ladeAusgaben() {
@@ -521,3 +523,175 @@ function gwgHinweis() {
 }
 ["kategorie", "betrag", "ust_satz"].forEach(k => $("#beleg-form").elements[k].addEventListener("input", gwgHinweis));
 $("#beleg-form").elements.kategorie.addEventListener("change", gwgHinweis);
+
+
+// ======================= Übersicht & EÜR =======================
+
+const ue = { jahr: String(new Date().getFullYear()), daten: null };
+const MON_KURZ = ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"];
+
+function jahresAuswahl(sel, jahr) {
+  const j = new Date().getFullYear();
+  sel.innerHTML = [j, j - 1, j - 2, j - 3].map(String).map(x => `<option${x === jahr ? " selected" : ""}>${x}</option>`).join("");
+}
+
+async function ladeUebersicht() {
+  try { ue.daten = await api(`finanzen/euer?jahr=${ue.jahr}`); }
+  catch (e) { return toast("Laden fehlgeschlagen: " + e.message, true); }
+  jahresAuswahl($("#finanzen-jahr"), ue.jahr);
+  const d = ue.daten;
+  const heute = new Date();
+  const stand = Number(ue.jahr) === heute.getFullYear() ? `bis ${fmtDate(today())}` : `Jahr ${ue.jahr}`;
+  const fahrtAfa = [d.fahrtkosten && `Fahrten ${euro2(d.fahrtkosten)}`, d.afa && `Abschreibung ${euro2(d.afa)}`].filter(Boolean).join(" · ");
+  $("#finanzen-kacheln").innerHTML = `
+    <div class="card"><div class="kachel-titel">Einnahmen</div><div class="stat-gross">${euro2(d.einnahmen)}<small>${d.anzahl_rechnungen} bezahlte Rechnung${d.anzahl_rechnungen === 1 ? "" : "en"}</small></div></div>
+    <div class="card"><div class="kachel-titel">Ausgaben</div><div class="stat-gross">${euro2(d.ausgaben)}<small>${fahrtAfa ? "inkl. " + fahrtAfa : "&nbsp;"}</small></div></div>
+    <div class="card kachel-gewinn"><div class="kachel-titel">Gewinn</div><div class="stat-gross">${euro2(d.gewinn)}<small>${stand}</small></div></div>`;
+  $("#finanzen-hinweise").innerHTML = d.pruefliste.filter(p => p.stufe === "warn").map(p =>
+    `<li class="gelb">${esc(p.text)}${p.aktion ? ` – <a href="#" data-pruef="${p.aktion}">${p.aktion === "bezahlt_am" ? "nachtragen" : "ansehen"}</a>` : ""}</li>`).join("");
+  zeichneDiagramm(d.monate);
+  const zeilen = d.ausgaben_zeilen.filter(z => z.betrag > 0);
+  const max = Math.max(...zeilen.map(z => z.betrag), 1);
+  $("#finanzen-kategorien").innerHTML = zeilen.map(z => `<div class="kat-zeile"><span>${esc(z.name)}</span><strong>${euro2(z.betrag)}</strong>
+      <div class="kat-balken"><span style="width:${z.betrag / max * 100}%"></span></div></div>`).join("")
+    || `<p class="hint">Noch keine Ausgaben in ${ue.jahr}.</p>`;
+}
+$("#finanzen-jahr").addEventListener("change", e => { ue.jahr = e.target.value; ladeUebersicht(); });
+
+/* Gruppierte Säulen, eine Achse, Werte nur beim besten Einnahme- und beim höchsten Ausgabenmonat; Rest im Tooltip/Tabelle */
+function zeichneDiagramm(monate) {
+  const W = 640, H = 260, L = 46, R = 8, T = 22, B = 26;
+  const maxWert = Math.max(1, ...monate.map(m => Math.max(m.einnahmen, m.ausgaben)));
+  const schritt = [100, 250, 500, 1000, 2000, 2500, 5000, 10000, 20000, 25000, 50000].find(s => maxWert / s <= 4) || 100000;
+  const max = Math.ceil(maxWert / schritt) * schritt;
+  const bw = (W - L - R) / 12, bar = Math.min(14, (bw - 10) / 2);
+  const y = v => T + (H - T - B) * (1 - Math.max(0, v) / max);
+  const achse = v => v >= 1000 ? `${(v / 1000).toLocaleString("de-DE")} T€` : `${v} €`;
+  let s = `<svg class="diagramm" viewBox="0 0 ${W} ${H}" role="img" aria-label="Einnahmen und Ausgaben je Monat ${ue.jahr}">`;
+  for (let v = 0; v <= max; v += schritt) s += `<line class="gitter" x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}"/><text x="${L - 6}" y="${y(v) + 4}" text-anchor="end">${achse(v)}</text>`;
+  const saeule = (x, v, farbe) => {
+    if (v <= 0) return "";
+    const h = y(0) - y(v), r = Math.min(4, h);
+    return `<path d="M${x},${y(0)} V${y(v) + r} Q${x},${y(v)} ${x + r},${y(v)} H${x + bar - r} Q${x + bar},${y(v)} ${x + bar},${y(v) + r} V${y(0)} Z" fill="${farbe}"/>`;
+  };
+  monate.forEach((m, i) => {
+    const x0 = L + i * bw;
+    s += `<g class="monat" data-i="${i}"><rect class="hit" x="${x0}" y="${T}" width="${bw}" height="${H - T - B}" rx="6"/>`
+      + saeule(x0 + bw / 2 - bar - 1, m.einnahmen, "var(--ein)") + saeule(x0 + bw / 2 + 1, m.ausgaben, "var(--aus)")
+      + `<text x="${x0 + bw / 2}" y="${H - 8}" text-anchor="middle">${MON_KURZ[i]}</text></g>`;
+  });
+  const iE = monate.reduce((b, m, i) => m.einnahmen > monate[b].einnahmen ? i : b, 0);
+  const iA = monate.reduce((b, m, i) => m.ausgaben > monate[b].ausgaben ? i : b, 0);
+  if (monate[iE].einnahmen > 0) s += `<text class="wert" x="${L + iE * bw + bw / 2 - bar / 2 - 1}" y="${y(monate[iE].einnahmen) - 6}" text-anchor="middle">${euro2(monate[iE].einnahmen).replace(",00", "")}</text>`;
+  if (monate[iA].ausgaben > 0 && iA !== iE) s += `<text class="wert" x="${L + iA * bw + bw / 2 + bar / 2 + 1}" y="${y(monate[iA].ausgaben) - 6}" text-anchor="middle">${euro2(monate[iA].ausgaben).replace(",00", "")}</text>`;
+  $("#finanzen-diagramm").innerHTML = s + "</svg>";
+  let tip = $(".diagramm-tip");
+  if (!tip) { tip = document.createElement("div"); tip.className = "diagramm-tip"; document.body.appendChild(tip); }
+  $$("#finanzen-diagramm g.monat").forEach(g => {
+    g.addEventListener("mousemove", e => {
+      const m = monate[Number(g.dataset.i)];
+      tip.innerHTML = `<b>${MONATE[Number(g.dataset.i)]} ${ue.jahr}</b><div><span><i style="background:var(--ein)"></i>Einnahmen</span><span>${euro2(m.einnahmen)}</span></div>`
+        + `<div><span><i style="background:var(--aus)"></i>Ausgaben</span><span>${euro2(m.ausgaben)}</span></div><div><span>Überschuss</span><b>${euro2(m.einnahmen - m.ausgaben)}</b></div>`
+        + (Number(g.dataset.i) === 11 && ue.daten.afa ? `<div><small>inkl. Abschreibung des Jahres</small></div>` : "");
+      tip.style.display = "block";
+      tip.style.left = Math.min(e.clientX + 14, window.innerWidth - 220) + "px";
+      tip.style.top = (e.clientY + 14) + "px";
+    });
+    g.addEventListener("mouseleave", () => { tip.style.display = "none"; });
+  });
+  $("#finanzen-tabelle").innerHTML = `<table class="mini"><thead><tr><th>Monat</th><th>Einnahmen</th><th>Ausgaben</th><th>Überschuss</th></tr></thead><tbody>`
+    + monate.map((m, i) => `<tr><td>${MONATE[i]}</td><td>${euro2(m.einnahmen)}</td><td>${euro2(m.ausgaben)}</td><td>${euro2(m.einnahmen - m.ausgaben)}</td></tr>`).join("")
+    + "</tbody></table>";
+}
+$("#diagramm-umschalten").addEventListener("click", e => {
+  e.preventDefault();
+  const tabelle = $("#finanzen-tabelle").hidden;
+  $("#finanzen-tabelle").hidden = !tabelle;
+  $("#finanzen-diagramm").hidden = tabelle;
+  $("#diagramm-legende").hidden = tabelle;
+  e.target.textContent = tabelle ? "Als Diagramm" : "Als Tabelle";
+});
+
+// Links aus Prüfliste/Hinweisen
+document.addEventListener("click", e => {
+  const a = e.target.closest("[data-pruef]");
+  if (a) {
+    e.preventDefault();
+    if (a.dataset.pruef === "bezahlt_am") return oeffneBezahltAm();
+    return showTab(a.dataset.pruef);
+  }
+  const g = e.target.closest("[data-goto-tab]");
+  if (g) { e.preventDefault(); showTab(g.dataset.gotoTab); }
+});
+
+async function ladeEuer() {
+  let d;
+  try { d = await api(`finanzen/euer?jahr=${ue.jahr}`); }
+  catch (e) { return toast("Laden fehlgeschlagen: " + e.message, true); }
+  ue.daten = d;
+  jahresAuswahl($("#euer-jahr"), ue.jahr);
+  $("#euer-titel").innerHTML = `EÜR ${ue.jahr} <span class="h2-sub">${d.kleinunternehmer ? "Kleinunternehmer" : "umsatzsteuerpflichtig, netto"}${Number(ue.jahr) === new Date().getFullYear() ? ` · Stand ${fmtDate(today())}` : ""}</span>`;
+  const zeile = z => `<tr class="eingerueckt"><td>${esc(z.name)}${z.euer ? `<small>${esc(z.euer)}</small>` : ""}</td><td class="num">${euro2(z.betrag)}</td></tr>`;
+  $("#euer-body").innerHTML = `<tr class="zwischen"><td>Betriebseinnahmen</td><td class="num">${euro2(d.einnahmen)}</td></tr>`
+    + d.einnahmen_zeilen.map(zeile).join("")
+    + `<tr class="zwischen"><td>Betriebsausgaben</td><td class="num">${euro2(d.ausgaben)}</td></tr>`
+    + (d.ausgaben_zeilen.map(zeile).join("") || `<tr class="eingerueckt"><td class="hint">keine</td><td></td></tr>`)
+    + `<tr class="gewinn"><td>${d.gewinn >= 0 ? "Gewinn" : "Verlust"}</td><td class="num">${euro2(d.gewinn)}</td></tr>`;
+  $("#euer-pruefliste").innerHTML = d.pruefliste.map(p => `<li class="${p.stufe}">${{ ok: "✓", warn: "⚠", info: "ℹ" }[p.stufe]} ${esc(p.text)}`
+    + (p.aktion ? ` – <a href="#" data-pruef="${p.aktion}">${p.aktion === "bezahlt_am" ? "nachtragen" : "ansehen"}</a>` : "") + "</li>").join("");
+  $("#euer-export-jahr").textContent = ue.jahr;
+  $("#einnahmen-body").innerHTML = d.sonstige.map(x => `<tr data-id="${x.id}"><td>${fmtDate(x.datum)}</td><td>${esc(x.beschreibung)}</td>
+      <td class="num">${euro2(x.betrag)}</td><td class="btns"><button type="button" class="icon del" title="Löschen">✕</button></td></tr>`).join("")
+    || `<tr><td class="hint" colspan="4">Keine in ${ue.jahr}.</td></tr>`;
+}
+$("#euer-jahr").addEventListener("change", e => { ue.jahr = e.target.value; ladeEuer(); });
+$("#euer-export").addEventListener("click", () => { ladeHerunter(`api/export?jahr=${ue.jahr}`); toast(`Export ${ue.jahr} wird erstellt …`); });
+
+async function oeffneBezahltAm() {
+  let liste;
+  try { liste = await api("finanzen/ohne-bezahltdatum"); } catch (e) { return toast(e.message, true); }
+  $("#bezahltam-body").innerHTML = liste.map(r => `<tr data-id="${r.id}"><td>Rechnung ${esc(r.nummer)}<br><small>${esc(r.kunde)} · ${fmtDate(r.datum)}</small></td>
+      <td class="num">${euro2(r.gesamt)}</td><td><input type="date" value="" aria-label="Bezahlt am"></td></tr>`).join("")
+    || `<tr><td class="hint">Alle bezahlten Rechnungen haben ein Bezahlt-Datum.</td></tr>`;
+  $("#bezahltam-dialog").showModal();
+}
+$("#bezahltam-body").addEventListener("change", async e => {
+  const tr = e.target.closest("tr[data-id]");
+  if (!tr || !e.target.value) return;
+  try { await api(`rechnungen/${tr.dataset.id}/bezahlt_am`, { method: "PUT", body: { bezahlt_am: e.target.value } }); tr.style.opacity = .5; toast("Bezahlt-Datum gespeichert"); }
+  catch (err) { toast(err.message, true); }
+});
+$("#bezahltam-zu").addEventListener("click", () => {
+  $("#bezahltam-dialog").close();
+  if ($("#tab-euer").classList.contains("active")) ladeEuer(); else if ($("#tab-finanzen").classList.contains("active")) ladeUebersicht();
+});
+
+$("#einnahme-neu").addEventListener("click", () => {
+  const f = $("#einnahme-form"); f.reset(); f.elements.datum.value = today();
+  $("#einnahme-dialog").showModal();
+});
+$("#einnahme-abbrechen").addEventListener("click", () => $("#einnahme-dialog").close());
+$("#einnahme-form").addEventListener("submit", async e => {
+  e.preventDefault();
+  const f = e.target.elements;
+  try {
+    await api("einnahmen", { method: "POST", body: { datum: f.datum.value, betrag: f.betrag.value, beschreibung: f.beschreibung.value } });
+    $("#einnahme-dialog").close(); toast("Einnahme gespeichert"); ladeEuer();
+  } catch (err) { toast(err.message, true); }
+});
+$("#einnahmen-body").addEventListener("click", async e => {
+  const tr = e.target.closest("tr[data-id]");
+  if (!tr || !e.target.closest("button") || !confirm("Diese Einnahme löschen?")) return;
+  try { await api(`einnahmen/${tr.dataset.id}`, { method: "DELETE" }); ladeEuer(); } catch (err) { toast(err.message, true); }
+});
+
+// Startseite: Kachel „Finanzen <Jahr>“
+async function renderStartFinanzen() {
+  const jahr = String(new Date().getFullYear());
+  let d;
+  try { d = await api(`finanzen/euer?jahr=${jahr}`); } catch (_) { return; }
+  $("#start-finanzen-titel").textContent = `Finanzen ${jahr}`;
+  const neu = d.pruefliste.find(p => p.aktion === "ausgaben" && p.stufe === "warn" && /Beleg/.test(p.text));
+  $("#start-finanzen-inhalt").innerHTML = `<div class="stat-gross">${euro2(d.gewinn)}<small>${d.gewinn >= 0 ? "Gewinn" : "Verlust"} bis heute · Einnahmen ${euro2(d.einnahmen)} · Ausgaben ${euro2(d.ausgaben)}</small></div>`
+    + (neu ? `<ul class="hinweise"><li class="gelb">${esc(neu.text)} – <a href="#" data-pruef="ausgaben">jetzt prüfen</a></li></ul>` : "");
+}

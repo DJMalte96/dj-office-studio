@@ -601,3 +601,48 @@ body.modus-angebot #veranstaltung-karte .nur-rechnung { display: none; }
 details.abgang { margin: 4px 0 14px; }
 details.abgang summary { cursor: pointer; font-size: 14px; color: var(--muted); margin-bottom: 10px; }
 .anlagen-tabelle td small { display: block; color: var(--muted); }
+
+/* Finanzen: Übersicht, Diagramm, EÜR */
+:root { --ein: #1baf7a; --aus: #2a78d6; }
+[data-theme="dark"] { --ein: #199e70; --aus: #256abf; }
+.zwei { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 20px; align-items: start; }
+.zwei > .card, .zwei > div > .card { margin: 0 0 20px; }
+@media (max-width: 900px) { .zwei { grid-template-columns: minmax(0, 1fr); } }
+.kachel-gewinn .stat-gross { color: var(--ink); }
+#finanzen-hinweise { margin-bottom: 20px; }
+#finanzen-hinweise:empty { display: none; }
+.legende { display: flex; gap: 18px; font-size: 13px; color: var(--muted); margin: 0 0 8px; align-items: center; }
+.legende i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+.legende .farbe-ein { background: var(--ein); } .legende .farbe-aus { background: var(--aus); }
+svg.diagramm { width: 100%; height: auto; display: block; overflow: visible; }
+svg.diagramm .gitter { stroke: var(--border); stroke-width: 1; }
+svg.diagramm text { fill: var(--muted); font-size: 11px; font-family: inherit; }
+svg.diagramm text.wert { fill: var(--text); font-weight: 600; }
+svg.diagramm .hit { fill: transparent; }
+svg.diagramm g.monat:hover .hit { fill: var(--primary-soft); }
+.diagramm-tip { position: fixed; pointer-events: none; background: var(--card); border: 1px solid var(--border); box-shadow: var(--shadow-lg);
+  border-radius: 10px; padding: 8px 12px; font-size: 13px; display: none; z-index: 50; min-width: 180px; }
+.diagramm-tip b { display: block; margin-bottom: 4px; }
+.diagramm-tip div { display: flex; justify-content: space-between; gap: 16px; }
+.diagramm-tip i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 6px; }
+table.mini { width: 100%; border-collapse: collapse; font-size: 13px; }
+table.mini th, table.mini td { padding: 5px 8px; border-bottom: 1px solid var(--border); text-align: right; }
+table.mini th:first-child, table.mini td:first-child { text-align: left; }
+.kat-zeile { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 14px; }
+.kat-zeile:last-child { border-bottom: none; }
+.kat-zeile strong { font-variant-numeric: tabular-nums; }
+.kat-balken { grid-column: 1 / -1; height: 6px; border-radius: 999px; background: var(--input-bg); overflow: hidden; }
+.kat-balken span { display: block; height: 100%; border-radius: 999px; background: var(--aus); }
+.pruefliste { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.pruefliste li { padding: 10px 14px; border-radius: 10px; font-size: 14px; background: var(--input-bg); border-left: 3px solid var(--border); }
+.pruefliste li.ok { background: var(--primary-soft); border-left-color: var(--neon); }
+.pruefliste li.warn { background: var(--gelb-soft); border-left-color: var(--gelb); }
+.pruefliste a { color: var(--text); font-weight: 650; }
+table.euer-tabelle td.num { font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+table.euer-tabelle tr.zwischen td { font-weight: 650; background: var(--input-bg); }
+table.euer-tabelle tr.eingerueckt td:first-child { padding-left: 26px; }
+table.euer-tabelle tr.eingerueckt small { display: block; color: var(--muted); }
+table.euer-tabelle tr.gewinn td { font-weight: 800; font-size: 17px; border-top: 2px solid var(--text); }
+.export-liste { margin: 8px 0 16px; padding-left: 18px; font-size: 14px; }
+#start-finanzen .stat-gross small { margin-top: 2px; }
+.kopf > select { width: auto; min-width: 120px; }
