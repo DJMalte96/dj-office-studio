@@ -112,23 +112,79 @@ function renderAusgaben() {
 
 // ---------- Hochladen ----------
 
-async function belegeHochladen(dateien) {
-  if (!dateien.length) return;
+// Große Mengen werden in Paketen hochgeladen (Server-Grenzen: 1000 Dateien bzw. 100 MB je Anfrage).
+const PAKET_DATEIEN = 50, PAKET_BYTES = 20 * 1024 * 1024, MAX_DATEI = 95 * 1024 * 1024;
+let hochladenLaeuft = false;
+
+function inPakete(dateien) {
+  const pakete = [];
+  let paket = [], groesse = 0;
+  for (const f of dateien) {
+    if (paket.length && (paket.length >= PAKET_DATEIEN || groesse + f.size > PAKET_BYTES)) {
+      pakete.push(paket); paket = []; groesse = 0;
+    }
+    paket.push(f); groesse += f.size;
+  }
+  if (paket.length) pakete.push(paket);
+  return pakete;
+}
+
+async function paketHochladen(paket) {
   const fd = new FormData();
-  [...dateien].forEach(f => fd.append("dateien", f));
-  $("#beleg-status").textContent = `${dateien.length} Beleg${dateien.length === 1 ? " wird" : "e werden"} gelesen …`;
+  paket.forEach(f => fd.append("dateien", f));
+  const res = await fetch("api/ausgaben/belege", { method: "POST", body: fd });
+  let d = null;
+  try { d = await res.json(); } catch { /* z. B. HTML-Fehlerseite */ }
+  if (!res.ok || !d) throw new Error((d && d.error) || `Fehler ${res.status}`);
+  return d;
+}
+
+async function belegeHochladen(dateien) {
+  dateien = [...dateien];
+  if (!dateien.length) return;
+  if (hochladenLaeuft) { toast("Es wird gerade noch hochgeladen – bitte kurz warten.", true); return; }
+  hochladenLaeuft = true;
+  const status = $("#beleg-status");
+  const gesamt = { neu: 0, doppelt: [], fehler: [] };
+  const zuGross = dateien.filter(f => f.size > MAX_DATEI);
+  zuGross.forEach(f => gesamt.fehler.push({ datei: f.name, fehler: "größer als 95 MB" }));
+  const pakete = inPakete(dateien.filter(f => f.size <= MAX_DATEI));
+  const anzahl = dateien.length - zuGross.length;
+  let fertig = 0, abbruch = null;
   try {
-    const res = await fetch("api/ausgaben/belege", { method: "POST", body: fd });
-    const d = await res.json();
-    if (!res.ok) throw new Error(d.error || `Fehler ${res.status}`);
+    for (const paket of pakete) {
+      status.textContent = anzahl === 1 ? "1 Beleg wird gelesen …"
+        : pakete.length === 1 ? `${anzahl} Belege werden gelesen …` : `${fertig} von ${anzahl} Belegen gelesen …`;
+      try {
+        const d = await paketHochladen(paket);
+        gesamt.neu += d.neu.length;
+        gesamt.doppelt.push(...d.doppelt);
+        gesamt.fehler.push(...d.fehler);
+      } catch (e) { abbruch = e; break; }
+      fertig += paket.length;
+    }
     const teile = [];
-    if (d.neu.length) teile.push(`${d.neu.length} neu`);
-    if (d.doppelt.length) teile.push(`${d.doppelt.length} schon vorhanden (${d.doppelt.map(x => x.datei).join(", ")})`);
-    if (d.fehler.length) teile.push(`${d.fehler.length} nicht lesbar`);
-    toast(teile.join(" · ") || "Nichts hochgeladen", !!(d.fehler.length && !d.neu.length));
-    await ladeAusgaben();
-  } catch (e) { toast("Hochladen fehlgeschlagen: " + e.message, true); }
-  finally { $("#beleg-status").textContent = "oder klicken zum Auswählen"; }
+    if (gesamt.neu) teile.push(`${gesamt.neu} neu`);
+    if (gesamt.doppelt.length) {
+      const namen = gesamt.doppelt.length <= 5 ? ` (${gesamt.doppelt.map(x => x.datei).join(", ")})` : "";
+      teile.push(`${gesamt.doppelt.length} schon vorhanden${namen}`);
+    }
+    if (gesamt.fehler.length) {
+      const namen = gesamt.fehler.length <= 3 ? ` (${gesamt.fehler.map(x => x.datei).join(", ")})` : "";
+      teile.push(`${gesamt.fehler.length} nicht lesbar${namen}`);
+    }
+    if (abbruch) {
+      const rest = anzahl - fertig;
+      toast(`Hochladen abgebrochen: ${abbruch.message}. ${teile.length ? teile.join(" · ") + " · " : ""}`
+        + `${rest} Datei${rest === 1 ? "" : "en"} nicht verarbeitet – einfach noch einmal hineinziehen, Doppelte werden erkannt.`, true);
+    } else {
+      toast(teile.join(" · ") || "Nichts hochgeladen", !!(gesamt.fehler.length && !gesamt.neu));
+    }
+    if (fertig) await ladeAusgaben();
+  } finally {
+    hochladenLaeuft = false;
+    status.textContent = "oder klicken zum Auswählen";
+  }
 }
 
 const drop = $("#beleg-drop");

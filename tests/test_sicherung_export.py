@@ -132,3 +132,10 @@ def test_sicherung_mit_boesen_pfaden(client, tmp_path):
     assert os.path.exists(os.path.join(db.DATA_DIR, "belege", "2026", "1_ok.pdf"))
     assert not any(os.path.exists(os.path.join(p, n)) for p in (db.DATA_DIR, os.path.dirname(db.DATA_DIR))
                    for n in ("boese.txt", "boese2.txt", "anderes"))
+
+
+def test_zu_grosser_upload_liefert_verstaendliche_meldung(client):
+    import io
+    dateien = [(io.BytesIO(b"x"), f"{i}.pdf") for i in range(1001)]     # über der Grenze von 1000 Dateien je Anfrage
+    r = client.post("/api/ausgaben/belege", data={"dateien": dateien}, content_type="multipart/form-data")
+    assert r.status_code == 413 and "1000 Dateien" in r.get_json()["error"]
