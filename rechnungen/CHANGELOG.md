@@ -2,6 +2,18 @@
 
 Alle Änderungen an DJ Office Studio. Neueste Version oben.
 
+## 1.3.0 – 2026-11-20
+
+### Neu
+- **Belege-Ordner**: Alles, was in einem Ordner landet (PDFs, Fotos, Mails, Postfach-Exporte), liest die App automatisch ein – jede Minute und beim Öffnen der Ausgaben. In Home Assistant ist das `/share/belege` (wird angelegt), in der Desktop-Version ein frei wählbarer Ordner. Eingelesene Dateien wandern in den Unterordner „übernommen“. Praktisch mit Scanner-Apps, Cloud-Ordnern oder Mail-Regeln – ganz ohne Paperless.
+- **Ablage von Paperless direkt lesen**: Legt Paperless die Ausgaben per Speicherpfad in einen eigenen Ordner, findet **Ausgaben-Ordner von Paperless suchen** ihn selbst (z. B. `…/originals/DJ/*/Ausgaben` für alle Jahre). Keine Anmeldung nötig; die Dateien bleiben unverändert liegen (nur lesen), neue kommen automatisch dazu.
+
+### Geändert
+- Der Paperless-Teil in den Einstellungen und der Knopf „Aus Paperless abholen“ erscheinen nur noch, wenn „Paperless-ngx ist installiert“ angehakt ist. Die Anmeldung über die Paperless-Schnittstelle gibt es weiterhin als Alternative.
+
+### Behoben
+- Paperless-Schnittstelle: „Paperless meldet Fehler 403“ – die App hatte den Ingress-Eingang des Add-ons statt Paperless selbst erwischt. Gezählt wird jetzt nur eine echte Antwort von Paperless; eine falsch gefundene Adresse wird nicht mehr gespeichert und blockiert die weitere Suche nicht.
+
 ## 1.2.1 – 2026-11-20
 
 ### Verbessert

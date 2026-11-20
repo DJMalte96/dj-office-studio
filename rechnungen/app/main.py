@@ -64,6 +64,9 @@ FELDER = {
     "fahrt_standard": (bool, True),   # neue Rechnungen: „Fahrt erfassen“ an
     "startnummer": (int, 1), "angebot_startnummer": (int, 1), "angebot_gueltigkeit_tage": (int, 30),
     "pdf_ordner": (str, os.environ.get("STANDARD_PDF_ORDNER", "/share/rechnungen")),
+    # Belege-Ordner: alles, was hier landet, wird automatisch als Ausgabe eingelesen (leer = aus)
+    "belege_ordner": (str, "" if DESKTOP else "/share/belege"),
+    "belege_ordner_verschieben": (bool, True),   # aus = nur lesen (z. B. Ablage von Paperless – Dateien bleiben liegen)
     "paperless_installiert": (bool, False),
     "paperless_eingangsordner": (str, "" if DESKTOP else "/share/paperless/consume"),
     # Belege aus Paperless abholen (Finanzen → Ausgaben): Adresse, API-Token (geheim) und Tag der Ausgaben-Belege
@@ -211,6 +214,9 @@ def settings_put():
     a = absender()
     # Hinweise zu Ordnern (kein Fehler – der Ordner kann z. B. erst später angelegt werden)
     hinweise = []
+    ordner = (a.get("belege_ordner") or "").strip()
+    if ordner and "*" not in ordner and not os.path.isdir(ordner) and not os.path.isdir(os.path.dirname(os.path.abspath(ordner))):
+        hinweise.append(f"Belege-Ordner {ordner} wurde nicht gefunden.")
     if a["paperless_installiert"] and not os.path.isdir(a["paperless_eingangsordner"] or "-"):
         hinweise.append(f"Paperless-Eingangsordner {a['paperless_eingangsordner'] or '(leer)'} wurde nicht gefunden.")
     return jsonify({"einstellungen": _ohne_geheimnisse(a), "hinweise": hinweise})
@@ -276,7 +282,8 @@ def get_absender():
                    | {"vollstaendig": not fehlt, "fehlt": fehlt,
                       "kleinunternehmer": bool(a.get("kleinunternehmer")), "ust_satz": a.get("ust_satz") or 19,
                       "paperless": bool(a.get("paperless_installiert")),
-                      "paperless_belege": bool(a.get("paperless_url") and a.get("paperless_token") and a.get("paperless_tag")),
+                      "paperless_belege": bool(a.get("paperless_installiert") and a.get("paperless_url")
+                                               and a.get("paperless_token") and a.get("paperless_tag")),
                       "paperless_tag_name": a.get("paperless_tag_name") or "",
                       "angebot_gueltigkeit_tage": a.get("angebot_gueltigkeit_tage") or 30,
                       "mail": mail.konfiguriert(a),

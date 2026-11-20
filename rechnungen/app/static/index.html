@@ -385,11 +385,23 @@
           <div class="card">
             <h2>Ablage &amp; Paperless</h2>
             <label>Ordner für PDF-Kopien <span class="opt nur-ha">(unter /share oder /media)</span><input name="pdf_ordner" placeholder="/share/rechnungen"></label>
+            <label>Belege-Ordner <span class="opt">(wird automatisch eingelesen · leer = aus)</span>
+              <input name="belege_ordner" placeholder="/share/belege"></label>
+            <label class="inline"><input type="checkbox" name="belege_ordner_verschieben">
+              Eingelesene Dateien in den Unterordner „übernommen“ verschieben <span class="opt">(aus = nur lesen, z. B. für die Ablage von Paperless)</span></label>
+            <p class="mini-hinweis belege-ordner-hinweis">Alles, was in diesem Ordner landet (PDFs, Fotos, Mails), erscheint unter Finanzen → Ausgaben bei „Neu – bitte prüfen“. Praktisch mit Scanner-Apps, Cloud-Ordnern oder Mail-Regeln. Mit <code>*</code> im Pfad werden mehrere Ordner gelesen, z. B. <code>…/DJ/*/Ausgaben</code> für alle Jahre.</p>
             <label class="inline"><input type="checkbox" name="paperless_installiert">
               Paperless-ngx ist installiert – „An Paperless senden“ anzeigen</label>
             <label>Paperless-Eingangsordner (consume) <span class="opt nur-desktop">(z. B. Netzlaufwerk von Paperless)</span><input name="paperless_eingangsordner" placeholder="/share/paperless/consume"></label>
-            <div class="pl-belege">
-              <h3>Belege aus Paperless abholen <span class="h2-sub">für Finanzen → Ausgaben</span></h3>
+            <div class="pl-belege" id="pl-belege">
+              <h3>Belege aus Paperless <span class="h2-sub">für Finanzen → Ausgaben</span></h3>
+              <p class="mini-hinweis pl-text">Am einfachsten: Die App liest den Ordner, in dem Paperless die Ausgaben-Belege ablegt (z. B. per Speicherpfad <code>…/Ausgaben</code>). Keine Anmeldung nötig, in Paperless wird nichts verändert.</p>
+              <div class="row pl-verbinden-zeile">
+                <button type="button" class="small secondary" id="pl-ordner-suchen">Ausgaben-Ordner von Paperless suchen</button>
+                <span class="hint" id="pl-ordner-status"></span>
+              </div>
+              <details class="pl-erweitert" id="pl-api">
+              <summary>Alternativ: über die Paperless-Schnittstelle mit Anmeldung (Tag auswählen)</summary>
               <p class="hint pl-verbunden" id="pl-verbunden" hidden></p>
               <div class="grid2 pl-anmeldung">
                 <label>Paperless-Benutzername<input id="pl-benutzer" autocomplete="off"></label>
@@ -410,6 +422,7 @@
               <label>Tag der Ausgaben-Belege
                 <select name="paperless_tag"><option value="0">– erst Verbindung prüfen –</option></select></label>
               <input type="hidden" name="paperless_tag_name">
+              </details>
             </div>
           </div>
         </div>
@@ -548,6 +561,7 @@
           <span>PDF-Rechnungen · Fotos (JPG, PNG, HEIC) · Kauf-Mails (.eml, .msg) · ganze Mail-Ordner (.mbox) – auch viele auf einmal</span>
           <span class="hint" id="beleg-status">oder klicken zum Auswählen</span>
         </label>
+        <p class="ordner-stand" id="ordner-stand" hidden></p>
         <div class="mail-hilfe" id="mail-hilfe" hidden>
           <div class="row between"><strong id="mail-hilfe-grund"></strong><button type="button" class="icon" id="mail-hilfe-zu" title="Schließen">✕</button></div>
           <p>Apple Mail gibt Mails beim Ziehen nicht direkt an den Browser weiter. So klappt es:</p>

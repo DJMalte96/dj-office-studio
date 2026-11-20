@@ -25,6 +25,11 @@ import finanzen  # noqa: E402
 import main  # noqa: E402
 
 finanzen.HINTERGRUND = False   # keine Streckenberechnung im Hintergrund (kein Internet nötig)
+# Belege-Ordner /share/belege (Standard in Home Assistant) nachstellen – leer, damit die Bilder den Normalfall zeigen
+_ordner_liste = finanzen._ordner_liste
+finanzen._ordner_liste = lambda muster: ["/share/belege"] if muster == "/share/belege" else _ordner_liste(muster)
+_ordner_dateien = finanzen._ordner_dateien
+finanzen._ordner_dateien = lambda o, ruhe=5: iter(()) if o == "/share/belege" else _ordner_dateien(o, ruhe)
 
 db.init()
 db.save_settings({

@@ -26,7 +26,7 @@ async function ladeKategorien() {
 
 /* Wird von showTab() in app.js aufgerufen */
 function finanzenTab(name) {
-  if (name === "ausgaben") ladeAusgaben();
+  if (name === "ausgaben") { ladeAusgaben(); ordnerPruefen(); }
   if (name === "fahrten") ladeFahrten();
   if (name === "anschaffungen") ladeAnlagen();
   if (name === "finanzen") ladeUebersicht();
@@ -813,11 +813,13 @@ function plTagAuswahl(tags, gewaehlt, name) {
 
 function plEinstellungen(werte) {
   const f = $("#einstellungen").elements;
+  zeigePaperlessBelege();
   f.paperless_token.value = "";
   f.paperless_token.placeholder = werte.paperless_token_gesetzt ? "•••••••• gespeichert – nur zum Ändern neu eingeben" : "Token aus Paperless einfügen";
   $("#pl-token-status").textContent = werte.paperless_token_gesetzt ? "(gespeichert)" : "(wird nur lokal gespeichert)";
   plTagAuswahl(null, werte.paperless_tag, werte.paperless_tag_name);
   const verbunden = werte.paperless_token_gesetzt && werte.paperless_url;
+  if (verbunden) $("#pl-api").open = true;
   $("#pl-verbunden").hidden = !verbunden;
   $("#pl-verbunden").textContent = verbunden ? `✓ Verbunden mit ${werte.paperless_url} – erneut anmelden nur bei Problemen.` : "";
   $("#pl-verbinden").textContent = verbunden ? "Tags neu laden" : "Mit Paperless verbinden";
@@ -878,4 +880,56 @@ $("#paperless-abholen").addEventListener("click", async e => {
     if (st.neu || st.doppelt) await ladeAusgaben();
   } catch (err) { toast(err.message, true); }
   finally { btn.disabled = false; btn.textContent = text; }
+});
+
+// ---------- Belege-Ordner ----------
+
+const uhrzeit = iso => iso ? iso.slice(11, 16) : "";
+
+function zeigeOrdnerStand(st) {
+  const el = $("#ordner-stand");
+  el.hidden = !st.ordner;
+  if (!st.ordner) return;
+  el.classList.toggle("warn", !!st.problem);
+  el.innerHTML = st.problem ? `⚠ ${esc(st.problem)} – <a href="#" class="zu-einstellungen">Einstellungen</a>`
+    : `↻ Belege-Ordner <b>${esc(st.ordner)}</b> wird automatisch eingelesen${st.laeuft ? " – gerade …" : st.geprueft ? ` · zuletzt ${uhrzeit(st.geprueft)} Uhr` : ""}`;
+}
+
+async function ordnerPruefen() {
+  let st;
+  try { st = await api("belege-ordner/einlesen", { method: "POST" }); } catch (_) { return; }
+  const start = [st.start_neu, st.start_doppelt];
+  zeigeOrdnerStand(st);
+  for (let i = 0; st.laeuft && i < 600; i++) {
+    await new Promise(ok => setTimeout(ok, 1000));
+    try { st = await api("belege-ordner"); } catch (_) { return; }
+    zeigeOrdnerStand(st);
+  }
+  const neu = st.neu - (start[0] ?? st.neu), doppelt = st.doppelt - (start[1] ?? st.doppelt);
+  if (neu || doppelt) {
+    toast(`Belege-Ordner: ${neu ? `${neu} neu` : ""}${neu && doppelt ? " · " : ""}${doppelt ? `${doppelt} schon vorhanden` : ""}`);
+    await ladeAusgaben();
+  }
+}
+
+// Paperless-Teil nur zeigen, wenn „Paperless-ngx ist installiert“ angehakt ist
+function zeigePaperlessBelege() {
+  $("#pl-belege").hidden = !$("#einstellungen").elements.paperless_installiert.checked;
+}
+$("#einstellungen").elements.paperless_installiert.addEventListener("change", zeigePaperlessBelege);
+
+$("#pl-ordner-suchen").addEventListener("click", async e => {
+  const btn = e.currentTarget, status = $("#pl-ordner-status"), f = $("#einstellungen").elements;
+  btn.disabled = true;
+  status.textContent = "Suche …";
+  try {
+    const r = await api("belege-ordner/suchen", { method: "POST", body: {} });
+    // gefunden → sofort übernehmen: nur lesen (die Dateien gehören Paperless)
+    await api("einstellungen", { method: "PUT", body: { belege_ordner: r.ordner, belege_ordner_verschieben: false } });
+    f.belege_ordner.value = r.ordner;
+    f.belege_ordner_verschieben.checked = false;
+    status.textContent = `✓ Gefunden: ${r.ordner} (${r.anzahl} Beleg${r.anzahl === 1 ? "" : "e"}). Wird automatisch eingelesen – die Belege erscheinen unter Finanzen → Ausgaben.`;
+    toast("Ausgaben-Ordner von Paperless eingestellt");
+  } catch (err) { status.textContent = ""; toast(err.message, true); }
+  finally { btn.disabled = false; }
 });

@@ -98,6 +98,12 @@ CREATE TABLE IF NOT EXISTS ausgaben (
 );
 CREATE INDEX IF NOT EXISTS ausgaben_pruefsumme ON ausgaben(beleg_pruefsumme);
 -- Fahrten zu Veranstaltungen (automatisch je Rechnung oder von Hand)
+-- Belege-Ordner im Nur-lesen-Modus (z. B. Ablage von Paperless): bereits gesehene Dateien
+CREATE TABLE IF NOT EXISTS belege_ordner_dateien (
+    pfad TEXT PRIMARY KEY,
+    groesse INTEGER,
+    geaendert REAL
+);
 CREATE TABLE IF NOT EXISTS fahrten (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     rechnung_id INTEGER REFERENCES rechnungen(id) ON DELETE SET NULL,
