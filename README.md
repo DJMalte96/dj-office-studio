@@ -131,9 +131,10 @@ Ist unter ⚙ Einstellungen „Paperless-ngx ist installiert“ eingeschaltet, g
 
 **Ausgaben-Belege aus Paperless abholen** (Finanzen → Ausgaben): Liegen Rechnungen und Quittungen schon in Paperless und tragen dort einen Tag (z. B. „Ausgaben“), holt die App sie mit **⇩ Aus Paperless abholen** in die Ausgaben. Einrichten unter ⚙ Einstellungen → Ablage & Paperless:
 
-1. **Adresse von Paperless** eintragen – oder leer lassen, dann sucht die App das Paperless-Add-on in Home Assistant selbst. Für die Desktop-Version die Adresse im Heimnetz, z. B. `http://homeassistant.local:8000` (dafür muss das Add-on seinen Port freigeben).
-2. **API-Token** eintragen: in Paperless oben rechts über das Profil → *API-Auth-Token* (ggf. erst erzeugen).
-3. **Verbindung prüfen & Tags laden**, den Tag der Ausgaben-Belege wählen, speichern.
+1. **Paperless-Benutzername und -Passwort** eintragen (dieselbe Anmeldung wie in Paperless) und **Mit Paperless verbinden** klicken. Die App findet das Paperless-Add-on in Home Assistant selbst, holt sich einen Zugangsschlüssel (API-Token) und speichert das Passwort nicht.
+2. Den **Tag der Ausgaben-Belege** wählen – heißt ein Tag z. B. „Ausgaben“ oder „Belege“, ist er schon vorausgewählt. Die Auswahl wird sofort gespeichert.
+
+Unter *Erweitert* lassen sich Adresse und API-Token auch von Hand eintragen – nötig für die **Desktop-Version** (Adresse im Heimnetz, z. B. `http://homeassistant.local:8000`; dafür muss das Add-on seinen Port freigeben) oder wenn Paperless nicht als Add-on läuft. In Home Assistant fragt die App dafür den Supervisor nach den installierten Add-ons (Berechtigung `hassio_api`, nur lesend).
 
 Beim Abholen kommen alle Dokumente mit dem Tag – auch aus früheren Jahren –, die noch nicht übernommen sind. Die App speichert eine Kopie (die PDF mit Texterkennung aus Paperless), damit Export und Sicherung auch ohne laufendes Paperless funktionieren. Lieferant (Korrespondent) und Datum kommen aus Paperless, der Betrag wird aus dem Text gelesen; die Belege stehen dann unter **Neu – bitte prüfen**. Wurde ein Beleg schon von Hand hochgeladen, wird er nur verknüpft und nicht doppelt angelegt. In Paperless wird nichts verändert. Der API-Token wird wie das E-Mail-Passwort nur lokal gespeichert und ist nicht in der Sicherung enthalten.
 

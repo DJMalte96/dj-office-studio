@@ -656,3 +656,7 @@ table.euer-tabelle tr.gewinn td { font-weight: 800; font-size: 17px; border-top:
 .pl-verbinden-zeile { align-items: center; gap: 12px; margin-bottom: 12px; }
 .pl-verbinden-zeile .hint { margin: 0; }
 #pl-verbinden { white-space: nowrap; flex: none; }
+.pl-anmeldung { margin-bottom: 0; }
+.pl-verbunden { color: var(--text); margin: 0 0 10px; }
+.pl-erweitert { margin: 4px 0 14px; font-size: 14px; }
+.pl-erweitert summary { cursor: pointer; color: var(--muted); margin-bottom: 10px; }

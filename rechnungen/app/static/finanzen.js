@@ -817,11 +817,20 @@ function plEinstellungen(werte) {
   f.paperless_token.placeholder = werte.paperless_token_gesetzt ? "•••••••• gespeichert – nur zum Ändern neu eingeben" : "Token aus Paperless einfügen";
   $("#pl-token-status").textContent = werte.paperless_token_gesetzt ? "(gespeichert)" : "(wird nur lokal gespeichert)";
   plTagAuswahl(null, werte.paperless_tag, werte.paperless_tag_name);
+  const verbunden = werte.paperless_token_gesetzt && werte.paperless_url;
+  $("#pl-verbunden").hidden = !verbunden;
+  $("#pl-verbunden").textContent = verbunden ? `✓ Verbunden mit ${werte.paperless_url} – erneut anmelden nur bei Problemen.` : "";
+  $("#pl-verbinden").textContent = verbunden ? "Tags neu laden" : "Mit Paperless verbinden";
 }
 
-$("#einstellungen").elements.paperless_tag.addEventListener("change", e => {
-  const o = e.target.selectedOptions[0];
-  $("#einstellungen").elements.paperless_tag_name.value = Number(o.value) ? o.textContent.replace(/ \(\d+ Dokumente?\)$/, "") : "";
+$("#einstellungen").elements.paperless_tag.addEventListener("change", async e => {
+  const o = e.target.selectedOptions[0], f = $("#einstellungen").elements;
+  f.paperless_tag_name.value = Number(o.value) ? o.textContent.replace(/ \(\d+ Dokumente?\)$/, "") : "";
+  try {   // Tag sofort speichern – kein extra Klick auf „Speichern“ nötig
+    await api("einstellungen", { method: "PUT", body: { paperless_tag: o.value, paperless_tag_name: f.paperless_tag_name.value } });
+    await ladeAbsender();
+    if (Number(o.value)) toast(`Tag „${f.paperless_tag_name.value}“ gespeichert – unter Finanzen → Ausgaben „Aus Paperless abholen“`);
+  } catch (err) { toast(err.message, true); }
 });
 
 $("#pl-verbinden").addEventListener("click", async e => {
@@ -829,15 +838,22 @@ $("#pl-verbinden").addEventListener("click", async e => {
   btn.disabled = true;
   status.textContent = f.paperless_url.value.trim() ? "Verbinde …" : "Suche Paperless …";
   try {
-    const r = await api("paperless/verbinden", { method: "POST", body: { url: f.paperless_url.value.trim(), token: f.paperless_token.value.trim() } });
+    const r = await api("paperless/verbinden", { method: "POST", body: {
+      url: f.paperless_url.value.trim(), token: f.paperless_token.value.trim(),
+      benutzer: $("#pl-benutzer").value.trim(), passwort: $("#pl-passwort").value } });
     f.paperless_url.value = r.url;
+    $("#pl-passwort").value = "";
     if (!r.tags) { status.textContent = r.hinweis; return; }
+    if (r.token_gespeichert) plEinstellungen({ ...await api("einstellungen") });
     plTagAuswahl(r.tags, f.paperless_tag.value, f.paperless_tag_name.value);
-    status.textContent = `✓ Verbunden${r.gefunden ? " (automatisch gefunden)" : ""} – ${r.tags.length} Tags. Tag wählen und speichern.`;
-    if (!Number(f.paperless_tag.value)) {   // naheliegenden Tag vorschlagen
+    const gefunden = r.gefunden ? r.gefunden + " – " : "";
+    if (!Number(f.paperless_tag.value)) {   // naheliegenden Tag vorschlagen (wird sofort gespeichert)
       const v = r.tags.find(t => /ausgabe|beleg|eür|euer|steuer|rechnung/i.test(t.name));
       if (v) { f.paperless_tag.value = v.id; f.paperless_tag.dispatchEvent(new Event("change")); }
     }
+    status.textContent = Number(f.paperless_tag.value)
+      ? `✓ ${gefunden}verbunden. Tag „${f.paperless_tag_name.value}“ ist eingestellt – unten änderbar.`
+      : `✓ ${gefunden}verbunden. Jetzt unten den Tag deiner Ausgaben wählen.`;
   } catch (err) { status.textContent = ""; toast(err.message, true); }
   finally { btn.disabled = false; }
 });
