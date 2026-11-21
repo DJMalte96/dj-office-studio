@@ -2,6 +2,11 @@
 
 Alle Änderungen an DJ Office Studio. Neueste Version oben.
 
+## 1.4.2 – 2026-11-21
+
+### Geändert
+- Kleine Textkorrektur beim Extra in den Einstellungen.
+
 ## 1.4.1 – 2026-11-21
 
 ### Neu
