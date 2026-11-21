@@ -856,6 +856,92 @@ def anlage_zur_ausgabe(aid):
             con.execute("UPDATE ausgaben SET anlage_id = ? WHERE id = ?", (nid, aid))
 
 
+# ======================= Kleinunternehmer-Grenzen (§ 19 UStG, seit 2025) =======================
+
+KU_GRENZE_VORJAHR = 25000.0     # Umsatz im Vorjahr höchstens 25.000 € …
+KU_GRENZE_JAHR = 100000.0       # … und im laufenden Jahr höchstens 100.000 € (Überschreiten → sofort steuerpflichtig)
+
+
+def _euro(v):
+    return f"{v:,.2f} €".replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+def _zahlungen(rechnungen, jahr):
+    """Vereinnahmte Entgelte (netto) aus Rechnungen eines Jahres → [(datum, betrag)]; Erstattungen (Storno) negativ."""
+    jahr = str(jahr)
+    out = []
+    for r in rechnungen:
+        netto = sum(float(p.get("preis") or 0) for p in r["positionen"])
+        if r.get("storno_von"):
+            orig = next((x for x in rechnungen if x["id"] == r["storno_von"]), None)
+            if orig and orig["bezahlt"] and r["datum"].startswith(jahr):
+                out.append((r["datum"], netto))
+        elif r["bezahlt"] and (r.get("bezahlt_am") or "").startswith(jahr):
+            out.append((r["bezahlt_am"], netto))
+    return sorted(out)
+
+
+def kleinunternehmer_grenzen(jahr, a=None, rechnungen=None, heute=None):
+    """Stand gegenüber den Grenzen der Kleinunternehmerregelung. Umsatz = vereinnahmte Entgelte aus Rechnungen
+    (nach Zahlungseingang, wie in der EÜR; ohne sonstige Einnahmen und Geräteverkäufe). Nur für Kleinunternehmer."""
+    a = a or _einstellungen()
+    if not a.get("kleinunternehmer"):
+        return None
+    rechnungen = rechnungen if rechnungen is not None else db.list_invoices()
+    heute = heute or date.today()
+    jahr = int(jahr)
+    zahlungen = _zahlungen(rechnungen, jahr)
+    umsatz = _r2(sum(b for _, b in zahlungen))
+    vorjahr = _r2(sum(b for _, b in _zahlungen(rechnungen, jahr - 1)))
+    offen = _r2(sum(sum(float(p.get("preis") or 0) for p in r["positionen"]) for r in rechnungen
+                    if not r["bezahlt"] and not r.get("storno_von") and not r.get("storniert_durch")
+                    and r["datum"].startswith(str(jahr))))
+    laufend = jahr == heute.year
+    tag = heute.timetuple().tm_yday
+    tage = 366 if jahr % 4 == 0 and (jahr % 100 or jahr % 400 == 0) else 365
+    hochrechnung = _r2(umsatz / tag * tage) if laufend and tag >= 60 and umsatz > 0 else None
+    gruendungsjahr = not any(r["datum"] < f"{jahr}-01-01" for r in rechnungen)   # vorher keine Rechnungen in der App
+    ueber_100_am = None
+    summe = 0.0
+    for d, b in zahlungen:
+        summe += b
+        if summe > KU_GRENZE_JAHR:
+            ueber_100_am = d
+            break
+
+    h = []   # (stufe, text) – stufe: rot | gelb | info | ok
+    naechstes = jahr + 1
+    if vorjahr > KU_GRENZE_VORJAHR and not gruendungsjahr:
+        h.append(("rot", f"Umsatz {jahr - 1}: {_euro(vorjahr)} – mehr als 25.000 €. Damit gilt die Kleinunternehmerregelung "
+                         f"für {jahr} nicht: Rechnungen müssen Umsatzsteuer ausweisen (⚙ Einstellungen). Bitte mit dem Steuerberater klären."))
+    if ueber_100_am:
+        h.append(("rot", f"Seit {ueber_100_am[8:10]}.{ueber_100_am[5:7]}.{ueber_100_am[:4]} mehr als 100.000 € Umsatz in {jahr} – "
+                         "ab diesem Umsatz besteht sofort Umsatzsteuerpflicht. Bitte umgehend mit dem Steuerberater klären."))
+    elif umsatz >= 0.8 * KU_GRENZE_JAHR:
+        h.append(("gelb", f"Umsatz {jahr} schon {_euro(umsatz)} – ab mehr als 100.000 € im Jahr besteht sofort Umsatzsteuerpflicht."))
+    if gruendungsjahr and umsatz > KU_GRENZE_VORJAHR and not ueber_100_am:
+        h.append(("gelb", f"Ist {jahr} dein Gründungsjahr? Dann liegt die Grenze schon bei 25.000 € – mit dem Umsatz, "
+                          "der sie überschreitet, wird man umsatzsteuerpflichtig. Bitte mit dem Steuerberater klären."))
+    if umsatz > KU_GRENZE_VORJAHR:
+        h.append(("gelb", f"Umsatz {jahr}: {_euro(umsatz)} – mehr als 25.000 €. Für {naechstes} gilt die Kleinunternehmerregelung "
+                          f"dann nicht mehr: ab 1.1.{naechstes} Rechnungen mit Umsatzsteuer. Bitte mit dem Steuerberater klären."))
+    elif laufend and umsatz + offen > KU_GRENZE_VORJAHR:
+        h.append(("gelb", f"Mit den offenen Rechnungen ({_euro(offen)}) käme der Umsatz {jahr} auf {_euro(umsatz + offen)} – "
+                          f"über 25.000 €. Dann gilt die Kleinunternehmerregelung für {naechstes} nicht mehr."))
+    elif laufend and hochrechnung and hochrechnung > KU_GRENZE_VORJAHR:
+        h.append(("info", f"Grobe Hochrechnung für {jahr}: rund {_euro(round(hochrechnung, -2))} – über 25.000 €. "
+                          f"Bleibt es dabei, gilt die Kleinunternehmerregelung für {naechstes} nicht mehr."))
+    elif laufend and umsatz >= 0.8 * KU_GRENZE_VORJAHR:
+        h.append(("info", f"Noch {_euro(KU_GRENZE_VORJAHR - umsatz)} bis 25.000 € Umsatz in {jahr}."))
+    if not h:
+        h.append(("ok", f"Umsatz {jahr} unter den Grenzen der Kleinunternehmerregelung."))
+    rang = {"rot": 3, "gelb": 2, "info": 1, "ok": 0}
+    return {"jahr": jahr, "umsatz": umsatz, "vorjahr": vorjahr, "offen": offen, "hochrechnung": hochrechnung,
+            "grenze_vorjahr": KU_GRENZE_VORJAHR, "grenze_jahr": KU_GRENZE_JAHR, "laufend": laufend,
+            "gruendungsjahr": gruendungsjahr, "ueber_100_am": ueber_100_am,
+            "stufe": max((s for s, _ in h), key=rang.get), "hinweise": [{"stufe": s, "text": t} for s, t in h]}
+
+
 # ======================= EÜR (Einnahmen-Überschuss-Rechnung) =======================
 
 def _r2(v):
@@ -948,11 +1034,15 @@ def euer(jahr, a=None):
         {"id": "umsatzsteuer", "name": "Vereinnahmte Umsatzsteuer", "betrag": _r2(umsatzsteuer)}) if z["betrag"] or z["id"] == "rechnungen"]
     einnahmen = _r2(sum(z["betrag"] for z in zeilen_ein))
     ausgaben_summe = _r2(sum(z["betrag"] for z in zeilen_aus))
+    grenzen = kleinunternehmer_grenzen(jahr, a, rechnungen)
+    grenzen_pruefliste = [{"stufe": "warn", "text": x["text"], "aktion": "grenzen"}
+                          for x in (grenzen or {}).get("hinweise", []) if x["stufe"] in ("rot", "gelb")]
     return {"jahr": int(jahr), "kleinunternehmer": ku, "einnahmen": einnahmen, "ausgaben": ausgaben_summe,
             "gewinn": _r2(einnahmen - ausgaben_summe), "einnahmen_zeilen": zeilen_ein, "ausgaben_zeilen": zeilen_aus,
             "anzahl_rechnungen": anzahl, "fahrtkosten": _r2(fahrtkosten), "afa": _r2(afa), "sonstige": sonstige,
             "monate": [{"monat": m, "einnahmen": _r2(v["einnahmen"]), "ausgaben": _r2(v["ausgaben"])} for m, v in monate.items()],
-            "pruefliste": pruefliste(jahr, a, rechnungen)}
+            "pruefliste": pruefliste(jahr, a, rechnungen) + grenzen_pruefliste,
+            "grenzen": grenzen}
 
 
 def pruefliste(jahr, a, rechnungen=None):

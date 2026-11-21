@@ -676,3 +676,18 @@ table.euer-tabelle tr.gewinn td { font-weight: 800; font-size: 17px; border-top:
 .datum-versteckt { position: absolute; left: 0; bottom: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; border: 0; padding: 0; }
 label .datum-feld { margin-top: 6px; }
 label .datum-feld > input.datum { margin-top: 0; }
+/* Kleinunternehmer-Grenzen */
+#ku-grenzen { margin-bottom: 20px; }
+.ku-zwei { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; margin: 6px 0 14px; }
+@media (max-width: 760px) { .ku-zwei { grid-template-columns: 1fr; } }
+.ku-kopf { display: flex; justify-content: space-between; gap: 10px; font-size: 14px; color: var(--muted); }
+.ku-status { font-weight: 650; font-size: 13px; white-space: nowrap; }
+.ku-status.ok { color: var(--muted); } .ku-status.gelb { color: var(--gelb); } .ku-status.rot { color: var(--danger); }
+.ku-wert { margin: 4px 0 8px; font-size: 14px; color: var(--muted); }
+.ku-wert strong { font-size: 22px; color: var(--text); font-variant-numeric: tabular-nums; }
+.ku-balken { height: 10px; border-radius: 999px; background: var(--input-bg); overflow: hidden; }
+.ku-balken span { display: block; height: 100%; border-radius: 999px; background: var(--ein); }
+.ku-balken.gelb span { background: var(--gelb); } .ku-balken.rot span { background: var(--danger); }
+.ku-meter small { display: block; margin-top: 6px; color: var(--muted); font-size: 13px; }
+#ku-hinweise:empty { display: none; }
+#ku-hinweise { margin: 0 0 10px; }

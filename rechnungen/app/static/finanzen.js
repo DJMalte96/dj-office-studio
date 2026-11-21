@@ -639,7 +639,8 @@ async function ladeUebersicht() {
     <div class="card"><div class="kachel-titel">Einnahmen</div><div class="stat-gross">${euro2(d.einnahmen)}<small>${d.anzahl_rechnungen} bezahlte Rechnung${d.anzahl_rechnungen === 1 ? "" : "en"}</small></div></div>
     <div class="card"><div class="kachel-titel">Ausgaben</div><div class="stat-gross">${euro2(d.ausgaben)}<small>${fahrtAfa ? "inkl. " + fahrtAfa : "&nbsp;"}</small></div></div>
     <div class="card kachel-gewinn"><div class="kachel-titel">Gewinn</div><div class="stat-gross">${euro2(d.gewinn)}<small>${stand}</small></div></div>`;
-  $("#finanzen-hinweise").innerHTML = d.pruefliste.filter(p => p.stufe === "warn").map(p =>
+  zeichneGrenzen(d.grenzen);
+  $("#finanzen-hinweise").innerHTML = d.pruefliste.filter(p => p.stufe === "warn" && p.aktion !== "grenzen").map(p =>
     `<li class="gelb">${esc(p.text)}${p.aktion ? ` – <a href="#" data-pruef="${p.aktion}">${p.aktion === "bezahlt_am" ? "nachtragen" : "ansehen"}</a>` : ""}</li>`).join("");
   zeichneDiagramm(d.monate);
   const zeilen = d.ausgaben_zeilen.filter(z => z.betrag > 0);
@@ -795,8 +796,11 @@ async function renderStartFinanzen() {
   try { d = await api(`finanzen/euer?jahr=${jahr}`); } catch (_) { return; }
   $("#start-finanzen-titel").textContent = `Finanzen ${jahr}`;
   const neu = d.pruefliste.find(p => p.aktion === "ausgaben" && p.stufe === "warn" && /Beleg/.test(p.text));
+  const grenze = (d.grenzen?.hinweise || []).filter(h => h.stufe === "rot" || h.stufe === "gelb")[0];
   $("#start-finanzen-inhalt").innerHTML = `<div class="stat-gross">${euro2(d.gewinn)}<small>${d.gewinn >= 0 ? "Gewinn" : "Verlust"} bis heute · Einnahmen ${euro2(d.einnahmen)} · Ausgaben ${euro2(d.ausgaben)}</small></div>`
-    + (neu ? `<ul class="hinweise"><li class="gelb">${esc(neu.text)} – <a href="#" data-pruef="ausgaben">jetzt prüfen</a></li></ul>` : "");
+    + (neu || grenze ? `<ul class="hinweise">`
+      + (grenze ? `<li class="${grenze.stufe}">${grenze.stufe === "rot" ? "⚠ " : ""}${esc(grenze.text)} – <a href="#" data-goto-tab="finanzen">Übersicht</a></li>` : "")
+      + (neu ? `<li class="gelb">${esc(neu.text)} – <a href="#" data-pruef="ausgaben">jetzt prüfen</a></li>` : "") + `</ul>` : "");
 }
 
 // ---------- Paperless: Einstellungen und Abholen ----------
@@ -933,3 +937,35 @@ $("#pl-ordner-suchen").addEventListener("click", async e => {
   } catch (err) { status.textContent = ""; toast(err.message, true); }
   finally { btn.disabled = false; }
 });
+
+// ---------- Kleinunternehmer-Grenzen (Übersicht) ----------
+
+function grenzMeter(titel, wert, grenze, unterzeile) {
+  const anteil = wert / grenze, breite = Math.min(100, Math.max(0, anteil * 100));
+  const stufe = anteil > 1 ? "rot" : anteil >= 0.8 ? "gelb" : "ok";
+  const status = anteil > 1 ? "⚠ überschritten" : anteil >= 0.8 ? "△ knapp" : "✓ im Rahmen";
+  return `<div class="ku-kopf"><span>${titel}</span><span class="ku-status ${stufe}">${status}</span></div>
+    <div class="ku-wert"><strong>${euro2(wert)}</strong> <span>von ${grenze.toLocaleString("de-DE")} €</span></div>
+    <div class="ku-balken ${stufe}" role="meter" aria-valuemin="0" aria-valuemax="${grenze}" aria-valuenow="${wert}"
+      aria-label="${esc(titel)}: ${euro2(wert)} von ${grenze.toLocaleString("de-DE")} €"><span style="width:${breite}%"></span></div>
+    <small>${unterzeile}</small>`;
+}
+
+function zeichneGrenzen(g) {
+  const karte = $("#ku-grenzen");
+  karte.hidden = !g;
+  if (!g) return;
+  const j = g.jahr;
+  $("#ku-titel").textContent = `Kleinunternehmer-Grenzen ${j}`;
+  $("#ku-stand").textContent = g.laufend ? `Stand ${fmtDate(today())}` : "";
+  const rest25 = g.grenze_vorjahr - g.umsatz;
+  $("#ku-25").innerHTML = grenzMeter(`Umsatz ${j} – entscheidet über ${j + 1}`, g.umsatz, g.grenze_vorjahr,
+    (rest25 > 0 ? `noch ${euro2(rest25)} bis 25.000 €` : `über 25.000 € → ${j + 1} keine Kleinunternehmerregelung`)
+    + (g.laufend && g.offen ? ` · dazu offene Rechnungen ${euro2(g.offen)}` : "")
+    + (g.hochrechnung ? ` · grobe Hochrechnung fürs Jahr ~${euro2(Math.round(g.hochrechnung / 100) * 100)}` : ""));
+  $("#ku-100").innerHTML = grenzMeter(`Grenze im Jahr ${j}`, g.umsatz, g.grenze_jahr,
+    g.gruendungsjahr ? `Umsatz ${j - 1}: keine Rechnungen in der App – alte Rechnungen ggf. importieren`
+      : `Umsatz ${j - 1}: ${euro2(g.vorjahr)} ${g.vorjahr > g.grenze_vorjahr ? "– über 25.000 €" : "– unter 25.000 € ✓"}`);
+  $("#ku-hinweise").innerHTML = g.hinweise.filter(h => h.stufe !== "ok").map(h =>
+    `<li class="${h.stufe === "info" ? "" : h.stufe}">${h.stufe === "rot" ? "⚠ " : ""}${esc(h.text)}</li>`).join("");
+}

@@ -2,6 +2,15 @@
 
 Alle Änderungen an DJ Office Studio. Neueste Version oben.
 
+## 1.4.0 – 2026-11-21
+
+### Neu
+- **Kleinunternehmer-Grenzen im Blick**: Die Finanzen-Übersicht zeigt für Kleinunternehmer eine Karte mit dem Umsatz des Jahres gegenüber den Grenzen nach § 19 UStG (seit 2025):
+  - **25.000 €** – wer sie im Jahr überschreitet, ist im **nächsten** Jahr kein Kleinunternehmer mehr; ebenso, wenn der Vorjahresumsatz darüber lag.
+  - **100.000 €** – darüber besteht **sofort** Umsatzsteuerpflicht; die App nennt den Tag, an dem die Grenze überschritten wurde.
+  - Gezählt wird wie im Gesetz das tatsächlich eingenommene Geld (bezahlte Rechnungen nach Zahlungseingang, Stornos abgezogen). Offene Rechnungen und eine grobe Hochrechnung fürs Jahr zeigen, ob es knapp wird.
+  - Warnungen erscheinen auf der Übersicht, der Startseite und in der Prüfliste der EÜR. Hinweis fürs Gründungsjahr (dort gilt schon 25.000 €).
+
 ## 1.3.1 – 2026-11-21
 
 ### Behoben
