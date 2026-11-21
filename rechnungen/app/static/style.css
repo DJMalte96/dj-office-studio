@@ -691,3 +691,6 @@ label .datum-feld > input.datum { margin-top: 0; }
 .ku-meter small { display: block; margin-top: 6px; color: var(--muted); font-size: 13px; }
 #ku-hinweise:empty { display: none; }
 #ku-hinweise { margin: 0 0 10px; }
+/* kleines Extra ganz unten in den Einstellungen */
+.easter-egg { margin: 40px 0 8px; text-align: center; font-size: 12px; color: var(--muted); opacity: .55; transition: opacity .3s; }
+.easter-egg:hover { opacity: 1; }
