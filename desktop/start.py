@@ -166,6 +166,7 @@ def main():
     automatische_sicherung(db)
     port = freier_port()
     server = create_server(webapp.app, host="127.0.0.1", port=port, threads=8)
+    webapp.finanzen.ordner_waechter_starten()   # Belege-Ordner regelmäßig einlesen
     threading.Thread(target=server.run, daemon=True).start()
     url = f"http://127.0.0.1:{port}/"
     print(f"{APP_NAME} {webapp.APP_VERSION} läuft unter {url}", flush=True)

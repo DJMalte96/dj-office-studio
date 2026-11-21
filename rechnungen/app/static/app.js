@@ -202,7 +202,8 @@ function addDays(iso, n) {
 const gueltigkeitTage = () => Number(state.absender?.angebot_gueltigkeit_tage) || 30;
 
 $("#r-datum").addEventListener("change", e => {
-  if (istAngebot() && state.gueltigAuto && e.target.value) $("#a-gueltig").value = addDays(e.target.value, gueltigkeitTage());
+  // nur bei vollständigem Datum (die Texteingabe liefert bei ungültiger Eingabe den Rohtext)
+  if (istAngebot() && state.gueltigAuto && /^\d{4}-\d{2}-\d{2}$/.test(e.target.value)) $("#a-gueltig").value = addDays(e.target.value, gueltigkeitTage());
 });
 $("#a-gueltig").addEventListener("input", () => { state.gueltigAuto = false; });
 $("#logo").addEventListener("click", () => showTab("start"));

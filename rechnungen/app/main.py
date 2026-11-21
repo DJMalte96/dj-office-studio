@@ -362,6 +362,16 @@ for _t in db.TABLES:
 
 # ---------- Rechnungen ----------
 
+def _ist_datum(text):
+    """Leer oder gültiges Datum JJJJ-MM-TT (die Datumsfelder der Oberfläche liefern bei Tippfehlern den Rohtext)."""
+    if not text:
+        return True
+    try:
+        return bool(re.fullmatch(r"\d{4}-\d{2}-\d{2}", text)) and bool(date.fromisoformat(text))
+    except ValueError:
+        return False
+
+
 def _validate_invoice(data, inv_id=None, check_number=True, art="rechnung", pflicht=True):
     """pflicht=False (PDF-Vorschau): Pflichtangaben einer Rechnung noch nicht erzwingen."""
     angebot = art == "angebot"
@@ -378,6 +388,13 @@ def _validate_invoice(data, inv_id=None, check_number=True, art="rechnung", pfli
     positionen = [p for p in data.get("positionen") or [] if (p.get("beschreibung") or "").strip()]
     if not positionen:
         errors.append("Mindestens eine Position mit Beschreibung angeben")
+    if not _ist_datum(data.get("datum")):
+        errors.append(f"Ungültiges {'Angebots' if angebot else 'Rechnungs'}datum: {data.get('datum')}")
+    if angebot and not _ist_datum(data.get("gueltig_bis")):
+        errors.append(f"Ungültiges Datum bei „Gültig bis“: {data.get('gueltig_bis')}")
+    for p in positionen:
+        if not _ist_datum(p.get("lieferdatum")):
+            errors.append(f"Ungültiges Datum bei „{p['beschreibung'][:30]}“: {p.get('lieferdatum')}")
     for p in positionen:
         try:
             p["preis"] = round(float(p.get("preis") or 0), 2)
@@ -1167,6 +1184,7 @@ if __name__ == "__main__":
     from waitress import serve
 
     db.init()
+    finanzen.ordner_waechter_starten()   # Belege-Ordner regelmäßig einlesen
     port = int(os.environ.get("PORT", "8099"))
     print(f"DJ Office Studio läuft auf Port {port}")
     serve(app, host="0.0.0.0", port=port)

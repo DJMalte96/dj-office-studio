@@ -1482,9 +1482,9 @@ def _ordner_schleife():
         time.sleep(ORDNER_TAKT)
 
 
-@bp.before_app_request
-def _ordner_waechter_starten():
-    """Beim ersten Aufruf der App den Hintergrund-Wächter starten (in Tests ausgeschaltet)."""
+def ordner_waechter_starten():
+    """Hintergrund-Wächter für den Belege-Ordner – nur beim echten Programmstart (main.py bzw. Desktop-App),
+    nie in den Tests, damit er dort nicht gleichzeitig mit einem Test Dateien einliest."""
     if HINTERGRUND and not _ordner_waechter:
         t = threading.Thread(target=_ordner_schleife, daemon=True, name="belege-ordner")
         _ordner_waechter.append(t)

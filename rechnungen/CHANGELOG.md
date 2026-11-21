@@ -2,6 +2,13 @@
 
 Alle Änderungen an DJ Office Studio. Neueste Version oben.
 
+## 1.4.3 – 2026-11-21
+
+### Behoben
+- Rechnungen und Angebote: Ein ungültiges Datum (z. B. 31.02.) wird jetzt auch vom Server abgelehnt – mit verständlicher Meldung – statt gespeichert zu werden.
+- Angebote: Ein Tippfehler im Angebotsdatum führte beim automatischen Nachrechnen von „Gültig bis“ zu einem Fehler im Hintergrund; „Gültig bis“ bleibt jetzt einfach stehen, bis das Datum vollständig ist.
+- Belege-Ordner: Der Hintergrund-Wächter startet nur noch beim Programmstart (Home Assistant und Desktop-App) und nicht mehr beim ersten Seitenaufruf.
+
 ## 1.4.2 – 2026-11-21
 
 ### Geändert

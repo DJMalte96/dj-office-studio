@@ -99,3 +99,20 @@ def test_ohne_daten_verstaendlicher_fehler_statt_absturz(client):
                          ("post", "/api/kunden"), ("put", "/api/einstellungen"), ("post", "/api/versand")):
         r = getattr(client, methode)(url, data="kein json", content_type="text/plain")
         assert r.status_code < 500, (url, r.status_code)
+
+
+def test_ungueltige_daten_werden_abgelehnt(client):
+    """Die Datumsfelder der Oberfläche sind Textfelder – Tippfehler dürfen nicht in die Datenbank gelangen."""
+    from conftest import KUNDE
+    basis = {"nummer": "050", "kunde": KUNDE, "zahlungsbedingung": "8 Tage",
+             "positionen": [{"beschreibung": "DJ", "lieferdatum": "2026-10-05", "preis": 100}]}
+    r = client.post("/api/rechnungen", json=basis | {"datum": "31.02.2026"})
+    assert r.status_code == 400 and "Rechnungsdatum" in r.get_json()["error"]
+    r = client.post("/api/rechnungen", json=basis | {"datum": "2026-02-31"})
+    assert r.status_code == 400
+    r = client.post("/api/rechnungen", json=basis | {"datum": "2026-10-06", "positionen": [
+        {"beschreibung": "DJ", "lieferdatum": "5.10.", "preis": 100}]})
+    assert r.status_code == 400 and "Ungültiges Datum bei „DJ“" in r.get_json()["error"]
+    r = client.post("/api/angebote", json=basis | {"datum": "2026-10-06", "gueltig_bis": "irgendwann"})
+    assert r.status_code == 400 and "Gültig bis" in r.get_json()["error"]
+    assert client.post("/api/rechnungen", json=basis | {"datum": "2026-10-06"}).status_code == 201
