@@ -97,7 +97,9 @@ jobs:
           curl -sf -X POST -H "Content-Type: application/json" \
             -d '{"nummer":"001","datum":"2026-01-01","kunde":{"name":"Test","strasse":"Testweg 1","plz":"12345","ort":"Teststadt"},"zahlungsbedingung":"8 Tage","positionen":[{"beschreibung":"DJ","lieferdatum":"2026-01-01","preis":100}]}' \
             http://127.0.0.1:8765/api/rechnungen
-          curl -sf http://127.0.0.1:8765/api/rechnungen/1/pdf | head -c 5 | grep -q "%PDF"
+          # erst in eine Datei laden: „curl | head“ bricht curl je nach Timing mit Schreibfehler (Exit 23) ab
+          curl -sf -o "$RUNNER_TEMP/rechnung.pdf" http://127.0.0.1:8765/api/rechnungen/1/pdf
+          head -c 5 "$RUNNER_TEMP/rechnung.pdf" | grep -q "%PDF"
           ls "$DJOS_BASIS/PDFs"
           # Echte Streckenberechnung über OpenStreetMap mit dem SSL der gebauten App (öffentliche Adressen).
           # Bei einer Störung des öffentlichen Dienstes nur Warnung, kein Abbruch.
