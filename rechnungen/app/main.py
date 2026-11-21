@@ -141,7 +141,7 @@ def _asset_version(name):
 def index():
     with open(os.path.join(STATIC_DIR, "index.html"), encoding="utf-8") as f:
         html = f.read()
-    for name in ("style.css", "app.js", "finanzen.js"):
+    for name in ("style.css", "datum.js", "app.js", "finanzen.js"):
         html = html.replace(f'"static/{name}"', f'"static/{name}?v={_asset_version(name)}"')
     return Response(html, mimetype="text/html", headers={"Cache-Control": "no-cache"})
 

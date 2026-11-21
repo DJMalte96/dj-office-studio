@@ -2,6 +2,13 @@
 
 Alle Änderungen an DJ Office Studio. Neueste Version oben.
 
+## 1.3.1 – 2026-11-21
+
+### Behoben
+- **Datum eintippen in Safari und der Desktop-App am Mac**: Das Jahr ließ sich nicht eingeben („2019“ wurde zu „0019“). Alle Datumsfelder nehmen das Datum jetzt als Text im deutschen Format an – `7.10.2019`, `07.10.19` oder `07102019`, ohne Jahr gilt das aktuelle. Ein Kalender-Symbol im Feld öffnet weiterhin den Kalender. Ungültige Daten (z. B. 31.02.) werden abgelehnt.
+- **Beleg-Erkennung bei Händler-Rechnungen**: Beträge ohne €-Zeichen, bei denen „EUR“ nur in der Beschriftung steht (z. B. „Total EUR inkl. MwSt. 788,48“), werden jetzt erkannt. Zeilen mit „inkl. MwSt.“ bzw. „brutto“ haben Vorrang – vorher konnte die App aus der Steuertabelle den Nettobetrag nehmen. Auch die Umsatzsteuer aus Tabellen wie „19 % 662,59 125,89“ wird erkannt.
+- Belege aus Paperless: Das Datum im Beleg hat Vorrang vor dem Datum aus Paperless (dort steht oft der Tag des Imports).
+
 ## 1.3.0 – 2026-11-20
 
 ### Neu

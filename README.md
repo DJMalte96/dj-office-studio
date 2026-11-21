@@ -49,6 +49,8 @@ Oben in der Kopfzeile gibt es auf jeder Seite das Menü: **Start**, **Rechnungen
 
 **Neue Rechnung:** Kundennamen eintippen und einen Vorschlag übernehmen (oder neue Adresse eingeben). Pro Position einen Rechnungsposten wählen, von/bis eintragen, Lieferdatum und Preis ergänzen. Zahlungsbedingung wählen, dann **PDF-Vorschau** oder **Rechnung speichern & PDF öffnen**. Gespeichert wird eine Rechnung nur mit den Pflichtangaben: vollständige Anschrift des Kunden (Straße, PLZ, Ort) und ein Lieferdatum bei jeder Position. Die PDF-Vorschau geht auch ohne, Angebote sind davon ausgenommen. Mit dem Kopieren-Symbol bei einer Rechnung oder einem Angebot startet man einen neuen Beleg mit denselben Angaben.
 
+**Datum eingeben:** Alle Datumsfelder nehmen das Datum einfach getippt an – `7.10.2019`, `07.10.19` oder `07102019`; ohne Jahr (`7.10.`) gilt das aktuelle Jahr. Das Kalender-Symbol im Feld öffnet einen Kalender.
+
 **Rechnungen:** Oben die offenen Rechnungen mit Restzeit. Ist eine Rechnung bezahlt, Haken setzen – sie wandert ins Archiv. Bei überfälligen Rechnungen erzeugt der grüne Button die nächste Stufe (Zahlungserinnerung → 1. Mahnung → 2. Mahnung) als PDF. 🔒 schreibt eine Rechnung fest, ✕ löscht sie bzw. storniert sie, wenn sie schon festgeschrieben ist. Im Archiv stehen bezahlte und stornierte Rechnungen; dort lassen sich Rechnungen auch stornieren.
 
 ![Screenshot: Rechnungen](docs/bilder/rechnungen.png)

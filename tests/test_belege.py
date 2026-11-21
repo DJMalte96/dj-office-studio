@@ -113,3 +113,31 @@ def test_mbox_aufteilen_trennt_nur_an_echten_grenzen():
     teile = belege.mbox_aufteilen(mbox)
     assert [n for n, _ in teile] == ["Eins (1).eml", "Zwei (2).eml"]
     assert b"From hier geht es weiter" in teile[0][1] and teile[1][1].endswith(b"\nFrom zitiert\n")
+
+
+def test_brutto_ohne_euro_zeichen_und_steuertabelle():
+    """Händler-Rechnung: Beträge ohne €, Währung nur in „Total EUR inkl. MwSt.“, darunter Steuertabelle mit Netto."""
+    import belege
+    from fpdf import FPDF
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Helvetica", size=9)
+    for x, y, s in [(60, 20, "MUSIKHAUS BEISPIEL professional"), (20, 90, "Rechnung-Nr."), (60, 90, "VKRE-1234567"),
+                    (20, 96, "Rechnungsdatum:"), (60, 96, "07.10.2019"), (110, 96, "Kunden-Nr."), (140, 96, "1234567"),
+                    (110, 106, "Fälligkeit:"), (140, 106, "17.10.19"),
+                    (20, 115, "Pos.  Beschreibung"), (120, 115, "Menge Einheit Einzelpreis Brutto Betrag (Brutto)"),
+                    (20, 122, "1.0  VB00090557"), (120, 122, "1"), (130, 122, "Stück"), (150, 122, "788,48"), (175, 122, "788,48"),
+                    (20, 140, "Summe"), (110, 140, "11"), (125, 140, "Total EUR inkl. MwSt."), (175, 140, "788,48"),
+                    (20, 146, "MwSt."), (45, 146, "Netto-Betrag"), (75, 146, "MwSt.-Betrag"),
+                    (20, 151, "19 %"), (50, 151, "662,59"), (80, 151, "125,89"),
+                    (20, 156, "Gesamt EUR"), (50, 156, "662,59"), (80, 156, "125,89")]:
+        pdf.text(x, y, s)
+    v = belege.auswerten("rechnung.pdf", bytes(pdf.output()))
+    assert v["betrag"] == 788.48 and "inkl. MwSt." in v["fundstellen"]["betrag"]   # nicht 662,59 (netto)
+    assert (v["ust_satz"], v["ust_betrag"]) == (19.0, 125.89) and v["belegdatum"] == "2019-10-07"
+
+
+def test_zahlen_ohne_waehrung_nur_mit_euro_beschriftung():
+    import belege
+    assert belege.gesamt_vorschlag(["Gesamtbetrag EUR", "39,80"])[0] == 39.80
+    assert belege.zahlen_ohne_waehrung("Kunden-Nr. 2406713 Menge 11 Preis 1.234,56 und 5.33") == [1234.56, 5.33]

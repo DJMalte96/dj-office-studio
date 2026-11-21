@@ -667,3 +667,12 @@ table.euer-tabelle tr.gewinn td { font-weight: 800; font-size: 17px; border-top:
 .pl-text code { font-size: 12.5px; }
 #pl-api > summary { color: var(--muted); }
 #pl-ordner-suchen { white-space: nowrap; flex: none; }
+/* Datumsfelder (datum.js): Textfeld TT.MM.JJJJ mit Kalender-Knopf */
+.datum-feld { position: relative; display: block; }
+.datum-feld > input.datum { padding-right: 42px; font-variant-numeric: tabular-nums; }
+.datum-kalender { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); width: 32px; height: 32px; padding: 0;
+  border: none; background: transparent; color: var(--muted); border-radius: 8px; display: grid; place-items: center; cursor: pointer; box-shadow: none; }
+.datum-kalender:hover { color: var(--text); background: var(--input-bg); }
+.datum-versteckt { position: absolute; left: 0; bottom: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; border: 0; padding: 0; }
+label .datum-feld { margin-top: 6px; }
+label .datum-feld > input.datum { margin-top: 0; }

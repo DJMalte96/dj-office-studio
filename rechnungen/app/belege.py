@@ -44,10 +44,31 @@ def betraege(text):
     return out
 
 
+# Betrag ohne Währungszeichen, aber mit genau zwei Nachkommastellen (1.234,56 · 788,48 · 788.48)
+ZAHL_OHNE = re.compile(r"(?<![\d.,])(?:\d{1,3}(?:\.\d{3})+|\d+),\d{2}(?![\d,])|(?<![\d.,])\d+\.\d{2}(?![\d.])")
+WAEHRUNG = re.compile(r"(?i)(?<![a-z])(?:eur|euro)(?![a-z])|€")
+
+
+def zahlen_ohne_waehrung(text):
+    out = []
+    for m in ZAHL_OHNE.finditer(text):
+        try:
+            out.append(zahl(m.group(0)))
+        except ValueError:
+            continue
+    return out
+
+
 def _betrag_nach(zeilen, i, umfang=3, mit_stelle=False):
-    """Erster Euro-Betrag in Zeile i oder den folgenden Zeilen (optional mit der Fundstelle als Text)."""
+    """Erster Euro-Betrag in Zeile i oder den folgenden Zeilen (optional mit der Fundstelle als Text).
+    Steht die Währung nur in der Beschriftung (z. B. „Total EUR inkl. MwSt.  788,48“), zählen auch Zahlen ohne €:
+    in derselben Zeile die letzte, in den folgenden Zeilen die erste."""
+    ohne = bool(WAEHRUNG.search(zeilen[i]))
     for j, z in enumerate(zeilen[i:i + umfang]):
         b = betraege(z)
+        if not b and ohne:
+            nackt = zahlen_ohne_waehrung(z)
+            b = nackt[-1:] if j == 0 else nackt[:1]
         if b:
             stelle = zeilen[i] if j == 0 else f"{zeilen[i]} … {z}"
             return (b[0], stelle) if mit_stelle else b[0]
@@ -62,6 +83,14 @@ STEUER_WOERTER = r"(?:mwst\.?|mehrwertsteuer|ust\.?|umsatzsteuer|vat|erhobene st
 def gesamt_vorschlag(zeilen):
     """Gesamtbetrag: erstes Schlüsselwort nach Priorität (z. B. „Gesamtsumme“ vor „Summe“); sonst höchster Betrag.
     Zeilen mit „Zwischensumme“, „vor Steuern“, „netto“ werden übersprungen."""
+    # Vorrang: ausdrücklich Bruttobetrag („Total EUR inkl. MwSt.“, „Gesamt brutto“) – sonst greift „Gesamt“
+    # womöglich in der Steuertabelle den Nettobetrag ab
+    brutto = re.compile(r"(?i)(?:gesamt|summe|total|betrag|zu zahlen).*(?:inkl|incl|brutto)|(?:inkl|incl|brutto).*(?:gesamt|summe|total)")
+    for i, z in enumerate(zeilen):
+        if brutto.search(z) and not re.search(r"(?i)zwischen|sub\s*total|subtotal|einzelpreis", z):
+            b, stelle = _betrag_nach(zeilen, i, umfang=2, mit_stelle=True)
+            if b is not None:
+                return b, stelle[:80]
     for wort in GESAMT_WOERTER:
         muster = re.compile(rf"(?<![a-zäöü]){wort}(?![a-zäöü])", re.I)
         for i, z in enumerate(zeilen):
@@ -75,6 +104,15 @@ def gesamt_vorschlag(zeilen):
 
 def steuer_vorschlag(zeilen, gesamt=None):
     """Umsatzsteuer: (Satz in %, Betrag) – Satz aus „19 %“, sonst aus Verhältnis Steuer/Gesamt geschätzt."""
+    # Steuertabelle ohne Währungszeichen: „19 %   662,59   125,89“ (Satz, Netto, Steuer) – passt die Steuer zum Gesamtbetrag?
+    if gesamt:
+        for z in zeilen:
+            m = re.match(r"\s*(19|7)(?:[.,]0+)?\s*%", z)
+            nackt = zahlen_ohne_waehrung(z[m.end():]) if m else []
+            if m and nackt:
+                satz, steuer = float(m.group(1)), nackt[-1]
+                if abs(steuer - gesamt * satz / (100 + satz)) <= 0.05:
+                    return satz, steuer
     for i, z in enumerate(zeilen):
         if re.search(rf"(?i)(?<![a-zäöü]){STEUER_WOERTER}(?![a-zäöü])", z) and not re.search(r"(?i)ust-?id|vat id|steuernummer", z):
             satz = re.search(r"(\d{1,2})(?:[.,]\d+)?\s*%", z)

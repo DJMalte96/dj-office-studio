@@ -111,7 +111,7 @@ def beleg_aufnehmen(name, daten, paperless=None):
             v["hinweise"].append("Werte aus der Texterkennung von Paperless" if t["betrag"] is not None
                                  else "Gesamtbetrag nicht gefunden – bitte eintragen")
         v["lieferant"] = paperless.get("korrespondent") or v["lieferant"] or paperless.get("titel")
-        v["belegdatum"] = paperless.get("datum") or v["belegdatum"]
+        v["belegdatum"] = v["belegdatum"] or paperless.get("datum")   # Datum im Beleg schlägt Paperless (dort oft der Importtag)
         v["beschreibung"] = v["beschreibung"] or paperless.get("titel")
         v["hinweise"].append(f"Aus Paperless (Dokument {pl_id})")
     kategorie = _kategorie_fuer(v["lieferant"]) or v["kategorie"] or "sonstiges"
