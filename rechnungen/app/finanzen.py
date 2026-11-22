@@ -45,6 +45,18 @@ def _belege_ordner():
     return os.path.join(db.DATA_DIR, "belege")
 
 
+def _beleg_pfad(a):
+    """Pfad der Belegdatei – nur innerhalb von belege/, sonst None. beleg_datei kann aus einer eingespielten
+    Sicherung stammen und ist deshalb nicht vertrauenswürdig."""
+    try:
+        pfad = os.path.realpath(os.path.join(db.DATA_DIR, a["beleg_datei"] or ""))
+        if pfad.startswith(os.path.realpath(_belege_ordner()) + os.sep) and os.path.isfile(pfad):
+            return pfad
+    except (ValueError, OSError):
+        pass
+    return None
+
+
 def _zeile(r):
     d = dict(r)
     d["erkannt"] = json.loads(d.pop("erkannt_json") or "{}")
@@ -298,19 +310,18 @@ def ausgabe_loeschen(aid):
     with db.connect() as con:
         con.execute("DELETE FROM ausgaben WHERE id = ?", (aid,))
         con.execute("DELETE FROM anlagen WHERE ausgabe_id = ?", (aid,))
-    if a.get("beleg_datei"):
+    pfad = _beleg_pfad(a)
+    if pfad:
         try:
-            os.remove(os.path.join(db.DATA_DIR, a["beleg_datei"]))
+            os.remove(pfad)
         except OSError:
             pass
     return "", 204
 
 
 def _beleg_bytes(a):
-    if not a.get("beleg_datei"):
-        abort(404)
-    pfad = os.path.realpath(os.path.join(db.DATA_DIR, a["beleg_datei"]))
-    if not pfad.startswith(os.path.realpath(_belege_ordner()) + os.sep) or not os.path.isfile(pfad):
+    pfad = _beleg_pfad(a)
+    if not pfad:
         abort(404)
     with open(pfad, "rb") as f:
         return f.read()
@@ -1200,8 +1211,8 @@ def export_finanzen(zf, jahr, a):
     for x in liste_:
         datei = ""
         if x.get("beleg_datei"):
-            pfad = os.path.join(db.DATA_DIR, x["beleg_datei"])
-            if os.path.isfile(pfad):
+            pfad = _beleg_pfad(x)
+            if pfad:
                 endung = os.path.splitext(x["beleg_name"] or x["beleg_datei"])[1].lower() or ".dat"
                 stamm = _dateiname(f"{x['bezahlt_am'] or x['belegdatum']}_{x['lieferant']}_{_b(x['betrag'])}")
                 datei, n = f"{stamm}{endung}", 2
@@ -1644,8 +1655,8 @@ def texterkennung_durchlauf():
                 con.execute("UPDATE ausgaben SET ocr = 'laeuft', ocr_versuche = COALESCE(ocr_versuche, 0) + 1 WHERE id = ?", (a["id"],))
             stand, text, problem = "fertig", None, None
             try:
-                pfad = os.path.realpath(os.path.join(db.DATA_DIR, a["beleg_datei"] or ""))
-                if not pfad.startswith(os.path.realpath(_belege_ordner()) + os.sep) or not os.path.isfile(pfad):
+                pfad = _beleg_pfad(a)
+                if not pfad:
                     raise texterkennung.Fehlgeschlagen("Datei fehlt")
                 text = texterkennung.lesen(pfad)
             except texterkennung.NichtVerfuegbar as e:

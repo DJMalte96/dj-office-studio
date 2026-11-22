@@ -139,3 +139,34 @@ def test_zu_grosser_upload_liefert_verstaendliche_meldung(client):
     dateien = [(io.BytesIO(b"x"), f"{i}.pdf") for i in range(1001)]     # über der Grenze von 1000 Dateien je Anfrage
     r = client.post("/api/ausgaben/belege", data={"dateien": dateien}, content_type="multipart/form-data")
     assert r.status_code == 413 and "1000 Dateien" in r.get_json()["error"]
+
+
+def test_manipulierte_sicherung_kommt_nicht_aus_der_belegablage(client, tmp_path):
+    """beleg_datei stammt beim Einspielen aus einer fremden Datei: Verwerfen, Export und Ansicht bleiben in belege/."""
+    import io
+    import sqlite3
+    import zipfile
+
+    opfer = tmp_path / "wichtig.txt"
+    opfer.write_text("GEHEIM")
+    ids = [client.post("/api/ausgaben", json={"belegdatum": "2026-01-02", "lieferant": f"Probe {i}", "betrag": 5,
+                                              "kategorie": "technik", "notiz": "x"}).get_json()["id"] for i in range(3)]
+    sicherung = zipfile.ZipFile(io.BytesIO(client.get("/api/backup").data))
+    dbname = next(n for n in sicherung.namelist() if n.endswith(".db"))
+    manipuliert = tmp_path / "manipuliert.db"
+    manipuliert.write_bytes(sicherung.read(dbname))
+    con = sqlite3.connect(manipuliert)
+    for aid, pfad in zip(ids, ("../wichtig.txt", str(opfer), "belege/../wichtig.txt")):
+        con.execute("UPDATE ausgaben SET beleg_datei = ?, beleg_name = 'b.txt' WHERE id = ?", (pfad, aid))
+    con.commit()
+    con.close()
+    r = client.post("/api/backup", data={"datei": (io.BytesIO(manipuliert.read_bytes()), "sicherung.db")},
+                    content_type="multipart/form-data")
+    assert r.status_code == 200, r.get_json()
+
+    export = zipfile.ZipFile(io.BytesIO(client.get("/api/export?jahr=2026").data))
+    assert not any(b"GEHEIM" in export.read(n) for n in export.namelist())
+    for aid in ids:
+        assert client.get(f"/api/ausgaben/{aid}/beleg").status_code == 404
+        assert client.delete(f"/api/ausgaben/{aid}").status_code == 204
+    assert opfer.read_text() == "GEHEIM"
