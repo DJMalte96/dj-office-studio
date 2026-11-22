@@ -882,6 +882,15 @@
   </dialog>
 
   <!-- ================= QR-Code zum Bezahlen ================= -->
+  <dialog id="absender-dialog" class="dialog absender-dialog" aria-labelledby="absender-dialog-titel">
+    <h2 id="absender-dialog-titel">Welche Rechnungen sind schon verschickt?</h2>
+    <p>Du änderst Absender, Bankverbindung oder Steuerangaben. Diese Rechnungen sind noch nicht festgeschrieben:</p>
+    <div class="absender-liste" id="absender-liste"></div>
+    <p class="hint"><b>Angehakt</b> = schon beim Kunden: wird mit dem <b>bisherigen</b> Absender festgeschrieben (danach nur noch Storno).<br>
+      <b>Ohne Haken</b> = noch nicht verschickt: bekommt den neuen Absender.</p>
+    <div class="actions"><button type="button" class="secondary" id="absender-abbrechen">Abbrechen</button>
+      <button type="button" id="absender-speichern">Speichern</button></div>
+  </dialog>
   <dialog id="qr-dialog" class="dialog qr-dialog">
     <h2 id="qr-titel">Rechnung bezahlen</h2>
     <p class="hint">Mit der Banking-App scannen („Fotoüberweisung“ bzw. „QR-Code scannen“) – Empfänger, Betrag und Verwendungszweck sind dann schon ausgefüllt.</p>

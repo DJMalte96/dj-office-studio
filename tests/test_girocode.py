@@ -44,7 +44,7 @@ def test_qr_code_nur_wo_ueberwiesen_wird(client):
     assert not qr_im_pdf(client.get(f"/api/angebote/{a}/pdf").data)
     # abschaltbar
     neu = neue_rechnung(client, nummer="045")
-    client.put("/api/einstellungen", json={"girocode": False})
+    client.put("/api/einstellungen", json={"girocode": False, "schon_verschickt": []})  # Entwurf da, Absender geändert → Antwort auf die Rückfrage
     assert not qr_im_pdf(client.get(f"/api/rechnungen/{neu}/pdf").data)
 
 

@@ -173,7 +173,7 @@ def test_fehler_werden_verstaendlich_gemeldet(client, smtp):
     daten = {"art": "rechnung", "id": inv, "an": "anna@example.de", "betreff": "x", "text": "y"}
     r = client.post("/api/versand", json=daten)   # noch nicht eingerichtet
     assert r.status_code == 502 and "nicht eingerichtet" in r.get_json()["error"]
-    einrichten(client)
+    einrichten(client, schon_verschickt=[])  # Entwurf da, Absender geändert → Antwort auf die Rückfrage
     assert client.post("/api/versand", json=daten | {"an": "kaputt"}).status_code == 400
     smtp.login_fehler = True
     r = client.post("/api/versand", json=daten)

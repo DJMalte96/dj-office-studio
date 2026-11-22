@@ -125,6 +125,42 @@ def absender():
     return {k: gespeichert.get(k, standard) for k, (_, standard) in FELDER.items()}
 
 
+# ---------- Absender eines ausgestellten Belegs ----------
+#
+# Ein festgeschriebener Beleg behält den Absender, mit dem er ausgestellt wurde (Anschrift, Bank, Steuerangaben) –
+# sonst trüge die alte Rechnung nach einem Umzug die neue Anschrift. Regeln:
+# - Jedes Erzeugen eines Beleg-PDFs nimmt absender_fuer(), jedes Festschreiben übergibt absender_jetzt().
+# - Entwürfe und Angebote folgen den Einstellungen. Ändert sich dort der Absender, fragt settings_put,
+#   welche Entwürfe schon verschickt sind – die werden mit dem bisherigen Absender festgeschrieben.
+# - Eine Mahnung hält ihren eigenen fest (neues Schreiben), der GiroCode am Bildschirm nimmt immer das aktuelle Konto.
+
+ABSENDER_FRAGE = ("name", "strasse", "plz_ort", "ort_fuer_datum", "telefon", "bank_name", "kontoinhaber", "iban", "bic",
+                  "girocode", "steuernummer", "ust_idnr")
+ABSENDER_FELDER = ABSENDER_FRAGE + ("kleinunternehmer",)    # nur für ältere Belege ohne eigene Steuerangabe
+
+
+def absender_jetzt(quelle="festgeschrieben", a=None):
+    """Festzuhaltender Absender – None, solange noch keiner eingetragen ist (dann wird er später nachgetragen)."""
+    a = a or absender()
+    if not all(str(a.get(k) or "").strip() for k in ("name", "strasse", "plz_ort")):
+        return None
+    return {k: a.get(k) for k in ABSENDER_FELDER} | {"quelle": quelle}
+
+
+def absender_fuer(beleg, a=None):
+    """Einstellungen für das PDF dieses Belegs."""
+    a, fest = a or absender(), beleg.get("absender") or {}
+    return a | {k: fest[k] for k in ABSENDER_FELDER if k in fest}
+
+
+def absender_festhalten():
+    """Beim Programmstart, nach dem Einspielen einer Sicherung und nach dem Speichern der Einstellungen."""
+    n = db.absender_nachtragen(absender_jetzt("nachgetragen"))
+    if n:
+        print(f"Absender bei {n} festgeschriebenen Belegen festgehalten", flush=True)
+    return n
+
+
 def pdf_dir():
     return absender().get("pdf_ordner") or os.path.join(db.DATA_DIR, "pdf")
 
@@ -210,7 +246,22 @@ def settings_put():
                 fehler.append(f"Ungültige E-Mail-Adresse: {werte[k]}")
     if fehler:
         return jsonify({"error": "; ".join(fehler)}), 400
+    alt = absender()
+    bisher = absender_jetzt(a=alt)
+    anders = {k for k in ABSENDER_FRAGE if k in werte and _normal(werte[k]) != _normal(alt.get(k))} if bisher else set()
+    rechnungen = db.list_invoices() if anders else []
+    entwuerfe = [r for r in rechnungen if not r["festgeschrieben"]]
+    if entwuerfe:
+        ids = daten.get("schon_verschickt")
+        if not isinstance(ids, list) or not all(type(i) is int for i in ids):
+            return jsonify({"error": "Absender geändert: Bitte angeben, welche offenen Rechnungen schon verschickt sind.",
+                            "offene_rechnungen": [{"id": r["id"], "nummer": r["nummer"], "datum": r["datum"],
+                                                   "kunde": r["kunde"].get("name", ""), "gesamt": r["gesamt"]} for r in entwuerfe]}), 409
+        for r in entwuerfe:
+            if r["id"] in ids:
+                db.festschreiben(r["id"], bisher)
     db.save_settings(werte)
+    absender_festhalten()
     a = absender()
     # Hinweise zu Ordnern (kein Fehler – der Ordner kann z. B. erst später angelegt werden)
     hinweise = []
@@ -219,7 +270,16 @@ def settings_put():
         hinweise.append(f"Belege-Ordner {ordner} wurde nicht gefunden.")
     if a["paperless_installiert"] and not os.path.isdir(a["paperless_eingangsordner"] or "-"):
         hinweise.append(f"Paperless-Eingangsordner {a['paperless_eingangsordner'] or '(leer)'} wurde nicht gefunden.")
+    if anders & {"iban", "bic", "kontoinhaber"}:
+        n = sum(1 for r in db.list_invoices() if r["festgeschrieben"] and not r["bezahlt"] and not r["storniert_durch"] and not r["storno_von"])
+        if n:
+            hinweise.append(f"{n} offene festgeschriebene Rechnung{'' if n == 1 else 'en'} zeig{'t' if n == 1 else 'en'} weiter das bisherige Konto. "
+                            "Neue Mahnungen und der QR-Code am Bildschirm nehmen das neue.")
     return jsonify({"einstellungen": _ohne_geheimnisse(a), "hinweise": hinweise})
+
+
+def _normal(wert):
+    return bool(wert) if isinstance(wert, bool) else " ".join(str(wert or "").split())
 
 
 # ---------- Update-Prüfung (nur Desktop-Version) ----------
@@ -460,7 +520,7 @@ def _write_pdf_file(inv):
         os.makedirs(target, exist_ok=True)
         path = os.path.join(target, pdf_filename(inv))
         with open(path, "wb") as f:
-            f.write(build_invoice_pdf(inv, absender()))
+            f.write(build_invoice_pdf(inv, absender_fuer(inv)))
         return path
     except OSError as e:
         app.logger.warning("PDF konnte nicht gespeichert werden: %s", e)
@@ -534,7 +594,7 @@ def invoices_paid(inv_id):
     inv = db.get_invoice(inv_id) or abort(404)
     if inv["storno_von"] or inv["storniert_durch"]:
         return _fehler("Stornierte Rechnungen und Stornorechnungen haben keinen Zahlstatus.")
-    db.set_paid(inv_id, _daten().get("bezahlt"))
+    db.set_paid(inv_id, _daten().get("bezahlt"), absender_jetzt())
     return "", 204
 
 
@@ -551,7 +611,7 @@ def invoices_delete(inv_id):
 @app.post("/api/rechnungen/<int:inv_id>/festschreiben")
 def invoices_lock(inv_id):
     db.get_invoice(inv_id) or abort(404)
-    db.festschreiben(inv_id)
+    db.festschreiben(inv_id, absender_jetzt())
     return "", 204
 
 
@@ -572,9 +632,10 @@ def invoices_cancel(inv_id):
         "kleinunternehmer": inv.get("kleinunternehmer"), "ust_satz": inv.get("ust_satz"),
         "veranstaltungsort": inv.get("veranstaltungsort"), "fahrt_erfassen": False,
         "bezahlt": True, "festgeschrieben": True, "storno_von": inv_id,
+        "absender": absender_jetzt(),       # neues Dokument von heute
     }
     storno_id = db.save_invoice(storno)
-    db.set_storniert(inv_id, storno_id)
+    db.set_storniert(inv_id, storno_id, absender_jetzt())
     storno = db.get_invoice(storno_id)
     return jsonify({"id": storno_id, "nummer": storno["nummer"], "datei": _write_pdf_file(storno)}), 201
 
@@ -601,15 +662,16 @@ def invoices_dunning(inv_id):
         return _fehler("Es wurden bereits Zahlungserinnerung, 1. und 2. Mahnung erstellt.")
     heute = date.today()
     frist = (heute + timedelta(days=absender()["mahnfrist_tage"] or 7)).isoformat()
-    mahnung_id = db.add_mahnung(inv_id, stufe, heute.isoformat(), frist)
-    db.festschreiben(inv_id)
+    fest = absender_jetzt()
+    mahnung_id = db.add_mahnung(inv_id, stufe, heute.isoformat(), frist, fest)
+    db.festschreiben(inv_id, fest)
     mahnung = db.get_mahnung(mahnung_id)
     datei = None
     try:   # Kopie im PDF-Ordner ablegen
         os.makedirs(pdf_dir(), exist_ok=True)
         datei = os.path.join(pdf_dir(), mahnung_filename(inv, mahnung))
         with open(datei, "wb") as f:
-            f.write(build_mahnung_pdf(inv, mahnung, absender(), _faellig_am(inv)))
+            f.write(build_mahnung_pdf(inv, mahnung, absender_fuer(mahnung), _faellig_am(inv)))
     except OSError as e:
         app.logger.warning("Mahnung konnte nicht gespeichert werden: %s", e)
         datei = None
@@ -620,7 +682,7 @@ def invoices_dunning(inv_id):
 def dunning_pdf(mahnung_id):
     mahnung = db.get_mahnung(mahnung_id) or abort(404)
     inv = db.get_invoice(mahnung["rechnung_id"]) or abort(404)
-    return Response(build_mahnung_pdf(inv, mahnung, absender(), _faellig_am(inv)), mimetype="application/pdf",
+    return Response(build_mahnung_pdf(inv, mahnung, absender_fuer(mahnung), _faellig_am(inv)), mimetype="application/pdf",
                     headers={"Content-Disposition": f'inline; filename="{mahnung_filename(inv, mahnung)}"'})
 
 
@@ -699,6 +761,7 @@ def backup_restore():
         db.sichern(vorher)
         letzte = db.get_settings().get("_letzte_sicherung")
         db.wiederherstellen(pfad)
+        absender_festhalten()       # ältere Sicherung: mit dem Absender aus ihren eigenen Einstellungen
         belege = _belege_uebernehmen(belege_tmp)
         if letzte and letzte > (db.get_settings().get("_letzte_sicherung") or ""):
             db.save_settings({"_letzte_sicherung": letzte})   # Zeitpunkt der letzten Sicherung nicht zurückdrehen
@@ -764,7 +827,7 @@ def export_year():
             w.writerow([r["nummer"], r["datum"], leistung, r["kunde"].get("name", ""), r["kunde"].get("ort", ""),
                         _betrag(netto), f"{satz:g} %" if satz else "", _betrag(r["gesamt"] - netto) if satz else "",
                         _betrag(r["gesamt"]), status, r.get("bezahlt_am") or "", bezug, name])
-            zf.writestr(f"PDFs/{name}", build_invoice_pdf(r, a))
+            zf.writestr(f"PDFs/{name}", build_invoice_pdf(r, absender_fuer(r, a)))
         summe = sum(r["gesamt"] for r in rechnungen)
         bezahlt = sum(r["gesamt"] for r in rechnungen if r["bezahlt"] and not r["storno_von"])
         w.writerow([])
@@ -786,9 +849,9 @@ def _de(iso):
         return ""
 
 
-def _versand_beleg(art, beleg_id, mahnung_id=None):
+def _versand_beleg(art, beleg_id, mahnung_id=None, a=None):
     """Beleg, Anhänge und Platzhalter-Werte für eine E-Mail. art: rechnung | angebot | mahnung."""
-    a = absender()
+    a = a or absender()
     if art == "angebot":
         beleg = db.get_offer(beleg_id) or abort(404)
     elif art in ("rechnung", "mahnung"):
@@ -798,9 +861,10 @@ def _versand_beleg(art, beleg_id, mahnung_id=None):
     mahnung = None
     if art == "mahnung":
         mahnung = next((m for m in beleg["mahnungen"] if m["id"] == mahnung_id), None) or abort(404)
-    anhaenge = [(pdf_filename(beleg), build_invoice_pdf(beleg, a))]
+    anhaenge = [(pdf_filename(beleg), build_invoice_pdf(beleg, absender_fuer(beleg, a)))]
     if mahnung:
-        anhaenge.insert(0, (mahnung_filename(beleg, mahnung), build_mahnung_pdf(beleg, mahnung, a, _faellig_am(beleg))))
+        anhaenge.insert(0, (mahnung_filename(beleg, mahnung),
+                            build_mahnung_pdf(beleg, mahnung, absender_fuer(mahnung, a), _faellig_am(beleg))))
     offen = art != "angebot" and not beleg["bezahlt"] and not beleg["storno_von"]
     werte = {
         "kunde": beleg["kunde"].get("name", ""),
@@ -845,7 +909,8 @@ def mail_send():
     """E-Mail mit PDF(s) verschicken, im Versand-Protokoll vermerken; Rechnungen werden festgeschrieben."""
     d = _daten()
     art = d.get("art", "")
-    beleg, mahnung, anhaenge, _ = _versand_beleg(art, d.get("id"), d.get("mahnung_id"))
+    a = absender()
+    beleg, mahnung, anhaenge, _ = _versand_beleg(art, d.get("id"), d.get("mahnung_id"), a)
     try:
         an = mail.adressen(d.get("an"))
     except ValueError as e:
@@ -854,7 +919,6 @@ def mail_send():
     text = (d.get("text") or "").strip()
     if not betreff or not text:
         return _fehler("Betreff und Text dürfen nicht leer sein.")
-    a = absender()
     try:
         mail.senden(a, an, betreff, text, anhaenge,
                     kopie_an=a.get("absender_email") if d.get("kopie") else None, ssl_kontext=_ssl_kontext())
@@ -862,7 +926,7 @@ def mail_send():
         return _fehler(str(e), 502)
     db.add_versand(art, beleg["id"], ", ".join(an), betreff, mahnung["id"] if mahnung else None)
     if art != "angebot":
-        db.festschreiben(beleg["id"])   # verschickt = ausgestellt
+        db.festschreiben(beleg["id"], absender_jetzt(a=a))   # verschickt = ausgestellt, genau mit diesem Absender
     if d.get("email_speichern") and len(an) == 1:
         kid = beleg.get("kunde_id") or db.upsert_customer(beleg["kunde"])
         db.set_customer_email(kid, an[0])
@@ -892,7 +956,7 @@ def mail_test():
 
 def _pdf_response(inv, download=False):
     disposition = "attachment" if download or request.args.get("download") else "inline"
-    return Response(build_invoice_pdf(inv, absender()), mimetype="application/pdf",
+    return Response(build_invoice_pdf(inv, absender_fuer(inv)), mimetype="application/pdf",
                     headers={"Content-Disposition": f'{disposition}; filename="{pdf_filename(inv)}"'})
 
 
@@ -939,7 +1003,7 @@ def _download(laden, zip_praefix):
             while name in used:          # gleiche Dateinamen nicht überschreiben
                 name, n = f"{stem}_{n}.pdf", n + 1
             used.add(name)
-            zf.writestr(name, build_invoice_pdf(inv, absender()))
+            zf.writestr(name, build_invoice_pdf(inv, absender_fuer(inv)))
     zip_name = f"{zip_praefix}_{date.today():%Y-%m-%d}.zip"
     return Response(buf.getvalue(), mimetype="application/zip",
                     headers={"Content-Disposition": f'attachment; filename="{zip_name}"'})
@@ -1003,13 +1067,13 @@ def invoices_to_paperless():
             continue
         name = pdf_filename(inv)
         try:
-            _in_eingangsordner(ordner, name, build_invoice_pdf(inv, a))
+            _in_eingangsordner(ordner, name, build_invoice_pdf(inv, absender_fuer(inv, a)))
         except OSError as e:
             fehler.append({"id": inv_id, "name": name, "error": f"{name} konnte nicht abgelegt werden: {e}"})
             continue
         db.set_paperless(inv_id, datetime.now().isoformat(timespec="seconds"), table)
         if not angebot:
-            db.festschreiben(inv_id)   # an Paperless übergeben = verschickt/abgelegt
+            db.festschreiben(inv_id, absender_jetzt(a=a))   # an Paperless übergeben = verschickt/abgelegt
         ok.append(inv_id)
     return jsonify({"ok": ok, "fehler": fehler})
 
@@ -1159,6 +1223,7 @@ def import_uebernehmen():
             "bezahlt": bool(data.get("bezahlt")),
             "bezahlt_am": (inv.get("datum") or date.today().isoformat()) if data.get("bezahlt") else None,  # Zahlung unbekannt → Rechnungsdatum
             "festgeschrieben": True,   # alte, bereits verschickte Rechnungen
+            "absender": absender_jetzt("import"),   # den damaligen kennt die App nicht – Original ist die importierte PDF
         })
         n_rech += 1
     status = data.get("angebot_status") if data.get("angebot_status") in db.STATUS else "offen"
@@ -1184,6 +1249,7 @@ if __name__ == "__main__":
     from waitress import serve
 
     db.init()
+    absender_festhalten()
     finanzen.ordner_waechter_starten()   # Belege-Ordner regelmäßig einlesen
     finanzen.texterkennung_starten()     # Fotos und Scans im Hintergrund lesen
     port = int(os.environ.get("PORT", "8099"))

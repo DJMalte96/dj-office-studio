@@ -717,3 +717,9 @@ label .datum-feld > input.datum { margin-top: 0; }
   .papierkorb-zeile .betrag, .papierkorb-knoepfe { grid-column: 2; justify-content: flex-start; text-align: left; }
   .papierkorb-zeile .was small { white-space: normal; }
 }
+
+/* Absender geändert: offene Rechnungen schon verschickt? */
+.absender-dialog { max-width: 620px; }
+.absender-liste { max-height: 40vh; overflow: auto; margin: 12px 0; }
+.absender-liste label.inline { display: flex; align-items: flex-start; gap: 8px; margin: 8px 0; }
+.absender-liste span { overflow-wrap: anywhere; }

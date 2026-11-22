@@ -14,6 +14,7 @@ from datetime import date, datetime, timedelta
 from email import policy
 from email.utils import parsedate_to_datetime, parseaddr
 
+import dateilesen
 import erechnung
 import grenzen
 import pdflesen
@@ -371,18 +372,10 @@ def mbox_aufteilen(daten):
 
 
 def msg_lesen(daten):
-    """Outlook-.msg → wie mail_lesen (benötigt das Paket extract-msg)."""
-    import extract_msg
-    m = extract_msg.openMsg(daten)
-    try:
-        anhaenge = [(a.longFilename or a.shortFilename or "Anhang", a.mimetype or "", a.data or b"")
-                    for a in m.attachments if getattr(a, "data", None) and isinstance(a.data, bytes)]
-        datum = m.date.astimezone().date().isoformat() if getattr(m, "date", None) else None
-        body_html = m.htmlBody.decode("utf-8", "replace") if isinstance(m.htmlBody, bytes) else (m.htmlBody or "")
-        return {"absender": (m.sender or "")[:MAX_KOPFZEILE], "betreff": (m.subject or "").strip()[:MAX_KOPFZEILE], "datum": datum,
-                "message_id": (m.messageId or "").strip() or None, "text": m.body or "", "html": body_html}, anhaenge
-    finally:
-        m.close()
+    """Outlook-.msg → wie mail_lesen, im begrenzten Kindprozess. Wirft pdflesen.Abgebrochen bzw. pdflesen.Kaputt."""
+    mail, anhaenge = dateilesen.msg(daten)
+    mail["absender"], mail["betreff"] = mail["absender"][:MAX_KOPFZEILE], mail["betreff"][:MAX_KOPFZEILE]
+    return mail, anhaenge
 
 
 # ---------- Auswertung ----------
@@ -454,6 +447,9 @@ def auswerten(name, daten):
     else:
         try:
             mail, anhaenge = mail_lesen(daten) if typ == "mail" else msg_lesen(daten)
+        except pdflesen.Abgebrochen as e:
+            v["hinweise"].append(f"Outlook-Mail aus Sicherheitsgründen nicht ausgewertet: {e.grund} – bitte Werte eintragen")
+            return v
         except Exception:
             v["hinweise"].append("Mail konnte nicht gelesen werden – im Mailprogramm als .eml speichern oder Werte eintragen")
             return v

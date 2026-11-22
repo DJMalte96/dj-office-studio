@@ -48,6 +48,20 @@ def text_begrenzen(text):
 
 # ---------- Kindprozess ----------
 
+# Nur diese Formate: Pillow erkennt am Inhalt, ein „beleg.jpg“ kann EPS sein – das startet Ghostscript.
+BILDFORMATE = ("JPEG", "PNG", "HEIF", "WEBP", "AVIF", "TIFF", "GIF", "BMP")
+
+
+def bild_oeffnen(pfad):
+    from PIL import Image
+    try:
+        import pillow_heif
+        pillow_heif.register_heif_opener()
+    except ImportError:
+        pass
+    Image.init()
+    return Image.open(pfad, formats=[f for f in BILDFORMATE if f in Image.OPEN])
+
 _grenze = {"mb": None, "bis": None}
 _waechter = []
 _job = []

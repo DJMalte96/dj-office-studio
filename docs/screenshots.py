@@ -102,7 +102,7 @@ r040 = rechnung("040", "anna", d(-16), [pos("DJ – Tätigkeit Hochzeit – 17:0
 r041 = rechnung("041", "bernd", d(-4), [pos("DJ – Tätigkeit Firmenfeier – 19:00 Uhr bis 0:00 Uhr", d(-4), 450)])
 c.post(f"/api/rechnungen/{r040}/mahnung")                                        # Zahlungserinnerung
 db.add_versand("rechnung", r040, "anna.muster@example.de", "Rechnung 040")     # per E-Mail verschickt
-db.festschreiben(r040)
+db.festschreiben(r040, main.absender_jetzt())
 for k in db.list_items("kunden"):                                               # E-Mail-Adresse bei Bernd
     if k["name"] == "Bernd Probe":
         db.set_customer_email(k["id"], "bernd.probe@example.de")
@@ -239,6 +239,17 @@ with sync_playwright() as p:
     page.screenshot(path=str(ZIEL / "fahrten.png"), full_page=True)
     oeffne(page, "Finanzen", "euer")
     page.screenshot(path=str(ZIEL / "euer.png"), full_page=True)
+
+    # Absender ändern: Rückfrage zu den noch nicht festgeschriebenen Rechnungen (wird abgebrochen)
+    page.click("#einstellungen-btn")
+    page.wait_for_timeout(800)
+    page.fill("#einstellungen [name=strasse]", "Neuer Weg 9")
+    page.click("#einstellungen button[type=submit]")
+    page.wait_for_selector("#absender-dialog[open]")
+    page.wait_for_timeout(400)
+    page.evaluate("document.activeElement && document.activeElement.blur()")
+    page.locator("#absender-dialog").screenshot(path=str(ZIEL / "absender.png"))
+    page.click("#absender-abbrechen")
 
     # Rechnungseditor mit Bestandskunde und zwei Positionen
     ctx2 = browser.new_context(viewport={"width": 1240, "height": 1180}, device_scale_factor=2, locale="de-DE")

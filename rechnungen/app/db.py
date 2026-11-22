@@ -256,6 +256,10 @@ def init():
         for spalte in ("status_vorher", "geloescht_am"):
             if spalte not in vorhanden:
                 con.execute(f"ALTER TABLE ausgaben ADD COLUMN {spalte} TEXT")
+        # seit 1.7.2: Absender beim Festschreiben festhalten (NULL = nicht festgeschrieben → aktuelle Einstellungen)
+        for tabelle in ("rechnungen", "mahnungen"):
+            if "absender_json" not in {r["name"] for r in con.execute(f"PRAGMA table_info({tabelle})")}:
+                con.execute(f"ALTER TABLE {tabelle} ADD COLUMN absender_json TEXT")
         for (titel, text), anlass in LEGACY_TEXTBAUSTEINE.items():
             con.execute("UPDATE textbausteine SET titel = ?, text = ?, preis = NULL, grundpreis = NULL,"
                         " grundstunden = NULL, stundensatz = NULL WHERE titel = ? AND text = ?",
@@ -320,8 +324,28 @@ def _invoice_from_row(r):
     d["positionen"] = json.loads(d.pop("positionen_json"))
     d["bezahlt"] = bool(d["bezahlt"])
     d["festgeschrieben"] = bool(d.get("festgeschrieben"))
+    fest = _absender_lesen(d.pop("absender_json", None))
+    d["absender"] = fest if d["festgeschrieben"] else None      # ein Entwurf folgt immer den Einstellungen
     d["veranstaltungsort"] = json.loads(d.pop("veranstaltungsort_json", None) or "null")
     d["fahrt_erfassen"] = d.get("fahrt_erfassen", 1) != 0
+    return d
+
+
+def _absender_lesen(text):
+    try:
+        d = json.loads(text or "null")
+    except ValueError:              # kann aus einer fremden Sicherung stammen
+        return None
+    return {k: v for k, v in d.items() if isinstance(v, (str, bool))} if isinstance(d, dict) else None
+
+
+def _absender_text(absender):
+    return json.dumps(absender) if absender else None
+
+
+def _mahnung_aus_zeile(r):
+    d = dict(r)
+    d["absender"] = _absender_lesen(d.pop("absender_json", None))
     return d
 
 
@@ -331,7 +355,7 @@ def _ergaenzen(con, rechnungen):
         return rechnungen
     mahnungen = {}
     for m in con.execute("SELECT * FROM mahnungen ORDER BY stufe"):
-        mahnungen.setdefault(m["rechnung_id"], []).append(dict(m))
+        mahnungen.setdefault(m["rechnung_id"], []).append(_mahnung_aus_zeile(m))
     kopf = {r["id"]: {"nummer": r["nummer"], "datum": r["datum"]}
             for r in con.execute("SELECT id, nummer, datum FROM rechnungen")}
     versand = _versand(con, "rechnung", "mahnung")
@@ -403,47 +427,64 @@ def save_invoice(inv, inv_id=None):
         return con.execute(
             "INSERT INTO rechnungen (nummer, datum, kunde_id, kunde_json, positionen_json,"
             " zahlungsbedingung, gesamt, bezahlt, festgeschrieben, storno_von, bezahlt_am, kleinunternehmer, ust_satz,"
-            " veranstaltungsort_json, fahrt_erfassen) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            vals + (int(bool(inv.get("festgeschrieben"))), inv.get("storno_von"), inv.get("bezahlt_am")) + steuer + ort).lastrowid
+            " veranstaltungsort_json, fahrt_erfassen, absender_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            vals + (int(bool(inv.get("festgeschrieben"))), inv.get("storno_von"), inv.get("bezahlt_am")) + steuer + ort
+            + (_absender_text(inv.get("absender")) if inv.get("festgeschrieben") else None,)).lastrowid
 
 
 def _ku(wert):
     return None if wert is None else int(bool(wert))
 
 
-def set_paid(inv_id, paid):
+# Festschreiben und Absender festhalten gehören zusammen – deshalb ist „absender“ überall Pflicht.
+# Ein einmal festgehaltener Absender wird nie überschrieben.
+_FEST = " festgeschrieben = 1, absender_json = CASE WHEN festgeschrieben = 1 AND absender_json IS NOT NULL THEN absender_json ELSE ? END"
+
+
+def set_paid(inv_id, paid, absender):
     """Bezahlt setzen (mit Datum) – eine bezahlte Rechnung wird damit auch festgeschrieben."""
     with connect() as con:
         if paid:
-            con.execute("UPDATE rechnungen SET bezahlt = 1, festgeschrieben = 1,"
-                        " bezahlt_am = COALESCE(bezahlt_am, date('now', 'localtime')) WHERE id = ?", (inv_id,))
+            con.execute("UPDATE rechnungen SET bezahlt = 1," + _FEST + ","
+                        " bezahlt_am = COALESCE(bezahlt_am, date('now', 'localtime')) WHERE id = ?",
+                        (_absender_text(absender), inv_id))
         else:
             con.execute("UPDATE rechnungen SET bezahlt = 0, bezahlt_am = NULL WHERE id = ?", (inv_id,))
 
 
-def festschreiben(inv_id):
+def festschreiben(inv_id, absender):
     with connect() as con:
-        con.execute("UPDATE rechnungen SET festgeschrieben = 1 WHERE id = ?", (inv_id,))
+        con.execute("UPDATE rechnungen SET" + _FEST + " WHERE id = ?", (_absender_text(absender), inv_id))
 
 
-def set_storniert(inv_id, storno_id):
+def set_storniert(inv_id, storno_id, absender):
     with connect() as con:
-        con.execute("UPDATE rechnungen SET storniert_durch = ?, festgeschrieben = 1 WHERE id = ?",
-                    (storno_id, inv_id))
+        con.execute("UPDATE rechnungen SET storniert_durch = ?," + _FEST + " WHERE id = ?",
+                    (storno_id, _absender_text(absender), inv_id))
+
+
+def absender_nachtragen(absender):
+    """Festgeschriebenes ohne festgehaltenen Absender (Bestand von vor 1.7.2, ältere Sicherung) → Anzahl."""
+    text = _absender_text(absender)
+    if not text:
+        return 0
+    with connect() as con:
+        return (con.execute("UPDATE rechnungen SET absender_json = ? WHERE festgeschrieben = 1 AND absender_json IS NULL", (text,)).rowcount
+                + con.execute("UPDATE mahnungen SET absender_json = ? WHERE absender_json IS NULL", (text,)).rowcount)
 
 
 # ---------- Mahnungen ----------
 
-def add_mahnung(inv_id, stufe, datum, frist):
+def add_mahnung(inv_id, stufe, datum, frist, absender):
     with connect() as con:
-        return con.execute("INSERT INTO mahnungen (rechnung_id, stufe, datum, frist) VALUES (?, ?, ?, ?)",
-                           (inv_id, stufe, datum, frist)).lastrowid
+        return con.execute("INSERT INTO mahnungen (rechnung_id, stufe, datum, frist, absender_json) VALUES (?, ?, ?, ?, ?)",
+                           (inv_id, stufe, datum, frist, _absender_text(absender))).lastrowid
 
 
 def get_mahnung(mahnung_id):
     with connect() as con:
         r = con.execute("SELECT * FROM mahnungen WHERE id = ?", (mahnung_id,)).fetchone()
-        return dict(r) if r else None
+        return _mahnung_aus_zeile(r) if r else None
 
 
 # ---------- E-Mail-Versand ----------

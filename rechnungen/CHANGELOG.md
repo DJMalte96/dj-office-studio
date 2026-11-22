@@ -2,6 +2,17 @@
 
 Alle Änderungen an DJ Office Studio. Neueste Version oben.
 
+## 1.7.2 – 2026-11-22
+
+### Behoben
+- **Festgeschriebene Rechnungen behalten ihren Absender**: Anschrift, Bankverbindung, Steuerangaben und GiroCode werden beim Festschreiben festgehalten. Bisher trug eine alte Rechnung nach einem Umzug oder Kontowechsel die neuen Angaben, wenn man sie erneut öffnete, verschickte oder exportierte. Mahnungen halten ihren eigenen Absender fest.
+- **Rückfrage beim Ändern des Absenders**: Gibt es noch nicht festgeschriebene Rechnungen, fragt die App, welche schon verschickt sind. Die werden mit dem bisherigen Absender festgeschrieben, die übrigen bekommen den neuen.
+- **Beim Update**: Schon festgeschriebene Rechnungen und Mahnungen bekommen den **heutigen** Absender festgehalten, den früheren kennt die App nicht. Wer seitdem umgezogen ist oder das Konto gewechselt hat, findet das Original in der abgelegten PDF-Kopie, in Paperless oder in der gesendeten Mail. Das 🔒 zeigt den festgehaltenen Absender.
+
+### Sicherheit
+- **Outlook-Mails (.msg) und die Vorschau von HEIC-Fotos** laufen jetzt wie PDFs in einem eigenen Prozess mit Grenzen für Arbeitsspeicher und Zeit.
+- **Fotos** werden nur noch in üblichen Bildformaten geöffnet. Eine als Foto benannte EPS-Datei kann kein Fremdprogramm mehr starten.
+
 ## 1.7.1 – 2026-11-22
 
 ### Sicherheit

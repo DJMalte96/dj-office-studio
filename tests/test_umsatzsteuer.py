@@ -37,7 +37,7 @@ def test_cent_betraege_und_anderer_satz(client):
 
 def test_einstellung_aendert_alte_belege_nicht(client):
     alt = neue_rechnung(client, nummer="037", preis=500)          # Kleinunternehmer (Standard)
-    client.put("/api/einstellungen", json=UST)
+    client.put("/api/einstellungen", json=UST | {"schon_verschickt": []})  # Entwurf da, Absender geändert → Antwort auf die Rückfrage
     neu = neue_rechnung(client, nummer="038", preis=500)
     assert client.get(f"/api/rechnungen/{alt}").get_json()["gesamt"] == 500
     assert client.get(f"/api/rechnungen/{neu}").get_json()["gesamt"] == 595

@@ -122,6 +122,7 @@ jobs:
           python tests/ocr_rauchtest.py http://127.0.0.1:8765
           python tests/erechnung_rauchtest.py http://127.0.0.1:8765
           python tests/pdf_rauchtest.py http://127.0.0.1:8765
+          python tests/dateien_rauchtest.py http://127.0.0.1:8765
           kill %1 || true
 
       - name: Packen (macOS)

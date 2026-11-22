@@ -12,8 +12,10 @@ from datetime import date, datetime, timezone
 from flask import Blueprint, Response, abort, jsonify, request
 
 import belege
+import dateilesen
 import db
 import erechnung
+import pdflesen
 import texterkennung
 
 bp = Blueprint("finanzen", __name__)
@@ -569,12 +571,16 @@ def beleg_ansicht(aid):
         mime = _bild_mime(daten)
         if mime:
             return Response(daten, mimetype=mime)
-        jpeg = _heic_als_jpeg(daten)
+        jpeg = dateilesen.als_jpeg(daten)
         if jpeg:
             return Response(jpeg, mimetype="image/jpeg")
         return _fehler("Für dieses Foto ist keine Vorschau möglich – über „Original öffnen“ ansehen.", 415)
     if a["beleg_typ"] in ("mail", "msg"):
-        mail, anhaenge = belege.mail_lesen(daten) if a["beleg_typ"] == "mail" else belege.msg_lesen(daten)
+        try:
+            mail, anhaenge = belege.mail_lesen(daten) if a["beleg_typ"] == "mail" else belege.msg_lesen(daten)
+        except Exception as e:
+            grund = f" ({e.grund})" if isinstance(e, pdflesen.Abgebrochen) else ""
+            return _seite(f"<p>Für diese Mail ist keine Vorschau möglich{_esc(grund)}. Über „Original öffnen“ ansehen.</p>")
         inhalt = _html_bereinigen(mail["html"]) if mail["html"].strip() else \
             f"<pre style='white-space:pre-wrap;font:13px/1.45 Arial,sans-serif'>{_esc(mail['text'])}</pre>"
         kopf = (f"<div style='font:12px/1.5 Arial,sans-serif;color:#555;border-bottom:1px solid #e5e5e5;padding:0 0 10px;margin:0 0 14px'>"
@@ -609,21 +615,6 @@ def _html_bereinigen(roh):
     roh = re.sub(r"(?i)\son\w+\s*=\s*(\"[^\"]*\"|'[^']*'|[^\s>]+)", "", roh)       # onclick, onload …
     roh = re.sub(r"(?i)(href|src)\s*=\s*([\"'])\s*javascript:[^\"']*\2", r'\1="#"', roh)
     return roh
-
-
-def _heic_als_jpeg(daten):
-    try:
-        import io
-        import pillow_heif
-        from PIL import Image
-        pillow_heif.register_heif_opener()
-        bild = Image.open(io.BytesIO(daten))
-        bild.thumbnail((2000, 2000))
-        out = io.BytesIO()
-        bild.convert("RGB").save(out, "JPEG", quality=85)
-        return out.getvalue()
-    except Exception:
-        return None
 
 
 # ======================= Fahrten =======================

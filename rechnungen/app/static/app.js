@@ -25,9 +25,9 @@ async function api(path, opts = {}) {
     body: opts.body ? JSON.stringify(opts.body) : undefined,
   });
   if (!res.ok) {
-    let msg = `Fehler ${res.status}`;
-    try { msg = (await res.json()).error || msg; } catch (_) { /* kein JSON */ }
-    throw new Error(msg);
+    let msg = `Fehler ${res.status}`, daten = null;
+    try { daten = await res.json(); msg = daten.error || msg; } catch (_) { /* kein JSON */ }
+    throw Object.assign(new Error(msg), { daten });
   }
   const type = res.headers.get("Content-Type") || "";
   if (type.includes("application/json")) return res.json();
@@ -386,7 +386,16 @@ $("#einstellungen").addEventListener("submit", async e => {
     daten[f.name] = f.type === "checkbox" ? f.checked : f.value;
   });
   try {
-    const res = await api("einstellungen", { method: "PUT", body: daten });
+    let res;
+    try {
+      res = await api("einstellungen", { method: "PUT", body: daten });
+    } catch (err) {
+      if (!err.daten?.offene_rechnungen) throw err;
+      const verschickt = await frageVerschickt(err.daten.offene_rechnungen);
+      if (!verschickt) return toast("Nicht gespeichert – der Absender bleibt, wie er war.", true);
+      res = await api("einstellungen", { method: "PUT", body: { ...daten, schon_verschickt: verschickt } });
+      if (verschickt.length) await loadListe();
+    }
     zeigePasswortStatus(res.einstellungen.smtp_passwort_gesetzt);
     if (typeof plEinstellungen === "function") plEinstellungen(res.einstellungen);
     await ladeAbsender();
@@ -396,6 +405,22 @@ $("#einstellungen").addEventListener("submit", async e => {
     if (!state.editId) $("#r-nummer").value = (await api(istAngebot() ? "angebote/naechste-nummer" : "rechnungen/naechste-nummer")).nummer;
   } catch (err) { toast(err.message, true); }
 });
+
+/* Absender geändert und es gibt nicht festgeschriebene Rechnungen: Welche sind schon verschickt?
+   → Liste der IDs, oder null bei Abbrechen. */
+function frageVerschickt(liste) {
+  const dlg = $("#absender-dialog"), heute = today();
+  $("#absender-liste").innerHTML = liste.map(r => `<label class="inline"><input type="checkbox" value="${r.id}"${r.datum < heute ? " checked" : ""}>
+    <span><b>${esc(r.nummer)}</b> · ${fmtDate(r.datum)} · ${esc(r.kunde)} · ${fmtEuro(r.gesamt)}</span></label>`).join("");
+  return new Promise(fertig => {
+    dlg.returnValue = "";
+    dlg.addEventListener("close", () => fertig(dlg.returnValue === "speichern"
+      ? [...dlg.querySelectorAll("#absender-liste input:checked")].map(i => Number(i.value)) : null), { once: true });
+    dlg.showModal();
+  });
+}
+$("#absender-abbrechen").addEventListener("click", () => $("#absender-dialog").close(""));
+$("#absender-speichern").addEventListener("click", () => $("#absender-dialog").close("speichern"));
 
 /* Desktop-Version: nach neuer Version suchen und ggf. Hinweis zeigen (ausgeblendete Version wird gemerkt). */
 async function pruefeUpdate() {
@@ -953,7 +978,13 @@ const NAECHSTE_MAHNUNG = ["Zahlungserinnerung", "1. Mahnung", "2. Mahnung"];
 const MAHN_KURZ = { 1: "Erinnerung", 2: "1. Mahnung", 3: "2. Mahnung" };
 
 const schloss = r => r.festgeschrieben
-  ? ` <span class="schloss" title="Festgeschrieben – Änderungen nur per Storno">🔒</span>` : "";
+  ? ` <span class="schloss" title="${esc("Festgeschrieben – Änderungen nur per Storno" + absenderInfo(r.absender))}">🔒</span>` : "";
+function absenderInfo(a) {
+  if (!a) return "";
+  const woher = { nachgetragen: " (nachträglich festgehalten – kann vom Original abweichen)",
+    import: " (beim Import festgehalten – Original ist deine importierte PDF)" }[a.quelle] || "";
+  return `\nAbsender: ${[a.name, a.strasse, a.plz_ort].filter(Boolean).join(", ")}${woher}`;
+}
 
 function stornoChip(r) {
   if (r.storno_von) return ` <span class="storno-chip">Storno zu ${esc(r.storno_zu?.nummer || "?")}</span>`;

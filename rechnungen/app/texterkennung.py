@@ -151,12 +151,8 @@ def _bilder(pfad):
         finally:
             pdf.close()
         return
-    try:
-        import pillow_heif
-        pillow_heif.register_heif_opener()
-    except ImportError:
-        pass
-    with Image.open(pfad) as roh:
+    import grenzen
+    with grenzen.bild_oeffnen(pfad) as roh:
         roh.draft("RGB", (MAX_SEITE, MAX_SEITE))        # große JPEGs gleich verkleinert dekodieren
         bild = ImageOps.exif_transpose(roh)
         bild.thumbnail((MAX_SEITE, MAX_SEITE))

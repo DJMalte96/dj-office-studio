@@ -20,7 +20,7 @@ DJ Office Studio ist eine App zum Schreiben von DJ-Rechnungen und -Angeboten –
 - **PDF** im A4-Layout mit Absenderzeile, Adressfeld, Positionstabelle, QR-Code zum Bezahlen und Fußzeile (Bankverbindung, Steuernummer, Kleinunternehmer-Hinweis nach § 19 UStG bzw. Umsatzsteuer). Vorschau vor dem Speichern; beim Speichern wird eine Kopie im PDF-Ordner abgelegt (Home Assistant: `/share/rechnungen`, Desktop: `Dokumente/DJ Office Studio/PDFs`).
 - **Offene Rechnungen** auf einen Blick: eine Summenzeile mit Anzahl, Gesamtbetrag und nächster Frist; darunter je Rechnung Rechnungsname (z. B. `Rechnung_037_311026`), Betrag, verbleibende Zeit („noch 5 Tage“, „3 Tage überfällig“), ein Haken zum Abhaken, wenn bezahlt wurde, und Buttons für **Zahlungserinnerung / Mahnung**, QR-Code zum Bezahlen, Senden per E-Mail, Kopieren, Festschreiben (🔒) und Löschen bzw. Stornieren (✕). Das Zahlungsziel wird aus der Zahlungsbedingung gelesen (z. B. „innerhalb der nächsten 8 Tage“) und ab dem Rechnungsdatum gerechnet.
 - **Archiv** für bezahlte und stornierte Rechnungen: Wird eine offene Rechnung abgehakt, wandert sie ins Archiv – mit Suche und Sortierung nach Nummer, Datum, Betrag oder Kunde. Bezahlte Rechnungen lassen sich wieder auf „offen“ setzen. Mehrere Rechnungen markieren und **als ZIP herunterladen** oder **an Paperless-ngx senden**.
-- **Festschreiben & Storno**: Eine Rechnung lässt sich nur ändern oder löschen, solange sie nicht festgeschrieben ist. Festgeschrieben wird sie automatisch, sobald sie bezahlt, gemahnt oder an Paperless gesendet wird – oder per 🔒 von Hand (z. B. nach dem Versenden). Danach wird korrigiert, wie es steuerlich sein soll: per **Stornorechnung** mit eigener Nummer und negativen Beträgen.
+- **Festschreiben & Storno**: Eine Rechnung lässt sich nur ändern oder löschen, solange sie nicht festgeschrieben ist. Festgeschrieben wird sie automatisch, sobald sie bezahlt, gemahnt oder an Paperless gesendet wird – oder per 🔒 von Hand (z. B. nach dem Versenden). Danach wird korrigiert, wie es steuerlich sein soll: per **Stornorechnung** mit eigener Nummer und negativen Beträgen. Beim Festschreiben wird auch der **Absender** festgehalten (Anschrift, Bank, Steuerangaben) – die Rechnung bleibt nach einem Umzug, wie sie war.
 - **Zahlungserinnerung und Mahnungen**: Zu offenen Rechnungen per Klick eine Zahlungserinnerung, dann 1. und 2. Mahnung als PDF – mit Bezug auf die Rechnung, Fälligkeitsdatum und neuer Zahlungsfrist (Standard 7 Tage).
 - **E-Mail-Versand**: Rechnungen, Angebote, Zahlungserinnerungen und Mahnungen direkt aus der App per E-Mail verschicken – über das eigene Postfach, egal bei welchem Anbieter (Vorlagen für WEB.DE, GMX, Gmail, iCloud, T-Online & Co., aber auch jeder andere Anbieter oder eigene Mailserver). Empfänger kommt aus den Kundendaten, Betreff und Text aus anpassbaren Vorlagen, das PDF hängt automatisch an. Verschickte Belege tragen einen Vermerk „✉ Datum“, Rechnungen werden dabei festgeschrieben. Herunterladen (z. B. zum Weiterschicken per WhatsApp) geht wie bisher – direkt im selben Dialog.
 - **Umsatzsteuer**: Für Kleinunternehmer ohne Umsatzsteuer mit Hinweis nach § 19 UStG. Ohne Kleinunternehmerregelung sind die Positionspreise Nettopreise; Rechnung und Angebot weisen Nettobetrag, Umsatzsteuer (19 % oder 7 %) und Gesamtbetrag aus, der Export enthält Netto, Steuersatz und Steuer. Die Steuer wird je Beleg gespeichert – ein späterer Wechsel in den Einstellungen ändert bereits geschriebene Rechnungen nicht.
@@ -73,6 +73,16 @@ Oben in der Kopfzeile gibt es auf jeder Seite das Menü: **Start**, **Rechnungen
 
 **Alte Rechnungen und Angebote importieren:** Unter **Rechnungen** (Archiv) auf **Alte Rechnungen importieren** bzw. unter **Angebote** auf **Alte Angebote importieren** klicken und PDFs hineinziehen – gemischt möglich. Danach auswählen, welche Empfänger, Rechnungsposten, Rechnungen und Angebote übernommen werden. Erkannt werden PDFs mit echtem Text, die so aufgebaut sind wie die PDFs der App (Absenderzeile mit „|“, Adresse, „Rechnung Nr.“ bzw. „Angebot“, Tabelle, „Gesamt“). Eingescannte Dokumente werden nicht unterstützt.
 
+### Absender ändern (Umzug, neues Konto)
+
+- **Festgeschriebene Rechnungen und Mahnungen** behalten den Absender, mit dem sie ausgestellt wurden. Das 🔒 zeigt ihn (Maus darüber).
+- **Nicht festgeschriebene Rechnungen:** Beim Speichern fragt die App, welche schon verschickt sind. Angehakte werden mit dem bisherigen Absender festgeschrieben, die anderen bekommen den neuen.
+- **Angebote** folgen immer den aktuellen Einstellungen.
+- **Neues Konto:** Neue Mahnungen und der QR-Code am Bildschirm nehmen das neue Konto, die alte Rechnung zeigt weiter das bisherige.
+- **Aus der Zeit vor 1.7.2 und importiert:** Den damaligen Absender kennt die App nicht, festgehalten ist der vom Tag des Updates bzw. Imports. Maßgeblich ist dann das verschickte Original.
+
+![Screenshot: Absender ändern](docs/bilder/absender.png)
+
 ### Finanzen
 
 **Jahr wählen:** Die Jahresmenüs reichen vom ältesten Eintrag bis heute.
@@ -100,7 +110,7 @@ Die Erkennung läuft vollständig auf dem eigenen Gerät und ohne Netzwerk. Sie 
 
 ![Screenshot: E-Rechnung prüfen](docs/bilder/e-rechnung.png)
 
-**Schutz vor präparierten Dateien:** Fremde PDFs liest die App in einem eigenen Prozess mit Grenzen für Arbeitsspeicher (400 MB) und Zeit (20 Sekunden), ohne Netz. Wird eine Grenze erreicht, steht am Beleg „PDF aus Sicherheitsgründen nicht ausgewertet“ – das Original bleibt gespeichert, die Werte trägt man von Hand ein. Von PDFs über 100 Seiten werden die ersten 90 und die letzten 10 gelesen.
+**Schutz vor präparierten Dateien:** Fremde PDFs und Outlook-Mails liest die App (HEIC-Fotos mit eigenen, höheren Grenzen) in einem eigenen Prozess mit Grenzen für Arbeitsspeicher (400 MB) und Zeit (20 Sekunden), ohne Netz. Wird eine Grenze erreicht, steht am Beleg „PDF aus Sicherheitsgründen nicht ausgewertet“ – das Original bleibt gespeichert, die Werte trägt man von Hand ein. Von PDFs über 100 Seiten werden die ersten 90 und die letzten 10 gelesen.
 
 **Papierkorb:** **Verwerfen** (ungeprüfter Beleg) und **Löschen** (übernommene Ausgabe) legen den Eintrag samt Beleg in den Papierkorb (Finanzen → Ausgaben → **Papierkorb**). Was dort liegt, zählt nicht in EÜR, Übersicht, Abschreibung und Export.
 
@@ -308,6 +318,7 @@ rechnungen/
     belege.py            Auslesen von Belegen (PDF, Fotos, Kauf-Mails .eml/.msg/.mbox)
     texterkennung.py     Texterkennung für Fotos und Scans (lokal, im eigenen Prozess)
     pdflesen.py          Lesen fremder PDFs im eigenen Prozess
+    dateilesen.py        Outlook-Mails und HEIC-Vorschau im eigenen Prozess
     grenzen.py           Grenzen für Speicher, Zeit und Textlänge
     erechnung.py         Lesen von E-Rechnungen (XRechnung, ZUGFeRD/Factur-X) samt Lesefassung
     paperless.py         Abholen von Ausgaben-Belegen aus Paperless-ngx (REST-Schnittstelle, nur lesend)
