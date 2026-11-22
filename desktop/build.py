@@ -34,6 +34,9 @@ args = [
 args += ["--hidden-import", "texterkennung", "--collect-data", "rapidocr", "--copy-metadata", "rapidocr",
          "--collect-submodules", "rapidocr.inference_engine.onnxruntime", "--collect-binaries", "onnxruntime",
          "--collect-all", "pypdfium2_raw", "--collect-all", "pypdfium2"]
+# Nicht gebraucht (kommt nur über extract-msg → oletools herein) und schädlich: Für Intel-Macs gibt es kein fertiges
+# cryptography mehr, pip baut es gegen das OpenSSL des Build-Rechners – die App verlangte dadurch macOS 15.
+args += ["--exclude-module", "cryptography", "--exclude-module", "msoffcrypto"]
 # Eigenes App-Fenster (pywebview): JavaScript-Teile mitnehmen und die Plattform-Anbindung sicher einbinden
 args += ["--collect-data", "webview", "--hidden-import", "webview"]
 if sys.platform == "darwin":

@@ -14,6 +14,9 @@ Alle Änderungen an DJ Office Studio. Neueste Version oben.
 ### Sicherheit
 - Eine **manipulierte Sicherungsdatei** konnte (seit 1.1.0) nach dem Einspielen dazu führen, dass beim Verwerfen eines Belegs fremde Dateien gelöscht oder in den Steuerberater-Export aufgenommen werden. Belegpfade gelten jetzt nur noch innerhalb der Belegablage. Selbst erstellte Sicherungen waren nicht betroffen.
 
+### Behoben
+- **Desktop-App für Intel-Macs**: Das Paket enthielt versehentlich Programmteile, die macOS 15 verlangen (betrifft auch 1.4.3). Sie sind entfernt; jeder Build wird jetzt auf macOS 13 als Mindestversion geprüft.
+
 ### Hinweise
 - Das Update und die Downloads der Desktop-App sind deutlich größer (Modelle und Bibliotheken der Texterkennung); das erste Update in Home Assistant dauert länger.
 - Die Texterkennung braucht kurzzeitig etwa 300–600 MB freien Arbeitsspeicher und am Mac mindestens macOS 13.
