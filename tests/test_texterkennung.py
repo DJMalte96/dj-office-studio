@@ -46,7 +46,7 @@ def test_steuer_nur_wenn_sie_rechnerisch_passt():
 
 
 def test_lieferant_ist_nicht_der_eigene_name():
-    t = belege.ocr_vorschlaege("Max Beispiel\nMusikhaus Probe GmbH\nSumme 5,00", "Max Beispiel")
+    t = belege.ocr_vorschlaege("Max Beispiel\nMusikhaus Probe GmbH\nSumme 5,00", {"name": "Max Beispiel"})
     assert t["lieferant"] == "Musikhaus Probe GmbH"
 
 

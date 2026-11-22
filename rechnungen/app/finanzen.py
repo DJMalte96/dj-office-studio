@@ -118,6 +118,26 @@ def _dateiname(name):
     return name[-100:]
 
 
+EIGENER_NAME = ("An der Stelle des Lieferanten stand dein eigener Name oder deine Anschrift – bitte den Händler eintragen. "
+                "Ist es eine Rechnung von dir, gehört sie nicht in die Ausgaben: bitte verwerfen.")
+
+
+def _lieferant_vorschlagen(v, paperless):
+    """Bester Vorschlag, der nicht man selbst ist. Lieber keiner als die nächstbeste Zeile (oft Straße oder Kunde)."""
+    ich = _einstellungen()
+    adresse = v.pop("absender_adresse", None)
+    erkannt = v["lieferant"]
+    selbst = belege.ist_eigen(erkannt, ich) or belege.ist_eigene_adresse(adresse, ich)
+    auswahl = [None if selbst else erkannt]
+    if paperless:
+        korrespondent, titel = paperless.get("korrespondent"), paperless.get("titel")
+        selbst = selbst or belege.ist_eigen(korrespondent, ich)
+        auswahl = [korrespondent, *auswahl, None if selbst else titel]
+    v["lieferant"] = next((x for x in auswahl if x and not belege.ist_eigen(x, ich)), None)
+    if selbst and not v["lieferant"]:
+        v["hinweise"].append(EIGENER_NAME)
+
+
 def beleg_aufnehmen(name, daten, paperless=None, automatisch=False, in_papierkorb=False):
     """Beleg speichern und auswerten → (neue Ausgabe | None, ID der vorhandenen bei Duplikat).
     paperless: Angaben aus Paperless (id, korrespondent, datum, titel, text) – haben Vorrang vor der eigenen Auswertung.
@@ -146,10 +166,10 @@ def beleg_aufnehmen(name, daten, paperless=None, automatisch=False, in_papierkor
                                  else "Gesamtbetrag nicht gefunden – bitte eintragen")
             if t["unsicher"]:
                 v["hinweise"].append(UNSICHER)
-        v["lieferant"] = paperless.get("korrespondent") or v["lieferant"] or paperless.get("titel")
         v["belegdatum"] = v["belegdatum"] or paperless.get("datum")   # Datum im Beleg schlägt Paperless (dort oft der Importtag)
         v["beschreibung"] = v["beschreibung"] or paperless.get("titel")
         v["hinweise"].append(f"Aus Paperless (Dokument {pl_id})")
+    _lieferant_vorschlagen(v, paperless)
     kategorie = _kategorie_fuer(v["lieferant"]) or v["kategorie"] or "sonstiges"
     belegdatum = v["belegdatum"] or date.today().isoformat()
     ocr = "wartet" if belege.braucht_texterkennung(v["typ"], v["betrag"], daten) else None
@@ -237,9 +257,11 @@ def ausgaben_liste():
 
 @bp.get("/api/ausgaben/lieferanten")
 def lieferanten():
+    ich = _einstellungen()
     with db.connect() as con:
         return jsonify([r[0] for r in con.execute(
-            "SELECT lieferant FROM ausgaben WHERE lieferant != '' AND status != 'papierkorb' GROUP BY lieferant COLLATE NOCASE ORDER BY COUNT(*) DESC, lieferant")])
+            "SELECT lieferant FROM ausgaben WHERE lieferant != '' AND status != 'papierkorb' GROUP BY lieferant COLLATE NOCASE ORDER BY COUNT(*) DESC, lieferant")
+            if not belege.ist_eigen(r[0], ich)])
 
 
 @bp.post("/api/ausgaben/belege")
@@ -1197,6 +1219,27 @@ def pruefliste(jahr, a, rechnungen=None):
     return [{"stufe": s, "text": t, "aktion": x} for s, t, x in p]
 
 
+def jahre(heute=None):
+    """Auswahl für alle Jahresmenüs, neuestes zuerst: lückenlos vom ältesten Jahr im Bestand (mindestens drei zurück)
+    bis heute. Ausreißer durch vertippte Daten (vor 2000, Zukunft) einzeln – sonst kommt man nicht zum Korrigieren hin."""
+    aktuell = (heute or date.today()).year
+    with db.connect() as con:
+        werte = [r[0] for r in con.execute(
+            "SELECT COALESCE(bezahlt_am, belegdatum) FROM ausgaben WHERE status != 'papierkorb'"
+            " UNION SELECT datum FROM rechnungen UNION SELECT bezahlt_am FROM rechnungen"
+            " UNION SELECT datum FROM fahrten UNION SELECT datum FROM einnahmen_sonstige")]
+    for a in anlagen_liste():               # ohne Anlagen aus dem Papierkorb
+        werte += [a.get("anschaffung_am"), a.get("start_jahr"), a.get("abgang_am")]
+    da = {int(m[0]) for w in werte if (m := re.match(r"[1-9]\d{3}(?=-|$)", str(w or "")))}
+    beginn = min([aktuell - 3, *(j for j in da if j >= 2000)])
+    return sorted(da | set(range(beginn, aktuell + 1)), reverse=True)
+
+
+@bp.get("/api/finanzen/jahre")
+def jahre_api():
+    return jsonify(jahre())
+
+
 @bp.get("/api/finanzen/euer")
 def euer_api():
     jahr = request.args.get("jahr") or str(date.today().year)
@@ -1764,7 +1807,7 @@ def _platzhalter_tage(a, v):
 
 def _ocr_uebernehmen(aid, pruef, stand, text=None, problem=None):
     """Ergebnis eintragen: nur in unangetastete Felder und nur, solange derselbe Beleg noch ungeprüft ist."""
-    t = belege.ocr_vorschlaege(text, _einstellungen().get("name")) if text else {}
+    t = belege.ocr_vorschlaege(text, _einstellungen()) if text else {}
     kategorie = _kategorie_fuer(t.get("lieferant"))
     with db.connect() as con:
         con.execute("BEGIN IMMEDIATE")

@@ -35,12 +35,14 @@ function finanzenTab(name) {
 }
 
 async function ladeAusgaben() {
+  const jahr = fin.jahr;
   try {
     await ladeKategorien();
-    fin.ausgaben = await api(`ausgaben?jahr=${fin.jahr}`);
+    const [liste, jahre] = await Promise.all([api(`ausgaben?jahr=${jahr}`), api("finanzen/jahre")]);
+    if (jahr !== fin.jahr) return;      // inzwischen ein anderes Jahr gewählt
+    fin.ausgaben = liste;
+    jahresAuswahl($("#ausgaben-jahr"), jahre, jahr);
   } catch (e) { return toast("Laden fehlgeschlagen: " + e.message, true); }
-  const jahre = [...new Set([String(new Date().getFullYear()), fin.jahr, ...fin.ausgaben.map(a => a.jahr).filter(Boolean)])].sort().reverse();
-  $("#ausgaben-jahr").innerHTML = jahre.map(j => `<option${j === fin.jahr ? " selected" : ""}>${j}</option>`).join("");
   renderAusgaben();
   ladePapierkorbAnzahl();
   ocrListeNachladen();
@@ -343,7 +345,8 @@ async function oeffneBeleg(id) {
   }
   showTab("beleg");
   window.scrollTo(0, 0);
-  setTimeout(() => (f.elements.betrag.value ? f.querySelector("[type=submit]") : f.elements.betrag).focus(), 50);
+  const feld = !f.elements.betrag.value ? f.elements.betrag : !f.elements.lieferant.value ? f.elements.lieferant : f.querySelector("[type=submit]");
+  setTimeout(() => feld.focus(), 50);
 }
 
 function belegVorschauHtml(a) {
@@ -406,10 +409,13 @@ const km = v => v == null ? "–" : String(v).replace(".", ",");
 
 async function ladeFahrten() {
   clearTimeout(fahrt.nachladen);
-  try { fahrt.daten = await api(`fahrten?jahr=${fahrt.jahr}`); }
-  catch (e) { return toast("Laden fehlgeschlagen: " + e.message, true); }
-  const jahre = [...new Set([String(new Date().getFullYear()), fahrt.jahr, ...fahrt.daten.fahrten.map(f => f.datum.slice(0, 4))])].sort().reverse();
-  $("#fahrten-jahr").innerHTML = jahre.map(j => `<option${j === fahrt.jahr ? " selected" : ""}>${j}</option>`).join("");
+  const jahr = fahrt.jahr;
+  try {
+    const [daten, jahre] = await Promise.all([api(`fahrten?jahr=${jahr}`), api("finanzen/jahre")]);
+    if (jahr !== fahrt.jahr) return;
+    fahrt.daten = daten;
+    jahresAuswahl($("#fahrten-jahr"), jahre, jahr);
+  } catch (e) { return toast("Laden fehlgeschlagen: " + e.message, true); }
   renderFahrten();
   // Läuft noch eine Berechnung im Hintergrund? Dann gleich noch einmal nachsehen.
   if (fahrt.daten.kartendienst && fahrt.daten.fahrten.some(f => f.km_einfach == null && !f.fehler)) {
@@ -516,11 +522,13 @@ const anl = { jahr: String(new Date().getFullYear()), liste: [], aktuell: null, 
 const zahlText = v => v == null || v === "" ? "" : Number(v).toFixed(2).replace(".", ",");
 
 async function ladeAnlagen() {
-  try { anl.liste = await api(`anlagen?jahr=${anl.jahr}`); }
-  catch (e) { return toast("Laden fehlgeschlagen: " + e.message, true); }
-  const j = Number(new Date().getFullYear());
-  $("#anlagen-jahr").innerHTML = [j + 1, j, j - 1, j - 2, j - 3].map(String)
-    .map(x => `<option${x === anl.jahr ? " selected" : ""}>${x}</option>`).join("");
+  const jahr = anl.jahr;
+  try {
+    const [liste, jahre] = await Promise.all([api(`anlagen?jahr=${jahr}`), api("finanzen/jahre")]);
+    if (jahr !== anl.jahr) return;
+    anl.liste = liste;
+    jahresAuswahl($("#anlagen-jahr"), [new Date().getFullYear() + 1, ...jahre], jahr);   // Abschreibung auch fürs nächste Jahr
+  } catch (e) { return toast("Laden fehlgeschlagen: " + e.message, true); }
   $("#anlagen-kopf-afa").textContent = `Abschreibung ${anl.jahr}`;
   $("#anlagen-kopf-rest").textContent = `Restwert 31.12.${anl.jahr.slice(2)}`;
   $("#anlagen-body").innerHTML = anl.liste.map(a => {
@@ -631,15 +639,14 @@ $("#beleg-form").elements.kategorie.addEventListener("change", gwgHinweis);
 const ue = { jahr: String(new Date().getFullYear()), daten: null };
 const MON_KURZ = ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"];
 
-function jahresAuswahl(sel, jahr) {
-  const j = new Date().getFullYear();
-  sel.innerHTML = [j, j - 1, j - 2, j - 3].map(String).map(x => `<option${x === jahr ? " selected" : ""}>${x}</option>`).join("");
-}
-
 async function ladeUebersicht() {
-  try { ue.daten = await api(`finanzen/euer?jahr=${ue.jahr}`); }
-  catch (e) { return toast("Laden fehlgeschlagen: " + e.message, true); }
-  jahresAuswahl($("#finanzen-jahr"), ue.jahr);
+  const jahr = ue.jahr;
+  try {
+    const [daten, jahre] = await Promise.all([api(`finanzen/euer?jahr=${jahr}`), api("finanzen/jahre")]);
+    if (jahr !== ue.jahr) return;
+    ue.daten = daten;
+    jahresAuswahl($("#finanzen-jahr"), jahre, jahr);
+  } catch (e) { return toast("Laden fehlgeschlagen: " + e.message, true); }
   const d = ue.daten;
   const heute = new Date();
   const stand = Number(ue.jahr) === heute.getFullYear() ? `bis ${fmtDate(today())}` : `Jahr ${ue.jahr}`;
@@ -728,10 +735,13 @@ document.addEventListener("click", e => {
 
 async function ladeEuer() {
   let d;
-  try { d = await api(`finanzen/euer?jahr=${ue.jahr}`); }
-  catch (e) { return toast("Laden fehlgeschlagen: " + e.message, true); }
-  ue.daten = d;
-  jahresAuswahl($("#euer-jahr"), ue.jahr);
+  const jahr = ue.jahr;
+  try {
+    const [daten, jahre] = await Promise.all([api(`finanzen/euer?jahr=${jahr}`), api("finanzen/jahre")]);
+    if (jahr !== ue.jahr) return;
+    ue.daten = d = daten;
+    jahresAuswahl($("#euer-jahr"), jahre, jahr);
+  } catch (e) { return toast("Laden fehlgeschlagen: " + e.message, true); }
   $("#euer-titel").innerHTML = `EÜR ${ue.jahr} <span class="h2-sub">${d.kleinunternehmer ? "Kleinunternehmer" : "umsatzsteuerpflichtig, netto"}${Number(ue.jahr) === new Date().getFullYear() ? ` · Stand ${fmtDate(today())}` : ""}</span>`;
   const zeile = z => `<tr class="eingerueckt"><td>${esc(z.name)}${z.euer ? `<small>${esc(z.euer)}</small>` : ""}</td><td class="num">${euro2(z.betrag)}</td></tr>`;
   $("#euer-body").innerHTML = `<tr class="zwischen"><td>Betriebseinnahmen</td><td class="num">${euro2(d.einnahmen)}</td></tr>`

@@ -8,9 +8,10 @@ import email
 import hashlib
 import html
 import re
+import unicodedata
 from datetime import date, datetime, timedelta
 from email import policy
-from email.utils import parsedate_to_datetime
+from email.utils import parsedate_to_datetime, parseaddr
 
 # ---------- Beträge ----------
 
@@ -333,6 +334,8 @@ def auswerten(name, daten):
         v["message_id"] = mail["message_id"]
         v["belegdatum"] = mail["datum"]
         shop = shop_aus_absender(mail["absender"])
+        if not shop:
+            v["absender_adresse"] = parseaddr(mail["absender"] or "")[1]
         v["lieferant"] = shop[0] if shop else _anzeigename(mail["absender"])
         v["kategorie"] = shop[1] if shop else None
         v["beschreibung"] = mail["betreff"][:120] or None
@@ -436,7 +439,7 @@ def ocr_steuer(zeilen, gesamt):
     return None, None
 
 
-def ocr_vorschlaege(text, eigener_name=""):
+def ocr_vorschlaege(text, absender=None):
     """Vorschläge aus erkanntem Text. Lieber kein Wert als ein falscher – unsichere werden gekennzeichnet."""
     zeilen = zeilen_aus(ocr_bereinigen(text))
     betrag, stelle = ocr_gesamt(zeilen)
@@ -444,8 +447,7 @@ def ocr_vorschlaege(text, eigener_name=""):
     datum = datum_vorschlag(zeilen)
     if datum and not "2000-01-01" <= datum <= (date.today() + timedelta(days=31)).isoformat():
         datum = None        # verlesenes Datum würde den Beleg ins falsche EÜR-Jahr schieben
-    eigen = (eigener_name or "").strip().lower()
-    kopf = [z for z in zeilen[:10] if re.search(r"[A-Za-zÄÖÜäöü]{3}", z) and not (eigen and eigen in z.lower())]
+    kopf = [z for z in zeilen[:10] if re.search(r"[A-Za-zÄÖÜäöü]{3}", z) and not ist_eigen(z, absender or {})]
     return {"betrag": betrag, "fundstelle": stelle, "ust_satz": satz, "ust_betrag": steuer, "belegdatum": datum,
             "lieferant": _lieferant_aus_pdf(kopf), "unsicher": stelle == HOECHSTER}
 
@@ -462,6 +464,35 @@ def braucht_texterkennung(typ, betrag, daten):
         return len("".join(pdf_text(daten).split())) < 100
     except Exception:
         return True     # pypdf scheitert – das Rendern als Bild kann trotzdem gelingen
+
+
+def _woerter(text):
+    """Wörter zum Vergleichen von Namen: ohne Groß/Klein und Akzente; ü = ue = u, Straße = Str."""
+    t = re.sub(r"strasse|str\.", "str ", (text or "").casefold())
+    t = "".join(z for z in unicodedata.normalize("NFKD", t) if not unicodedata.combining(z))
+    return re.findall(r"[^\W_]+", re.sub(r"([aou])e", r"\1", t))
+
+
+def ist_eigen(text, absender):
+    """Bezeichnet der Text den Nutzer selbst (Name, Kontoinhaber, Anschrift)? Dann ist er kein Lieferant.
+    Mehrteilige Namen zählen in beliebiger Reihenfolge, auch mit Zusatz; einteilige und die Anschrift nur allein –
+    sonst würde „Max“ auch „Max Musikhaus“ treffen."""
+    w = [x for x in _woerter(text) if x not in ("herr", "herrn", "frau")]
+    if not w:
+        return False
+    zeile = "".join(w)
+    namen = [n for k in ("name", "kontoinhaber") for n in re.split(r"\s[-–—|/]\s|[|()]", absender.get(k) or "")]
+    for n in map(_woerter, namen):
+        if n and (zeile == "".join(n) or (len(n) > 1 and set(n) <= set(w))):
+            return True
+    strasse, ort = ("".join(_woerter(absender.get(k))) for k in ("strasse", "plz_ort"))
+    return zeile in {x for x in (strasse, ort, strasse + ort) if x}
+
+
+def ist_eigene_adresse(adresse, absender):
+    """Mail von einem selbst, z. B. eine weitergeleitete Kauf-Mail."""
+    eigene = {(absender.get(k) or "").strip().lower() for k in ("absender_email", "mail_antwort_an", "smtp_benutzer")}
+    return "@" in (adresse or "") and adresse.lower() in eigene
 
 
 def _anzeigename(absender):

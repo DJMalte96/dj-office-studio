@@ -2,6 +2,13 @@
 
 Alle Änderungen an DJ Office Studio. Neueste Version oben.
 
+## 1.6.1 – 2026-11-22
+
+### Behoben
+- **Ältere Jahre fehlten in den Jahresmenüs**: Ausgaben, Fahrten, Anschaffungen, Übersicht, EÜR und der Export in den Einstellungen bieten jetzt alle Jahre seit dem ältesten Eintrag an. Die Daten waren immer da, nur nicht auswählbar. Bei Ausgaben verschwand ein Jahr, sobald dessen letzter Beleg übernommen war.
+- **Eigener Name als Lieferant**: Name, Kontoinhaber und Anschrift aus den Einstellungen sowie die eigene Mailadresse (weitergeleitete Mails) werden nicht mehr als Lieferant vorgeschlagen. Das Feld bleibt dann leer und ein Hinweis erinnert daran, dass eigene Rechnungen keine Ausgaben sind. Schon erfasste Ausgaben bleiben unverändert.
+- **Beleg prüfen**: Fehlt der Lieferant, steht der Cursor gleich in diesem Feld, statt zum Knopf „Übernehmen“ nach unten zu springen.
+
 ## 1.6.0 – 2026-11-22
 
 ### Neu

@@ -215,10 +215,16 @@ document.addEventListener("click", e => {
   if (e.target.closest(".zu-einstellungen")) { e.preventDefault(); showTab("einstellungen"); }
 });
 
+// Alle Jahresmenüs: Jahre aus dem ganzen Bestand (api/finanzen/jahre), nie aus einer schon gefilterten Liste
+function jahresAuswahl(sel, jahre, gewaehlt) {
+  const html = [...new Set([...jahre.map(String), gewaehlt])].sort().reverse().map(j => `<option>${j}</option>`).join("");
+  if (sel.dataset.jahre !== html) sel.innerHTML = sel.dataset.jahre = html;   // nur bei Änderung, sonst klappt ein offenes Menü zu
+  sel.value = gewaehlt;
+}
+
 async function ladeEinstellungen() {
-  const [werte, rechnungen] = await Promise.all([api("einstellungen"), api("rechnungen")]);
-  const jahre = [...new Set([String(new Date().getFullYear()), ...rechnungen.map(r => r.datum.slice(0, 4))])].sort().reverse();
-  $("#export-jahr").innerHTML = jahre.map(j => `<option>${j}</option>`).join("");
+  const [werte, jahre] = await Promise.all([api("einstellungen"), api("finanzen/jahre")]);
+  jahresAuswahl($("#export-jahr"), jahre, String(new Date().getFullYear()));
   const form = $("#einstellungen");
   for (const [k, v] of Object.entries(werte)) {
     const feld = form.elements[k];
