@@ -8,7 +8,7 @@ import email
 import hashlib
 import html
 import re
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from email import policy
 from email.utils import parsedate_to_datetime
 
@@ -132,6 +132,7 @@ def steuer_vorschlag(zeilen, gesamt=None):
 
 # ---------- Datum ----------
 
+DATUM_KURZ = re.compile(r"(?<![\d.])(\d{1,2})\.(\d{1,2})\.(\d{2})(?![\d.])")   # Kassenbons: 02.07.26
 DATUM_DE = re.compile(r"\b(\d{1,2})\.(\d{1,2})\.(\d{4})\b")
 DATUM_US = re.compile(r"\b(\d{1,2})/(\d{1,2})/(\d{4})\b")
 DATUM_ISO = re.compile(r"\b(\d{4})-(\d{2})-(\d{2})\b")
@@ -160,6 +161,14 @@ def datum_vorschlag(zeilen):
         d = iso(z)
         if d:
             return d
+    for z in zeilen:        # zweistellige Jahre nur, wenn es kein vollständiges Datum gibt
+        for m in DATUM_KURZ.finditer(z):
+            t, mo, j = (int(x) for x in m.groups())
+            if 15 <= j <= date.today().year % 100 + 1:
+                try:
+                    return date(2000 + j, mo, t).isoformat()
+                except ValueError:
+                    continue
     return None
 
 
@@ -299,7 +308,7 @@ def auswerten(name, daten):
     v = {"typ": typ, "lieferant": None, "belegdatum": None, "betrag": None, "ust_satz": None, "ust_betrag": None,
          "beschreibung": None, "kategorie": None, "message_id": None, "fundstellen": {}, "hinweise": []}
     if typ == "bild":
-        v["hinweise"].append("Foto – keine automatische Erkennung, bitte Betrag eintragen")
+        v["hinweise"].append("Foto – bitte Betrag eintragen")
         return v
     if typ == "unbekannt":
         v["hinweise"].append("Dateityp nicht erkannt – bitte Werte eintragen")
@@ -364,11 +373,95 @@ def auswerten(name, daten):
 
 def text_vorschlaege(text):
     """Betrag, Umsatzsteuer und Datum aus reinem Text (z. B. der Texterkennung von Paperless)."""
-    zeilen = zeilen_aus(text or "")
-    betrag, fundstelle = gesamt_vorschlag(zeilen)
-    ust_satz, ust_betrag = steuer_vorschlag(zeilen, betrag)
-    return {"betrag": betrag, "fundstelle": fundstelle, "ust_satz": ust_satz, "ust_betrag": ust_betrag,
-            "belegdatum": datum_vorschlag(zeilen)}
+    return ocr_vorschlaege(text)
+
+
+# ---------- Texterkennung (Fotos, Scans) ----------
+
+HOECHSTER = "höchster Betrag im Beleg"
+OCR_KEINE_SUMME = re.compile(r"(?i)zwischen|sub\s*total|netto|rabatt|ersparnis|gespart|übertrag|punkte|vor steuern")
+OCR_BARGELD = re.compile(r"(?i)(?<![a-zäöü])(?:gegeben|bar|bargeld|rückgeld|ruckgeld|rueckgeld|zurück|wechselgeld|erhalten)(?![a-zäöü])")
+OCR_STEUER = re.compile(r"(?i)mwst|mehrwertsteuer|ust|umsatzsteuer|steuer|%")
+
+
+def ocr_bereinigen(text):
+    """Typische Lesefehler: „inkI.“ (großes i statt l), Leerzeichen hinter dem Dezimalkomma („42, 46“)."""
+    text = re.sub(r"(?<![A-Za-z])([Ii])nk[I1|](?![A-Za-z])", r"\1nkl", text or "")
+    return re.sub(r"(\d), (\d{2})(?!\d)", r"\1,\2", text)
+
+
+def ocr_gesamt(zeilen):
+    """Gesamtbetrag auf Fotos, Scans und Kassenbons: oft ohne Währung; gegebenes Bargeld ist nie die Summe."""
+    def in_zeile(z):
+        ohne_prozent = re.sub(r"\d+(?:[.,]\d+)?\s*%", " ", z)
+        b = betraege(ohne_prozent)
+        return b[0] if b else (zahlen_ohne_waehrung(ohne_prozent) or [None])[-1]
+
+    brutto = re.compile(r"(?i)inkl|incl|brutto")
+    summe = re.compile(r"(?i)gesamt|summe|total|betrag|zu zahlen")
+    kandidaten = [(i, z) for i, z in enumerate(zeilen) if not OCR_KEINE_SUMME.search(z) and not OCR_BARGELD.search(z)
+                  and (brutto.search(z) or not OCR_STEUER.search(z))]
+    for i, z in kandidaten:
+        if brutto.search(z) and summe.search(z) and "einzelpreis" not in z.lower():
+            b = in_zeile(z)
+            if b is not None:
+                return b, z[:80]
+    for wort in GESAMT_WOERTER + ["betrag"]:
+        muster = re.compile(rf"(?<![a-zäöü]){wort}(?![a-zäöü])", re.I)
+        for i, z in kandidaten:
+            if not muster.search(z):
+                continue
+            b = in_zeile(z)
+            if b is not None:
+                return b, z[:80]
+            # Betrag allein in der nächsten Zeile
+            if i + 1 < len(zeilen) and re.fullmatch(r"[\s€EURO\d.,]+", zeilen[i + 1]):
+                b = in_zeile(zeilen[i + 1])
+                if b is not None:
+                    return b, f"{z} … {zeilen[i + 1]}"[:80]
+    alle = [b for z in zeilen if not OCR_BARGELD.search(z) for b in betraege(z)]
+    return (max(alle), HOECHSTER) if alle else (None, None)
+
+
+def ocr_steuer(zeilen, gesamt):
+    """Steuersatz nur, wenn der gelesene Steuerbetrag rechnerisch zum Gesamtbetrag passt."""
+    if gesamt:
+        for z in zeilen:
+            for m in re.finditer(r"(?<![\d,.])(19|7)(?:[.,]0+)?\s*%", z):
+                satz = float(m.group(1))
+                soll = gesamt * satz / (100 + satz)
+                for zahl_ in zahlen_ohne_waehrung(z) + betraege(z):
+                    if abs(zahl_ - soll) <= .02:
+                        return satz, zahl_
+    return None, None
+
+
+def ocr_vorschlaege(text, eigener_name=""):
+    """Vorschläge aus erkanntem Text. Lieber kein Wert als ein falscher – unsichere werden gekennzeichnet."""
+    zeilen = zeilen_aus(ocr_bereinigen(text))
+    betrag, stelle = ocr_gesamt(zeilen)
+    satz, steuer = ocr_steuer(zeilen, betrag)
+    datum = datum_vorschlag(zeilen)
+    if datum and not "2000-01-01" <= datum <= (date.today() + timedelta(days=31)).isoformat():
+        datum = None        # verlesenes Datum würde den Beleg ins falsche EÜR-Jahr schieben
+    eigen = (eigener_name or "").strip().lower()
+    kopf = [z for z in zeilen[:10] if re.search(r"[A-Za-zÄÖÜäöü]{3}", z) and not (eigen and eigen in z.lower())]
+    return {"betrag": betrag, "fundstelle": stelle, "ust_satz": satz, "ust_betrag": steuer, "belegdatum": datum,
+            "lieferant": _lieferant_aus_pdf(kopf), "unsicher": stelle == HOECHSTER}
+
+
+def braucht_texterkennung(typ, betrag, daten):
+    """Foto, oder PDF ohne (nennenswerten) Text, in dem kein Betrag gefunden wurde."""
+    if betrag is not None:
+        return False
+    if typ == "bild":
+        return True
+    if typ != "pdf":
+        return False
+    try:
+        return len("".join(pdf_text(daten).split())) < 100
+    except Exception:
+        return True     # pypdf scheitert – das Rendern als Bild kann trotzdem gelingen
 
 
 def _anzeigename(absender):

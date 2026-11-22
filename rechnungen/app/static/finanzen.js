@@ -41,6 +41,7 @@ async function ladeAusgaben() {
   const jahre = [...new Set([String(new Date().getFullYear()), fin.jahr, ...fin.ausgaben.map(a => a.jahr).filter(Boolean)])].sort().reverse();
   $("#ausgaben-jahr").innerHTML = jahre.map(j => `<option${j === fin.jahr ? " selected" : ""}>${j}</option>`).join("");
   renderAusgaben();
+  ocrListeNachladen();
 }
 
 function renderAusgaben() {
@@ -50,14 +51,14 @@ function renderAusgaben() {
   $("#ausgaben-neu").innerHTML = neu.map(a => {
     const e = a.erkannt || {};
     const erkannt = [e.betrag != null && "Gesamt", e.ust_betrag != null && "MwSt.", e.kategorie && "Kategorie"].filter(Boolean);
-    const info = e.typ === "bild" ? "Foto – keine automatische Erkennung, Betrag bitte eintragen"
+    const info = ocrLaeuft(a) ? "Text wird gelesen …"
       : erkannt.length ? `erkannt: ${erkannt.join(", ")}` : "nichts erkannt – bitte Werte eintragen";
     return `<div class="neu-beleg" data-id="${a.id}">
       <div class="datei-icon">${TYP_KURZ[a.beleg_typ] || "DATEI"}</div>
       <div class="was"><strong>${esc(a.lieferant || a.beleg_name)}</strong>
         <small>${esc(a.beschreibung || a.beleg_name)} · ${fmtDate(a.belegdatum)} · ${info}</small></div>
       <div class="betrag">${a.betrag != null ? euro2(a.betrag) : "– €"}</div>
-      <button type="button" class="small${a === neu[0] ? "" : " secondary"}" data-act="pruefen">${a.betrag != null ? "Prüfen" : "Eintragen"}</button>
+      <button type="button" class="small${a === neu[0] ? "" : " secondary"}" data-act="pruefen">${a.betrag != null || ocrLaeuft(a) ? "Prüfen" : "Eintragen"}</button>
     </div>`;
   }).join("");
 
@@ -316,15 +317,8 @@ async function oeffneBeleg(id) {
   f.elements.notiz.required = ohneBeleg;
   $("#notiz-hinweis").textContent = ohneBeleg ? "(Pflicht: warum gibt es keinen Beleg?)" : "(optional)";
 
-  // Hinweise und Fundstellen der Erkennung
-  const e = (a && a.erkannt) || {};
-  $("#beleg-hinweise").innerHTML = (e.hinweise || []).map(h => `<li class="gelb">${esc(h)}</li>`).join("");
-  $("#erkannt-lieferant").innerHTML = neu && a && e.lieferant ? (a.beleg_typ === "mail" || a.beleg_typ === "msg"
-    ? "erkannt am Absender der Mail" : "aus dem Briefkopf übernommen – bitte prüfen") : "";
-  $("#erkannt-betrag").innerHTML = neu && e.betrag != null ? `erkannt: <b>${esc(e.fundstellen?.betrag || "")}</b>`
-    + (e.ust_betrag != null ? ` · Umsatzsteuer <b>${euro2(e.ust_betrag)}</b>` : "") + " – bitte kurz mit dem Beleg vergleichen" : "";
-  $("#erkannt-kategorie").textContent = neu && a && a.lieferant ? (e.kategorie && e.kategorie === a.kategorie
-    ? "aus dem Shop erkannt" : a.kategorie !== "sonstiges" ? `wie beim letzten Beleg von ${a.lieferant}` : "") : "";
+  zeigeErkennung(a, neu);
+  ocrImFormularVerfolgen();
 
   // Vorschau
   const v = $("#beleg-vorschau");
@@ -968,4 +962,70 @@ function zeichneGrenzen(g) {
       : `Umsatz ${j - 1}: ${euro2(g.vorjahr)} ${g.vorjahr > g.grenze_vorjahr ? "– über 25.000 €" : "– unter 25.000 € ✓"}`);
   $("#ku-hinweise").innerHTML = g.hinweise.filter(h => h.stufe !== "ok").map(h =>
     `<li class="${h.stufe === "info" ? "" : h.stufe}">${h.stufe === "rot" ? "⚠ " : ""}${esc(h.text)}</li>`).join("");
+}
+
+// ---------- Texterkennung (Fotos, Scans) ----------
+
+function ocrLaeuft(a) { return !!a && a.status === "neu" && (a.ocr === "wartet" || a.ocr === "laeuft"); }
+
+function zeigeErkennung(a, neu) {
+  const e = a?.erkannt || {}, laeuft = ocrLaeuft(a);
+  $("#ocr-stand").hidden = !laeuft;
+  $("#ocr-stand").textContent = a?.ocr === "wartet" ? "Text wird gleich gelesen – du kannst die Werte auch schon eintragen."
+    : "Text wird gelesen … – du kannst die Werte auch schon eintragen.";
+  $("#ocr-starten").hidden = laeuft || !neu || !a || a.betrag != null || !["bild", "pdf"].includes(a.beleg_typ);
+  $("#beleg-hinweise").innerHTML = laeuft ? "" : (e.hinweise || []).map(h => `<li class="gelb">${esc(h)}</li>`).join("");
+  // nur, solange das Feld noch den erkannten Wert hat – nicht unter selbst Getipptem
+  $("#erkannt-lieferant").textContent = neu && a && e.lieferant && $("#beleg-form").elements.lieferant.value === e.lieferant ? (a.beleg_typ === "mail" || a.beleg_typ === "msg"
+    ? "erkannt am Absender der Mail" : "aus dem Briefkopf übernommen – bitte prüfen") : "";
+  $("#erkannt-betrag").innerHTML = neu && e.betrag != null ? `erkannt: <b>${esc(e.fundstellen?.betrag || "")}</b>`
+    + (e.ust_betrag != null ? ` · Umsatzsteuer <b>${euro2(e.ust_betrag)}</b>` : "") + " – bitte kurz mit dem Beleg vergleichen" : "";
+  $("#erkannt-kategorie").textContent = neu && a && a.lieferant ? (e.kategorie && e.kategorie === a.kategorie
+    ? "aus dem Shop erkannt" : a.kategorie !== "sonstiges" ? `wie beim letzten Beleg von ${a.lieferant}` : "") : "";
+}
+
+const OCR_FELDER = {
+  lieferant: a => a.lieferant || "", belegdatum: a => a.belegdatum || "", bezahlt_am: a => a.bezahlt_am || "",
+  kategorie: a => a.kategorie || "", betrag: a => a.betrag != null ? Number(a.betrag).toFixed(2).replace(".", ",") : "",
+  ust_satz: a => a.ust_satz ? String(Math.round(a.ust_satz)) : "",
+};
+
+// Beleg ist offen, während noch gelesen wird: Ergebnis nur in Felder, die noch unverändert sind
+function ocrImFormularVerfolgen() {
+  clearTimeout(fin.ocrFormular);
+  const vorher = fin.aktuell;
+  if (!ocrLaeuft(vorher)) return;
+  fin.ocrFormular = setTimeout(async () => {
+    if (!$("#tab-beleg").classList.contains("active")) return;
+    let a;
+    try { a = await api(`ausgaben/${vorher.id}`); } catch (_) { return ocrImFormularVerfolgen(); }
+    if (fin.aktuell !== vorher) return;         // inzwischen ist ein anderer Beleg offen
+    if (a.status === "neu") {
+      const f = $("#beleg-form").elements;
+      for (const [k, wert] of Object.entries(OCR_FELDER)) {
+        if (f[k] !== document.activeElement && f[k].value === wert(vorher)) f[k].value = wert(a);
+        else if (f[k] === document.activeElement && f[k].value === "" && !wert(vorher)) f[k].value = wert(a);   // leeres Feld mit Cursor
+      }
+      fin.aktuell = a;
+      zeigeErkennung(a, true);
+      ocrImFormularVerfolgen();
+    }
+  }, 1500);
+}
+
+$("#ocr-starten").addEventListener("click", async () => {
+  const a = fin.aktuell;
+  if (!a) return;
+  try {
+    const stand = await api(`ausgaben/${a.id}/texterkennung`, { method: "POST" });
+    fin.aktuell = { ...a, ocr: stand.ocr };
+    zeigeErkennung(fin.aktuell, true);
+    ocrImFormularVerfolgen();
+  } catch (err) { toast(err.message, true); }
+});
+
+function ocrListeNachladen() {
+  clearTimeout(fin.ocrListe);
+  if (!fin.ausgaben.some(ocrLaeuft)) return;
+  fin.ocrListe = setTimeout(() => { if ($("#tab-ausgaben").classList.contains("active")) ladeAusgaben(); }, 2500);
 }

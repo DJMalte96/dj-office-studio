@@ -6,3 +6,11 @@ certifi>=2024.2.2
 segno==1.6.6
 extract-msg>=0.48,<1
 pillow-heif>=0.18,<2
+# Texterkennung für Fotos und Scans (lokal, Modelle im Paket). Versionen fest:
+# - onnxruntime 1.23.2 ist die letzte mit Intel-Mac und macOS 13; ebenso opencv 4.11
+# - texterkennung.py hängt an RapidOCR-Interna (Richtungserkennung) – bei Updates tests/test_texterkennung.py beachten
+rapidocr==3.10.0
+onnxruntime==1.23.2
+opencv-python-headless==4.11.0.86
+numpy==2.2.6
+pypdfium2==5.15.2

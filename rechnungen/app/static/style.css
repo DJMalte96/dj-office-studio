@@ -694,3 +694,7 @@ label .datum-feld > input.datum { margin-top: 0; }
 /* kleines Extra ganz unten in den Einstellungen */
 .easter-egg { margin: 40px 0 8px; text-align: center; font-size: 12px; color: var(--muted); opacity: .55; transition: opacity .3s; }
 .easter-egg:hover { opacity: 1; }
+/* Texterkennung */
+.ocr-stand { margin: 0 0 12px; padding: 10px 14px; border-radius: 10px; background: var(--primary-soft); font-size: 14px; }
+#ocr-starten { margin: 0 0 12px; }
+#ocr-starten[hidden], .ocr-stand[hidden] { display: none; }

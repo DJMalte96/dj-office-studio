@@ -38,4 +38,24 @@ jobs:
           }
 
       - name: JavaScript prüfen (Syntax)
-        run: node --check rechnungen/app/static/app.js
+        run: for f in rechnungen/app/static/*.js; do node --check "$f"; done
+
+  # Das echte Add-on-Image für beide Architekturen von Home Assistant, mit 1 GB RAM wie auf kleinen Geräten
+  container:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Image bauen
+        run: docker build -t djos rechnungen && docker image ls djos
+      - name: Texterkennung im Image (1 GB RAM, ohne Internet)
+        run: |
+          docker run -d --name djos --network none --memory 1g --memory-swap 1g --cpus 2 -v "$PWD/tests:/pruefung:ro" djos
+          docker exec djos python3 /pruefung/ocr_rauchtest.py http://127.0.0.1:8099
+          echo "Speicherspitze: $(( $(docker exec djos cat /sys/fs/cgroup/memory.peak) / 1048576 )) MB"
+      - name: Protokoll
+        if: always()
+        run: docker logs djos 2>&1 | tail -40 || true

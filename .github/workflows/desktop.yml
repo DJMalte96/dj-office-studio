@@ -39,6 +39,13 @@ jobs:
       - name: Abhängigkeiten
         run: pip install -r rechnungen/requirements.txt -r desktop/requirements.txt pyinstaller pillow pytest
 
+      - name: numpy für macOS 13 (pip nimmt sonst die Variante des Build-Rechners)
+        if: runner.os == 'macOS'
+        run: |
+          NUMPY=$(grep '^numpy==' rechnungen/requirements.txt)
+          pip download "$NUMPY" --no-deps --only-binary :all: --platform "macosx_13_0_$(uname -m)" -d "$RUNNER_TEMP/numpy"
+          pip install --force-reinstall --no-deps "$RUNNER_TEMP"/numpy/*.whl
+
       - name: Tests
         run: |
           pytest -q tests --junitxml=pytest.xml || {
@@ -60,6 +67,10 @@ jobs:
 
       - name: Bauen
         run: python desktop/build.py
+
+      - name: Läuft ab macOS 13 (kein Programmteil darf mehr verlangen)
+        if: runner.os == 'macOS'
+        run: python desktop/mindest_macos.py "dist/DJ Office Studio.app" 13
 
       - name: Wie aus dem Internet geladen markieren (Windows)
         if: runner.os == 'Windows'
@@ -107,6 +118,8 @@ jobs:
           STRECKE=$(curl -s -G --max-time 60 --data-urlencode "strasse=Marienplatz 1" --data-urlencode "plz=80331" --data "ort=M%C3%BCnchen" http://127.0.0.1:8765/api/fahrten/vorschau || true)
           echo "Strecke Hamburg → München: $STRECKE"
           if echo "$STRECKE" | grep -q '"km_einfach"'; then echo "Kartendienst ok"; else echo "::warning::Kartendienst nicht erreichbar: $STRECKE"; fi
+          # Texterkennung in der gepackten App (eigener Prozess, Modelle, native Bibliotheken)
+          python tests/ocr_rauchtest.py http://127.0.0.1:8765
           kill %1 || true
 
       - name: Packen (macOS)

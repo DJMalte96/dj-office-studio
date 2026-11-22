@@ -236,6 +236,15 @@ def init():
             for spalte, typ in (("kleinunternehmer", "INTEGER"), ("ust_satz", "REAL")):
                 if spalte not in vorhanden:
                     con.execute(f"ALTER TABLE {tabelle} ADD COLUMN {spalte} {typ}")
+        # seit 1.5: Texterkennung für Fotos und Scans (ocr: wartet | laeuft | fertig | fehler | nicht_verfuegbar)
+        vorhanden = {r["name"] for r in con.execute("PRAGMA table_info(ausgaben)")}
+        if "ocr_versuche" not in vorhanden:
+            con.execute("ALTER TABLE ausgaben ADD COLUMN ocr_versuche INTEGER DEFAULT 0")
+        if "ocr" not in vorhanden:
+            con.execute("ALTER TABLE ausgaben ADD COLUMN ocr TEXT")
+            # einmalig: vorhandene, noch ungeprüfte Fotos und Scans ohne Betrag nachträglich lesen
+            con.execute("UPDATE ausgaben SET ocr = 'wartet' WHERE status = 'neu' AND betrag IS NULL AND beleg_datei IS NOT NULL"
+                        " AND (beleg_typ = 'bild' OR (beleg_typ = 'pdf' AND erkannt_json LIKE '%PDF ohne Text%'))")
         for (titel, text), anlass in LEGACY_TEXTBAUSTEINE.items():
             con.execute("UPDATE textbausteine SET titel = ?, text = ?, preis = NULL, grundpreis = NULL,"
                         " grundstunden = NULL, stundensatz = NULL WHERE titel = ? AND text = ?",

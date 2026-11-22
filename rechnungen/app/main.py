@@ -1185,6 +1185,7 @@ if __name__ == "__main__":
 
     db.init()
     finanzen.ordner_waechter_starten()   # Belege-Ordner regelmäßig einlesen
+    finanzen.texterkennung_starten()     # Fotos und Scans im Hintergrund lesen
     port = int(os.environ.get("PORT", "8099"))
     print(f"DJ Office Studio läuft auf Port {port}")
     serve(app, host="0.0.0.0", port=port)

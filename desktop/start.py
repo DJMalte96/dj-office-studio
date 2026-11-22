@@ -167,6 +167,7 @@ def main():
     port = freier_port()
     server = create_server(webapp.app, host="127.0.0.1", port=port, threads=8)
     webapp.finanzen.ordner_waechter_starten()   # Belege-Ordner regelmäßig einlesen
+    webapp.finanzen.texterkennung_starten()     # Fotos und Scans im Hintergrund lesen
     threading.Thread(target=server.run, daemon=True).start()
     url = f"http://127.0.0.1:{port}/"
     print(f"{APP_NAME} {webapp.APP_VERSION} läuft unter {url}", flush=True)
@@ -300,5 +301,16 @@ def fenster(url, version, server):
     root.mainloop()
 
 
+def texterkennung_kind(pfad, ausgabe):
+    """Die App ruft sich für die Texterkennung selbst als Kindprozess auf – ohne Fenster und ohne Server."""
+    if not getattr(sys, "frozen", False):
+        sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "rechnungen" / "app"))
+    import texterkennung
+    texterkennung.kind(pfad, ausgabe)
+
+
 if __name__ == "__main__":
-    main()
+    if len(sys.argv) == 4 and sys.argv[1] == "--texterkennung":   # vor allem anderen: sonst öffnet sich ein zweites Fenster
+        texterkennung_kind(sys.argv[2], sys.argv[3])
+    else:
+        main()

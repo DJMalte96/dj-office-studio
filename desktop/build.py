@@ -30,6 +30,10 @@ args = [
     "--icon", str(ROOT / "rechnungen" / "icon.png"),
     "--distpath", str(OUT / "dist"), "--workpath", str(OUT / "build"), "--specpath", str(OUT / "build"),
 ]
+# Texterkennung: Modelle, Einstellungen und Lizenzhinweise von RapidOCR, native Bibliotheken
+args += ["--hidden-import", "texterkennung", "--collect-data", "rapidocr", "--copy-metadata", "rapidocr",
+         "--collect-submodules", "rapidocr.inference_engine.onnxruntime", "--collect-binaries", "onnxruntime",
+         "--collect-all", "pypdfium2_raw", "--collect-all", "pypdfium2"]
 # Eigenes App-Fenster (pywebview): JavaScript-Teile mitnehmen und die Plattform-Anbindung sicher einbinden
 args += ["--collect-data", "webview", "--hidden-import", "webview"]
 if sys.platform == "darwin":

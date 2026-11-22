@@ -7,12 +7,13 @@ Status „neu“, bis sie in der App geprüft und übernommen wurden. Die Tabell
 import json
 import os
 import re
-from datetime import date
+from datetime import date, datetime, timezone
 
 from flask import Blueprint, Response, abort, jsonify, request
 
 import belege
 import db
+import texterkennung
 
 bp = Blueprint("finanzen", __name__)
 
@@ -35,6 +36,9 @@ KATEGORIEN = {
 
 FELDER = ("belegdatum", "bezahlt_am", "lieferant", "beschreibung", "kategorie", "betrag", "ust_satz", "privatanteil",
           "notiz", "rechnung_id")
+
+
+UNSICHER = "Keine Summenzeile gefunden – vorgeschlagen ist der höchste Betrag, bitte genau prüfen"
 
 
 def _belege_ordner():
@@ -110,25 +114,32 @@ def beleg_aufnehmen(name, daten, paperless=None):
             v["hinweise"] = [h for h in v["hinweise"] if "bitte Betrag eintragen" not in h and "Gesamtbetrag nicht" not in h]
             v["hinweise"].append("Werte aus der Texterkennung von Paperless" if t["betrag"] is not None
                                  else "Gesamtbetrag nicht gefunden – bitte eintragen")
+            if t["unsicher"]:
+                v["hinweise"].append(UNSICHER)
         v["lieferant"] = paperless.get("korrespondent") or v["lieferant"] or paperless.get("titel")
         v["belegdatum"] = v["belegdatum"] or paperless.get("datum")   # Datum im Beleg schlägt Paperless (dort oft der Importtag)
         v["beschreibung"] = v["beschreibung"] or paperless.get("titel")
         v["hinweise"].append(f"Aus Paperless (Dokument {pl_id})")
     kategorie = _kategorie_fuer(v["lieferant"]) or v["kategorie"] or "sonstiges"
     belegdatum = v["belegdatum"] or date.today().isoformat()
+    ocr = "wartet" if belege.braucht_texterkennung(v["typ"], v["betrag"], daten) else None
+    if not v["belegdatum"]:
+        v["datum_ersatz"] = belegdatum      # Platzhalter: den darf die Texterkennung später ersetzen
     with db.connect() as con:
         aid = con.execute(
             "INSERT INTO ausgaben (status, belegdatum, bezahlt_am, lieferant, beschreibung, kategorie, betrag, ust_satz,"
-            " beleg_name, beleg_typ, beleg_pruefsumme, mail_message_id, erkannt_json, paperless_id)"
-            " VALUES ('neu', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            " beleg_name, beleg_typ, beleg_pruefsumme, mail_message_id, erkannt_json, paperless_id, ocr)"
+            " VALUES ('neu', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (belegdatum, belegdatum, v["lieferant"] or "", v["beschreibung"] or "", kategorie, v["betrag"], v["ust_satz"],
-             name, v["typ"], pruef, v["message_id"], json.dumps(v), pl_id)).lastrowid
+             name, v["typ"], pruef, v["message_id"], json.dumps(v), pl_id, ocr)).lastrowid
         rel = os.path.join("belege", belegdatum[:4], f"{aid}_{_dateiname(name)}")
         ziel = os.path.join(db.DATA_DIR, rel)
         os.makedirs(os.path.dirname(ziel), exist_ok=True)
         with open(ziel, "wb") as f:
             f.write(daten)
         con.execute("UPDATE ausgaben SET beleg_datei = ? WHERE id = ?", (rel, aid))
+    if ocr:
+        _ocr_wecker.set()
     return holen(aid), None
 
 
@@ -1544,3 +1555,135 @@ def ordner_suchen():
                        + ", ".join(wurzeln or SUCH_WURZELN) + "). Bitte den Pfad von Hand eintragen.")
     return jsonify({"muster": muster, "ordner": muster[0], "anzahl": sum(len(list(_ordner_dateien(o, 0)))
                                                                        for o in _ordner_liste(muster[0]))})
+
+
+# ---------- Texterkennung: Warteschlange für Fotos und Scans ----------
+
+_ocr_wecker = threading.Event()
+_ocr_sperre = threading.Lock()      # immer nur ein Beleg gleichzeitig (Arbeitsspeicher)
+_ocr_waechter = []
+
+
+def _platzhalter_tage(a, v):
+    """Tage, die als „kein Datum erkannt“ gelten: das beim Anlegen eingesetzte Tagesdatum."""
+    if v.get("belegdatum"):
+        return set()
+    if v.get("datum_ersatz"):
+        return {v["datum_ersatz"]}
+    try:    # Belege von vor 1.5: Tag des Anlegens (gespeichert in UTC, eingesetzt in Ortszeit)
+        utc = datetime.fromisoformat(a["erstellt"]).replace(tzinfo=timezone.utc)
+    except (TypeError, ValueError):
+        return set()
+    return {utc.date().isoformat(), utc.astimezone().date().isoformat()}
+
+
+def _ocr_uebernehmen(aid, pruef, stand, text=None, problem=None):
+    """Ergebnis eintragen: nur in unangetastete Felder und nur, solange derselbe Beleg noch ungeprüft ist."""
+    t = belege.ocr_vorschlaege(text, _einstellungen().get("name")) if text else {}
+    kategorie = _kategorie_fuer(t.get("lieferant"))
+    with db.connect() as con:
+        con.execute("BEGIN IMMEDIATE")
+        a = con.execute("SELECT * FROM ausgaben WHERE id = ? AND beleg_pruefsumme IS ?", (aid, pruef)).fetchone()
+        if not a:
+            return                          # inzwischen verworfen oder Sicherung eingespielt
+        w = {"ocr": stand}
+        if a["status"] == "neu":
+            v = json.loads(a["erkannt_json"] or "{}")
+            hinweise = [h for h in v.get("hinweise", []) if not re.search(
+                r"Betrag eintragen|keine automatische|Gesamtbetrag nicht|Texterkennung", h) and h != UNSICHER]
+            if t:
+                if a["betrag"] is None and t["betrag"] is not None:
+                    w["betrag"] = t["betrag"]
+                    if a["ust_satz"] is None and t["ust_satz"]:
+                        w["ust_satz"] = t["ust_satz"]
+                if not a["lieferant"] and t["lieferant"]:
+                    w["lieferant"] = t["lieferant"]
+                    v["lieferant"] = t["lieferant"]
+                    if kategorie and a["kategorie"] == "sonstiges":
+                        w["kategorie"] = kategorie
+                if t["belegdatum"]:
+                    platzhalter = _platzhalter_tage(a, v)
+                    for feld in ("belegdatum", "bezahlt_am"):
+                        if a[feld] in platzhalter:
+                            w[feld] = t["belegdatum"]
+                    if "belegdatum" in w:
+                        v["belegdatum"] = t["belegdatum"]
+                if "betrag" in w:
+                    v.update(betrag=t["betrag"], ust_satz=t["ust_satz"], ust_betrag=t["ust_betrag"])
+                    v.setdefault("fundstellen", {})["betrag"] = t["fundstelle"]
+            if problem:
+                hinweise.append(f"{problem} – bitte Betrag eintragen")
+            elif t.get("betrag") is None:
+                hinweise.append("Texterkennung: keinen Gesamtbetrag gefunden – bitte eintragen")
+            else:
+                hinweise.append("Werte aus der Texterkennung – bitte mit dem Beleg vergleichen")
+                if t["unsicher"] and "betrag" in w:
+                    hinweise.append(UNSICHER)
+            v["hinweise"] = hinweise
+            w["erkannt_json"] = json.dumps(v)
+        con.execute(f"UPDATE ausgaben SET {', '.join(k + ' = ?' for k in w)} WHERE id = ?", [*w.values(), aid])
+
+
+def texterkennung_durchlauf():
+    """Warteschlange abarbeiten → Anzahl der bearbeiteten Belege."""
+    if not _ocr_sperre.acquire(blocking=False):
+        return 0
+    n = 0
+    try:
+        with db.connect() as con:
+            # „laeuft“ ohne laufende Erkennung: App wurde mittendrin beendet. Einmal wiederholen, dann aufgeben –
+            # falls der Beleg das Gerät überfordert, darf daraus keine Neustart-Schleife werden.
+            con.execute("UPDATE ausgaben SET ocr = CASE WHEN ocr_versuche < 2 THEN 'wartet' ELSE 'fehler' END WHERE ocr = 'laeuft'")
+            con.execute("UPDATE ausgaben SET ocr = NULL WHERE ocr = 'wartet' AND status != 'neu'")
+        while True:
+            with db.connect() as con:
+                a = con.execute("SELECT id, beleg_datei, beleg_pruefsumme FROM ausgaben WHERE ocr = 'wartet' AND status = 'neu'"
+                                " ORDER BY id LIMIT 1").fetchone()
+                if not a:
+                    return n
+                con.execute("UPDATE ausgaben SET ocr = 'laeuft', ocr_versuche = COALESCE(ocr_versuche, 0) + 1 WHERE id = ?", (a["id"],))
+            stand, text, problem = "fertig", None, None
+            try:
+                pfad = os.path.realpath(os.path.join(db.DATA_DIR, a["beleg_datei"] or ""))
+                if not pfad.startswith(os.path.realpath(_belege_ordner()) + os.sep) or not os.path.isfile(pfad):
+                    raise texterkennung.Fehlgeschlagen("Datei fehlt")
+                text = texterkennung.lesen(pfad)
+            except texterkennung.NichtVerfuegbar as e:
+                print(f"Texterkennung nicht verfügbar: {e}", flush=True)
+                stand, problem = "nicht_verfuegbar", "Texterkennung auf diesem Gerät nicht verfügbar (am Mac ab macOS 13)"
+            except Exception as e:
+                stand, problem = "fehler", f"Texterkennung fehlgeschlagen ({e})"
+            _ocr_uebernehmen(a["id"], a["beleg_pruefsumme"], stand, text, problem)
+            n += 1
+    finally:
+        _ocr_sperre.release()
+
+
+def _ocr_schleife():
+    while True:
+        _ocr_wecker.clear()
+        try:
+            texterkennung_durchlauf()
+        except Exception as e:      # der Wächter darf nie sterben
+            print(f"Texterkennung: {type(e).__name__}: {e}", flush=True)
+        _ocr_wecker.wait(30)
+
+
+def texterkennung_starten():
+    """Nur beim echten Programmstart (main.py bzw. Desktop-App), nie in den Tests."""
+    if HINTERGRUND and not _ocr_waechter:
+        t = threading.Thread(target=_ocr_schleife, daemon=True, name="texterkennung")
+        _ocr_waechter.append(t)
+        t.start()
+
+
+@bp.post("/api/ausgaben/<int:aid>/texterkennung")
+def texterkennung_anstossen(aid):
+    """„Text erkennen“: (noch einmal) lesen, z. B. nach einem Fehler."""
+    a = holen(aid) or abort(404)
+    if a["status"] != "neu" or a["beleg_typ"] not in ("pdf", "bild") or not a["beleg_datei"]:
+        return _fehler("Texterkennung gibt es nur für ungeprüfte Fotos und PDFs")
+    with db.connect() as con:
+        con.execute("UPDATE ausgaben SET ocr = 'wartet', ocr_versuche = 0 WHERE id = ? AND COALESCE(ocr, '') != 'laeuft'", (aid,))
+    _ocr_wecker.set()
+    return jsonify(holen(aid))
