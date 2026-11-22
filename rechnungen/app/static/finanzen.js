@@ -27,6 +27,7 @@ async function ladeKategorien() {
 /* Wird von showTab() in app.js aufgerufen */
 function finanzenTab(name) {
   if (name === "ausgaben") { ladeAusgaben(); ordnerPruefen(); }
+  if (name === "papierkorb") ladePapierkorb();
   if (name === "fahrten") ladeFahrten();
   if (name === "anschaffungen") ladeAnlagen();
   if (name === "finanzen") ladeUebersicht();
@@ -41,6 +42,7 @@ async function ladeAusgaben() {
   const jahre = [...new Set([String(new Date().getFullYear()), fin.jahr, ...fin.ausgaben.map(a => a.jahr).filter(Boolean)])].sort().reverse();
   $("#ausgaben-jahr").innerHTML = jahre.map(j => `<option${j === fin.jahr ? " selected" : ""}>${j}</option>`).join("");
   renderAusgaben();
+  ladePapierkorbAnzahl();
   ocrListeNachladen();
 }
 
@@ -146,7 +148,7 @@ async function belegeHochladen(dateien) {
   if (hochladenLaeuft) { toast("Es wird gerade noch hochgeladen – bitte kurz warten.", true); return; }
   hochladenLaeuft = true;
   const status = $("#beleg-status");
-  const gesamt = { neu: 0, doppelt: [], fehler: [] };
+  const gesamt = { neu: 0, doppelt: [], papierkorb: [], fehler: [] };
   const zuGross = dateien.filter(f => f.size > MAX_DATEI);
   zuGross.forEach(f => gesamt.fehler.push({ datei: f.name, fehler: "größer als 95 MB" }));
   const pakete = inPakete(dateien.filter(f => f.size <= MAX_DATEI));
@@ -160,6 +162,7 @@ async function belegeHochladen(dateien) {
         const d = await paketHochladen(paket);
         gesamt.neu += d.neu.length;
         gesamt.doppelt.push(...d.doppelt);
+        gesamt.papierkorb.push(...(d.papierkorb || []));
         gesamt.fehler.push(...d.fehler);
       } catch (e) { abbruch = e; break; }
       fertig += paket.length;
@@ -169,6 +172,10 @@ async function belegeHochladen(dateien) {
     if (gesamt.doppelt.length) {
       const namen = gesamt.doppelt.length <= 5 ? ` (${gesamt.doppelt.map(x => x.datei).join(", ")})` : "";
       teile.push(`${gesamt.doppelt.length} schon vorhanden${namen}`);
+    }
+    if (gesamt.papierkorb.length) {
+      teile.push(`${gesamt.papierkorb.length} im Papierkorb gefunden`);
+      papierkorbAnbieten(gesamt.papierkorb.map(x => x.id));
     }
     if (gesamt.fehler.length) {
       const namen = gesamt.fehler.length <= 3 ? ` (${gesamt.fehler.map(x => x.datei).join(", ")})` : "";
@@ -288,6 +295,10 @@ async function oeffneBeleg(id) {
   if (id != null) {
     try { a = await api(`ausgaben/${id}`); } catch (e) { return toast(e.message, true); }
   }
+  if (a && a.status === "papierkorb") {        // in einem anderen Fenster gelöscht
+    toast("Dieser Beleg liegt im Papierkorb.", true);
+    return naechsterOderListe();
+  }
   fin.aktuell = a;
   const f = $("#beleg-form");
   f.reset();
@@ -326,16 +337,20 @@ async function oeffneBeleg(id) {
     v.innerHTML = `<div class="ohne-beleg"><b>Ohne Beleg</b><br>Für Ausgaben ohne Quittung (z. B. Parkautomat) bitte in der Notiz festhalten, warum es keinen Beleg gibt.</div>`;
     $("#beleg-original").textContent = "";
   } else {
-    const url = `api/ausgaben/${a.id}/ansicht`;
-    v.innerHTML = a.beleg_typ === "bild" ? `<img src="${url}" alt="Beleg" onerror="this.outerHTML='<div class=&quot;ohne-beleg&quot;>Für dieses Foto ist keine Vorschau möglich – bitte über „Original öffnen“ ansehen.</div>'">`
-      : a.beleg_typ === "unbekannt" ? `<div class="ohne-beleg">Keine Vorschau für diesen Dateityp.</div>`
-      : `<iframe src="${url}" title="Beleg" ${a.beleg_typ === "pdf" ? "" : 'sandbox=""'}></iframe>`;
+    v.innerHTML = belegVorschauHtml(a);
     $("#beleg-original").innerHTML = `${a.beleg_typ === "mail" || a.beleg_typ === "msg" ? "Original-Mail" : "Original"} wird unverändert gespeichert · `
       + `<a href="#" id="beleg-original-link">Original öffnen</a>`;
   }
   showTab("beleg");
   window.scrollTo(0, 0);
   setTimeout(() => (f.elements.betrag.value ? f.querySelector("[type=submit]") : f.elements.betrag).focus(), 50);
+}
+
+function belegVorschauHtml(a) {
+  const url = `api/ausgaben/${a.id}/ansicht`;
+  return a.beleg_typ === "bild" ? `<img src="${url}" alt="Beleg" onerror="this.outerHTML='<div class=&quot;ohne-beleg&quot;>Für dieses Foto ist keine Vorschau möglich – bitte über „Original öffnen“ ansehen.</div>'">`
+    : a.beleg_typ === "unbekannt" ? `<div class="ohne-beleg">Keine Vorschau für diesen Dateityp.</div>`
+    : `<iframe src="${url}" title="Beleg" ${a.beleg_typ === "pdf" ? "" : 'sandbox=""'}></iframe>`;
 }
 
 document.addEventListener("click", e => {
@@ -373,12 +388,12 @@ $("#beleg-form").addEventListener("submit", async e => {
 $("#beleg-verwerfen").addEventListener("click", async () => {
   const a = fin.aktuell;
   if (!a) return;
-  const frage = a.status === "neu" ? `Beleg „${a.beleg_name || a.lieferant}“ verwerfen?\n\nDie hochgeladene Datei wird gelöscht.`
-    : `Ausgabe ${a.lieferant} (${euro2(a.betrag)}) löschen?\n\nDer Beleg wird mit gelöscht.`;
+  const frage = a.status === "neu" ? `Beleg „${a.beleg_name || a.lieferant}“ verwerfen?\n\nEr kommt in den Papierkorb und lässt sich dort wiederherstellen.`
+    : `Ausgabe ${a.lieferant} (${euro2(a.betrag)}) löschen?\n\nSie kommt mit Beleg in den Papierkorb, zählt nicht mehr mit und lässt sich dort wiederherstellen.`;
   if (!confirm(frage)) return;
   try {
     await api(`ausgaben/${a.id}`, { method: "DELETE" });
-    toast(a.status === "neu" ? "Beleg verworfen" : "Ausgabe gelöscht");
+    toast(a.status === "neu" ? "Beleg in den Papierkorb gelegt" : "Ausgabe in den Papierkorb gelegt");
     naechsterOderListe();
   } catch (err) { toast(err.message, true); }
 });
@@ -872,6 +887,7 @@ $("#paperless-abholen").addEventListener("click", async e => {
     const teile = [];
     if (st.neu) teile.push(`${st.neu} neu`);
     if (st.doppelt) teile.push(`${st.doppelt} schon von Hand hochgeladen`);
+    if (st.verworfen) teile.push(`${st.verworfen} verworfen, bleiben draußen`);
     if (st.fehler?.length) teile.push(`${st.fehler.length} nicht lesbar (${st.fehler.slice(0, 3).join(", ")})`);
     if (st.abbruch) toast(`${st.abbruch}${teile.length ? " · bis dahin: " + teile.join(" · ") : ""}`, true);
     else toast(teile.length ? `Paperless: ${teile.join(" · ")}` : `Paperless: keine neuen Belege (${st.vorhanden} schon übernommen)`);
@@ -903,6 +919,7 @@ async function ordnerPruefen() {
     try { st = await api("belege-ordner"); } catch (_) { return; }
     zeigeOrdnerStand(st);
   }
+  if (st.papierkorb?.length) papierkorbAnbieten(st.papierkorb);
   const neu = st.neu - (start[0] ?? st.neu), doppelt = st.doppelt - (start[1] ?? st.doppelt);
   if (neu || doppelt) {
     toast(`Belege-Ordner: ${neu ? `${neu} neu` : ""}${neu && doppelt ? " · " : ""}${doppelt ? `${doppelt} schon vorhanden` : ""}`);
@@ -1029,3 +1046,133 @@ function ocrListeNachladen() {
   if (!fin.ausgaben.some(ocrLaeuft)) return;
   fin.ocrListe = setTimeout(() => { if ($("#tab-ausgaben").classList.contains("active")) ladeAusgaben(); }, 2500);
 }
+
+// ---------- Papierkorb ----------
+
+const papierkorb = { liste: [], angebot: new Set(), abgelehnt: new Set(), vorschau: null };
+
+async function ladePapierkorbAnzahl() {
+  try {
+    const { anzahl } = await api("papierkorb/anzahl");
+    $("#papierkorb-anzahl").textContent = anzahl ? ` (${anzahl})` : "";
+  } catch (_) { /* nur die Zahl am Knopf */ }
+}
+
+async function ladePapierkorb() {
+  try { papierkorb.liste = await api("papierkorb"); }
+  catch (e) { return toast("Laden fehlgeschlagen: " + e.message, true); }
+  $("#papierkorb-leeren").classList.toggle("hidden", !papierkorb.liste.length);
+  $("#papierkorb-liste").innerHTML = papierkorb.liste.map(a => {
+    const wann = a.geloescht_am ? `gelöscht am ${fmtDate(a.geloescht_am.slice(0, 10))}` : "aus der Zeit vor 1.6 im Belege-Ordner gefunden";
+    const war = a.status_vorher === "ok" ? `war übernommen (${esc(a.jahr)})` : "ungeprüft";
+    return `<div class="neu-beleg papierkorb-zeile" data-id="${a.id}">
+      <div class="datei-icon">${a.beleg_datei ? TYP_KURZ[a.beleg_typ] || "DATEI" : "OHNE"}</div>
+      <div class="was"><strong>${esc(a.lieferant || a.beleg_name || "Ausgabe")}</strong>
+        <small>${esc(a.beschreibung || a.beleg_name || a.notiz || "")}${a.belegdatum ? ` · ${fmtDate(a.belegdatum)}` : ""}</small>
+        <small>${war} · ${wann}</small></div>
+      <div class="betrag">${a.betrag != null ? euro2(a.betrag) : "– €"}</div>
+      <div class="papierkorb-knoepfe">
+        ${a.beleg_datei ? `<button type="button" class="small secondary" data-act="vorschau">Vorschau</button>` : ""}
+        <button type="button" class="small" data-act="holen">Wiederherstellen</button>
+        <button type="button" class="small secondary danger-text" data-act="endgueltig">Endgültig löschen</button>
+      </div>
+    </div>`;
+  }).join("") || `<p class="hint">Der Papierkorb ist leer.</p>`;
+}
+
+async function papierkorbHolen(a) {
+  if (a.aehnlich && !confirm(`Es gibt schon eine Ausgabe mit gleichem Betrag und Datum (${a.aehnlich}).\n\n`
+    + "Ist das derselbe Beleg, würde er doppelt zählen. Trotzdem wiederherstellen?")) return null;
+  return api(`papierkorb/${a.id}/wiederherstellen`, { method: "POST" });
+}
+
+async function papierkorbEinenHolen(a) {
+  try {
+    const neu = await papierkorbHolen(a);
+    if (!neu) return;
+    toast(neu.status === "ok" ? `Wiederhergestellt – zählt wieder in der EÜR ${neu.jahr}` : "Wiederhergestellt unter „Neu – bitte prüfen“");
+    $("#papierkorb-dialog").close();
+    await ladePapierkorb();
+    ladePapierkorbAnzahl();
+  } catch (e) { toast(e.message, true); }
+}
+
+$("#papierkorb-oeffnen").addEventListener("click", () => showTab("papierkorb"));
+$("#papierkorb-zurueck").addEventListener("click", () => showTab("ausgaben"));
+$("#papierkorb-liste").addEventListener("click", async e => {
+  const act = e.target.closest("[data-act]")?.dataset.act;
+  const id = Number(e.target.closest("[data-id]")?.dataset.id);
+  const a = papierkorb.liste.find(x => x.id === id);
+  if (!act || !a) return;
+  if (act === "holen") return papierkorbEinenHolen(a);
+  if (act === "vorschau") {
+    papierkorb.vorschau = a;
+    $("#papierkorb-dialog-titel").textContent = a.lieferant || a.beleg_name || "Beleg";
+    $("#papierkorb-vorschau").innerHTML = belegVorschauHtml(a);
+    return $("#papierkorb-dialog").showModal();
+  }
+  if (act === "endgueltig") {
+    if (!confirm(`„${a.lieferant || a.beleg_name || "Ausgabe"}“ endgültig löschen?\n\nDie Belegdatei in der App wird gelöscht. Das lässt sich nicht rückgängig machen.`
+      + (a.status_vorher === "ok" ? "\n\nDiese Ausgabe war schon übernommen: Buchungsbelege muss man in der Regel 8 Jahre aufbewahren." : ""))) return;
+    try {
+      await api(`papierkorb/${a.id}`, { method: "DELETE" });
+      toast("Endgültig gelöscht");
+      await ladePapierkorb();
+    } catch (err) { toast(err.message, true); }
+  }
+});
+$("#papierkorb-dialog-zu").addEventListener("click", () => $("#papierkorb-dialog").close());
+$("#papierkorb-dialog-holen").addEventListener("click", () => papierkorb.vorschau && papierkorbEinenHolen(papierkorb.vorschau));
+$("#papierkorb-dialog").addEventListener("close", () => { $("#papierkorb-vorschau").innerHTML = ""; papierkorb.vorschau = null; });
+
+$("#papierkorb-leeren").addEventListener("click", async () => {
+  const liste = papierkorb.liste, gebucht = liste.filter(a => a.status_vorher === "ok").length;
+  if (!confirm(`${liste.length === 1 ? "1 Eintrag" : `${liste.length} Einträge`} endgültig löschen?\n\nDie Belegdateien in der App werden gelöscht. Das lässt sich nicht rückgängig machen.`
+    + (gebucht ? `\n\n${gebucht} davon ${gebucht === 1 ? "war" : "waren"} schon übernommen: Buchungsbelege muss man in der Regel 8 Jahre aufbewahren.` : ""))) return;
+  try {
+    const { anzahl } = await api("papierkorb/leeren", { method: "POST", body: { ids: liste.map(a => a.id) } });
+    toast(`${anzahl} endgültig gelöscht`);
+    await ladePapierkorb();
+  } catch (e) { toast(e.message, true); }
+});
+
+// Derselbe Beleg noch einmal hochgeladen bzw. in den Belege-Ordner gelegt
+function papierkorbAnbieten(ids) {
+  ids.forEach(id => { if (!papierkorb.abgelehnt.has(id)) papierkorb.angebot.add(id); });
+  zeigePapierkorbAngebot();
+}
+
+function zeigePapierkorbAngebot() {
+  const n = papierkorb.angebot.size;
+  $("#papierkorb-angebot").classList.toggle("hidden", !n);
+  $("#papierkorb-angebot-text").textContent = n === 1 ? "Dieser Beleg liegt schon im Papierkorb."
+    : `${n} dieser Belege liegen schon im Papierkorb.`;
+}
+
+$("#papierkorb-angebot-holen").addEventListener("click", async () => {
+  let n = 0;
+  try {
+    const liste = await api("papierkorb");
+    for (const id of [...papierkorb.angebot]) {
+      const a = liste.find(x => x.id === id);
+      if (a) {
+        if (await papierkorbHolen(a)) n++;
+        else papierkorb.abgelehnt.add(id);
+      }
+      papierkorb.angebot.delete(id);
+    }
+  } catch (e) { toast(e.message, true); }
+  zeigePapierkorbAngebot();
+  if (n) toast(`${n} wiederhergestellt`);
+  ladeAusgaben();
+});
+$("#papierkorb-angebot-ansehen").addEventListener("click", () => {
+  papierkorb.angebot.clear();
+  zeigePapierkorbAngebot();
+  showTab("papierkorb");
+});
+$("#papierkorb-angebot-zu").addEventListener("click", () => {
+  papierkorb.angebot.forEach(id => papierkorb.abgelehnt.add(id));
+  papierkorb.angebot.clear();
+  zeigePapierkorbAngebot();
+});

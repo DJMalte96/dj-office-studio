@@ -147,6 +147,12 @@ mails = [("dateien", (open(BEISPIELMAILS / n, "rb"), n)) for n in ("beatport.eml
 neu = c.post("/api/ausgaben/belege", data={"dateien": [m[1] for m in mails]}, content_type="multipart/form-data").get_json()["neu"]
 for a in neu[:2]:                                                                   # zwei geprüft, eine wartet noch
     c.put(f"/api/ausgaben/{a['id']}", json={"uebernehmen": True})
+# zwei Einträge im Papierkorb
+for lieferant, betrag, datum, text in (("Druckerei Beispiel", 24.90, f"{j}-01-20", "Plakat (doppelt erfasst)"),
+                                       ("Parkhaus am Markt", 12.50, f"{j}-01-27", "privat geparkt")):
+    r = c.post("/api/ausgaben", json={"belegdatum": datum, "lieferant": lieferant, "betrag": betrag, "kategorie": "sonstiges",
+                                      "beschreibung": text, "notiz": "Beispiel"}).get_json()
+    c.delete(f"/api/ausgaben/{r['id']}")
 
 from playwright.sync_api import sync_playwright  # noqa: E402
 from waitress import create_server  # noqa: E402
@@ -208,6 +214,11 @@ with sync_playwright() as p:
     page.screenshot(path=str(ZIEL / "finanzen.png"), full_page=True)
     oeffne(page, "Finanzen", "ausgaben")
     page.screenshot(path=str(ZIEL / "ausgaben.png"), full_page=True)
+    page.click("#papierkorb-oeffnen")
+    page.wait_for_timeout(700)
+    page.screenshot(path=str(ZIEL / "papierkorb.png"))
+    page.click("#papierkorb-zurueck")
+    page.wait_for_timeout(700)
     page.click("#alle-pruefen")
     page.wait_for_timeout(1500)
     page.mouse.move(5, 890)

@@ -123,7 +123,28 @@ def test_waehrend_des_lesens_uebernommen(client, ocr):
 def test_waehrend_des_lesens_verworfen(client, ocr):
     a = foto(client)
     ocr[1](lambda pfad: client.delete(f"/api/ausgaben/{a['id']}") and TEXT)
+    assert ocr[0]() == 1 and client.get("/api/ausgaben").get_json() == []
+    b = client.post(f"/api/papierkorb/{a['id']}/wiederherstellen").get_json()
+    assert (b["status"], b["betrag"], b["belegdatum"]) == ("neu", 42.46, "2026-03-14")      # Ergebnis nicht verloren
+
+
+def test_waehrend_des_lesens_endgueltig_geloescht(client, ocr):
+    a = foto(client)
+
+    def lesen(pfad):
+        client.delete(f"/api/ausgaben/{a['id']}")
+        client.delete(f"/api/papierkorb/{a['id']}")
+        return TEXT
+    ocr[1](lesen)
     assert ocr[0]() == 1 and client.get(f"/api/ausgaben/{a['id']}").status_code == 404
+
+
+def test_wartende_erkennung_ueberlebt_den_papierkorb(client, ocr):
+    a = foto(client)
+    client.delete(f"/api/ausgaben/{a['id']}")
+    assert ocr[0]() == 0                                       # im Papierkorb wird nicht gelesen …
+    assert client.post(f"/api/papierkorb/{a['id']}/wiederherstellen").get_json()["ocr"] == "wartet"
+    assert ocr[0]() == 1 and holen(client, a)["betrag"] == 42.46
 
 
 def test_gleiche_id_anderer_beleg_wird_nicht_beschrieben(client, ocr):

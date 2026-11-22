@@ -2,6 +2,18 @@
 
 Alle Änderungen an DJ Office Studio. Neueste Version oben.
 
+## 1.6.0 – 2026-11-22
+
+### Neu
+- **Papierkorb für Ausgaben**: „Verwerfen“ und „Löschen“ sind nicht mehr endgültig. Unter Finanzen → Ausgaben → **Papierkorb** lassen sich Belege ansehen, wiederherstellen oder endgültig löschen.
+  - Was im Papierkorb liegt, zählt nicht in EÜR, Übersicht, Abschreibung und Export; Anschaffungen kommen samt Nutzungsdauer zurück.
+  - Derselbe Beleg noch einmal hochgeladen oder in den Belege-Ordner gelegt: Die App bietet das Wiederherstellen an.
+  - Geleert wird nur von Hand.
+- **Einmalig beim Update**: Was früher aus dem Belege-Ordner (auch der Ablage von Paperless) verworfen wurde und dort noch liegt, kommt in den Papierkorb. Früher verworfene Uploads lassen sich nur aus älteren Sicherungen holen.
+
+### Behoben
+- „Aus Paperless abholen“ holte verworfene Belege bei jedem Abholen erneut herein.
+
 ## 1.5.0 – 2026-11-22
 
 ### Neu

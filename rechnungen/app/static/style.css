@@ -698,3 +698,18 @@ label .datum-feld > input.datum { margin-top: 0; }
 .ocr-stand { margin: 0 0 12px; padding: 10px 14px; border-radius: 10px; background: var(--primary-soft); font-size: 14px; }
 #ocr-starten { margin: 0 0 12px; }
 #ocr-starten[hidden], .ocr-stand[hidden] { display: none; }
+/* Papierkorb */
+.papierkorb-angebot { margin-top: 14px; padding: 12px 16px; border-radius: 10px; background: var(--gelb-soft); border-left: 3px solid var(--gelb);
+  display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; font-size: 14px; }
+.papierkorb-knoepfe { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.papierkorb-zeile { margin-bottom: 0; }
+#papierkorb-dialog { width: min(820px, calc(100vw - 24px)); }
+#papierkorb-dialog .beleg-rahmen iframe { height: 56vh; }
+#papierkorb-dialog .beleg-rahmen img { max-height: 56vh; }
+.papierkorb-zeile .papierkorb-knoepfe { min-width: 385px; }    /* Beträge bündig, auch ohne „Vorschau“ */
+@media (max-width: 760px) {
+  .papierkorb-zeile .papierkorb-knoepfe { min-width: 0; }
+  .papierkorb-zeile { grid-template-columns: 44px minmax(0, 1fr); }
+  .papierkorb-zeile .betrag, .papierkorb-knoepfe { grid-column: 2; justify-content: flex-start; text-align: left; }
+  .papierkorb-zeile .was small { white-space: normal; }
+}

@@ -98,6 +98,12 @@ CREATE TABLE IF NOT EXISTS ausgaben (
 );
 CREATE INDEX IF NOT EXISTS ausgaben_pruefsumme ON ausgaben(beleg_pruefsumme);
 -- Fahrten zu Veranstaltungen (automatisch je Rechnung oder von Hand)
+-- Endgültig aus dem Papierkorb gelöscht: damit Paperless bzw. der Nur-lesen-Ordner sie nicht wieder hereinholen
+CREATE TABLE IF NOT EXISTS ausgaben_geloescht (
+    pruefsumme TEXT,
+    paperless_id INTEGER,
+    geloescht_am TEXT
+);
 -- Belege-Ordner im Nur-lesen-Modus (z. B. Ablage von Paperless): bereits gesehene Dateien
 CREATE TABLE IF NOT EXISTS belege_ordner_dateien (
     pfad TEXT PRIMARY KEY,
@@ -245,6 +251,11 @@ def init():
             # einmalig: vorhandene, noch ungeprüfte Fotos und Scans ohne Betrag nachträglich lesen
             con.execute("UPDATE ausgaben SET ocr = 'wartet' WHERE status = 'neu' AND betrag IS NULL AND beleg_datei IS NOT NULL"
                         " AND (beleg_typ = 'bild' OR (beleg_typ = 'pdf' AND erkannt_json LIKE '%PDF ohne Text%'))")
+        # seit 1.6: Papierkorb (status 'papierkorb'; status_vorher = 'neu' | 'ok' fürs Wiederherstellen)
+        vorhanden = {r["name"] for r in con.execute("PRAGMA table_info(ausgaben)")}
+        for spalte in ("status_vorher", "geloescht_am"):
+            if spalte not in vorhanden:
+                con.execute(f"ALTER TABLE ausgaben ADD COLUMN {spalte} TEXT")
         for (titel, text), anlass in LEGACY_TEXTBAUSTEINE.items():
             con.execute("UPDATE textbausteine SET titel = ?, text = ?, preis = NULL, grundpreis = NULL,"
                         " grundstunden = NULL, stundensatz = NULL WHERE titel = ? AND text = ?",
@@ -497,7 +508,8 @@ def pruefe_sicherung(pfad):
         tabellen = {r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
         if not {"rechnungen", "kunden"} <= tabellen:
             raise ValueError("Die Datei enthält keine Daten von DJ Office Studio.")
-        return {t: con.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0]
+        ohne = {"ausgaben": " WHERE status != 'papierkorb'"}    # Gelöschtes nicht mitzählen
+        return {t: con.execute(f"SELECT COUNT(*) FROM {t}{ohne.get(t, '')}").fetchone()[0]
                 for t in ("rechnungen", "kunden", "angebote", "ausgaben") if t in tabellen}
     except sqlite3.DatabaseError as e:
         raise ValueError("Die Datei ist keine gültige Sicherung.") from e

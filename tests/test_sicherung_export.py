@@ -111,6 +111,7 @@ def test_sicherung_enthaelt_belege(client):
 
     # Beleg geht verloren (z. B. neuer Computer) → Sicherung einspielen holt ihn zurück
     client.delete(f"/api/ausgaben/{a['id']}")
+    client.delete(f"/api/papierkorb/{a['id']}")
     assert not os.path.exists(os.path.join(db.DATA_DIR, belege[0]))
     r = client.post("/api/backup", data={"datei": (io.BytesIO(sicherung), "s.zip")}, content_type="multipart/form-data")
     assert r.status_code == 200 and r.get_json()["belege"] == 1 and r.get_json()["anzahl"]["ausgaben"] == 1
@@ -169,4 +170,5 @@ def test_manipulierte_sicherung_kommt_nicht_aus_der_belegablage(client, tmp_path
     for aid in ids:
         assert client.get(f"/api/ausgaben/{aid}/beleg").status_code == 404
         assert client.delete(f"/api/ausgaben/{aid}").status_code == 204
+        assert client.delete(f"/api/papierkorb/{aid}").status_code == 204       # hier wird wirklich gelöscht
     assert opfer.read_text() == "GEHEIM"

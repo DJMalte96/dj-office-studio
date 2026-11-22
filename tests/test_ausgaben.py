@@ -46,11 +46,13 @@ def test_ohne_beleg_braucht_notiz(client):
     assert client.post("/api/ausgaben", json=basis | {"notiz": "x", "privatanteil": 150}).status_code == 400
 
 
-def test_verwerfen_loescht_datei(client, tmp_path):
+def test_verwerfen_dann_endgueltig_loescht_datei(client, tmp_path):
     a = hochladen(client, "apple.eml")["neu"][0]
     datei = tmp_path / a["beleg_datei"]
     assert datei.exists()
     assert client.delete(f"/api/ausgaben/{a['id']}").status_code == 204
+    assert datei.exists() and client.get("/api/ausgaben").get_json() == []          # erst nur im Papierkorb
+    assert client.delete(f"/api/papierkorb/{a['id']}").status_code == 204
     assert not datei.exists() and client.get(f"/api/ausgaben/{a['id']}").status_code == 404
 
 

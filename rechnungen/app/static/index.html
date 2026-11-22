@@ -551,6 +551,7 @@
       <div class="kopf">
         <div><h2>Ausgaben</h2><p class="hint">Belege hochladen, prüfen, fertig. Die Originale bleiben unverändert gespeichert.</p></div>
         <div class="knopf-zeile">
+          <button type="button" class="secondary" id="papierkorb-oeffnen" title="Verworfene Belege und gelöschte Ausgaben">Papierkorb<span id="papierkorb-anzahl"></span></button>
           <button type="button" class="secondary hidden" id="paperless-abholen" title="Alle Dokumente mit dem Ausgaben-Tag holen, die noch nicht übernommen sind">⇩ Aus Paperless abholen</button>
           <button type="button" class="secondary" id="ausgabe-ohne-beleg">＋ Ausgabe ohne Beleg</button>
         </div>
@@ -563,6 +564,14 @@
           <span class="hint" id="beleg-status">oder klicken zum Auswählen</span>
         </label>
         <p class="ordner-stand" id="ordner-stand" hidden></p>
+        <div class="papierkorb-angebot hidden" id="papierkorb-angebot" role="status">
+          <span id="papierkorb-angebot-text"></span>
+          <div class="knopf-zeile">
+            <button type="button" class="small" id="papierkorb-angebot-holen">Wiederherstellen</button>
+            <button type="button" class="small secondary" id="papierkorb-angebot-ansehen">Papierkorb ansehen</button>
+            <button type="button" class="small secondary" id="papierkorb-angebot-zu">Im Papierkorb lassen</button>
+          </div>
+        </div>
         <div class="mail-hilfe" id="mail-hilfe" hidden>
           <div class="row between"><strong id="mail-hilfe-grund"></strong><button type="button" class="icon" id="mail-hilfe-zu" title="Schließen">✕</button></div>
           <p>Apple Mail gibt Mails beim Ziehen nicht direkt an den Browser weiter. So klappt es:</p>
@@ -594,6 +603,23 @@
     </section>
 
     <!-- ================= Finanzen: Beleg prüfen / Ausgabe bearbeiten ================= -->
+    <section id="tab-papierkorb" class="tab">
+      <div class="kopf">
+        <div><h2>Papierkorb</h2><p class="hint">Zählt nicht in EÜR, Übersicht, Abschreibung und Export. Geleert wird nur von Hand – Buchungsbelege muss man in der Regel 8 Jahre aufbewahren.</p></div>
+        <div class="knopf-zeile">
+          <button type="button" class="secondary danger-text hidden" id="papierkorb-leeren">Papierkorb leeren</button>
+          <button type="button" class="secondary" id="papierkorb-zurueck">← Ausgaben</button>
+        </div>
+      </div>
+      <div class="card"><div class="neu-liste" id="papierkorb-liste"></div></div>
+      <dialog id="papierkorb-dialog" class="dialog">
+        <h2 id="papierkorb-dialog-titel">Beleg</h2>
+        <div class="beleg-rahmen" id="papierkorb-vorschau"></div>
+        <div class="actions"><button type="button" class="secondary" id="papierkorb-dialog-zu">Schließen</button>
+          <button type="button" id="papierkorb-dialog-holen">Wiederherstellen</button></div>
+      </dialog>
+    </section>
+
     <section id="tab-beleg" class="tab">
       <div class="kopf">
         <div><h2 id="beleg-titel">Beleg prüfen</h2><p class="hint" id="beleg-fortschritt"></p></div>

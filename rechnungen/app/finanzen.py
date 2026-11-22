@@ -38,6 +38,8 @@ FELDER = ("belegdatum", "bezahlt_am", "lieferant", "beschreibung", "kategorie", 
           "notiz", "rechnung_id")
 
 
+PAPIERKORB = "papierkorb"       # Status: zählt nirgends mit, ist aber wiederherstellbar
+LIEGT_IM_PAPIERKORB = "Diese Ausgabe liegt im Papierkorb – bitte dort zuerst wiederherstellen"
 UNSICHER = "Keine Summenzeile gefunden – vorgeschlagen ist der höchste Betrag, bitte genau prüfen"
 
 
@@ -69,10 +71,11 @@ def liste(jahr=None):
     """Alle neuen (ungeprüften) Ausgaben + die übernommenen des Jahres (nach Bezahlt-Datum)."""
     with db.connect() as con:
         if jahr:
-            rows = con.execute("SELECT * FROM ausgaben WHERE status = 'neu' OR COALESCE(bezahlt_am, belegdatum) LIKE ?"
+            rows = con.execute("SELECT * FROM ausgaben WHERE (status = 'neu' OR COALESCE(bezahlt_am, belegdatum) LIKE ?)"
+                               " AND status != 'papierkorb'"
                                " ORDER BY status = 'ok', COALESCE(bezahlt_am, belegdatum) DESC, id DESC", (f"{jahr}%",))
         else:
-            rows = con.execute("SELECT * FROM ausgaben ORDER BY status = 'ok', COALESCE(bezahlt_am, belegdatum) DESC, id DESC")
+            rows = con.execute("SELECT * FROM ausgaben WHERE status != 'papierkorb' ORDER BY status = 'ok', COALESCE(bezahlt_am, belegdatum) DESC, id DESC")
         return [_zeile(r) for r in rows]
 
 
@@ -94,9 +97,20 @@ def _kategorie_fuer(lieferant):
 
 def _doppelt(pruefsumme, message_id):
     with db.connect() as con:
-        r = con.execute("SELECT id FROM ausgaben WHERE beleg_pruefsumme = ? OR (? IS NOT NULL AND mail_message_id = ?)",
+        r = con.execute("SELECT id FROM ausgaben WHERE beleg_pruefsumme = ? OR (? IS NOT NULL AND mail_message_id = ?)"
+                        " ORDER BY status = 'papierkorb', id LIMIT 1",   # lebende Ausgabe vor gelöschter
                         (pruefsumme, message_id, message_id)).fetchone()
         return r["id"] if r else None
+
+
+def _endgueltig_geloescht(pruefsumme):
+    with db.connect() as con:
+        return bool(con.execute("SELECT 1 FROM ausgaben_geloescht WHERE pruefsumme = ?", (pruefsumme,)).fetchone())
+
+
+def _im_papierkorb(aid):
+    a = holen(aid) if aid else None
+    return bool(a) and a["status"] == PAPIERKORB
 
 
 def _dateiname(name):
@@ -104,13 +118,17 @@ def _dateiname(name):
     return name[-100:]
 
 
-def beleg_aufnehmen(name, daten, paperless=None):
+def beleg_aufnehmen(name, daten, paperless=None, automatisch=False, in_papierkorb=False):
     """Beleg speichern und auswerten → (neue Ausgabe | None, ID der vorhandenen bei Duplikat).
-    paperless: Angaben aus Paperless (id, korrespondent, datum, titel, text) – haben Vorrang vor der eigenen Auswertung."""
+    paperless: Angaben aus Paperless (id, korrespondent, datum, titel, text) – haben Vorrang vor der eigenen Auswertung.
+    automatisch: aus einer fremden Ablage (Paperless) – endgültig Gelöschtes bleibt draußen → (None, None).
+    in_papierkorb: gleich dort anlegen (Abgleich von vor 1.6)."""
     pruef = belege.pruefsumme(daten)
     schon = _doppelt(pruef, None)
     if schon:
         return None, schon
+    if (automatisch or paperless) and _endgueltig_geloescht(pruef):
+        return None, None
     v = belege.auswerten(name, daten)
     vorhanden = _doppelt(pruef, v["message_id"])
     if vorhanden:
@@ -141,8 +159,8 @@ def beleg_aufnehmen(name, daten, paperless=None):
         aid = con.execute(
             "INSERT INTO ausgaben (status, belegdatum, bezahlt_am, lieferant, beschreibung, kategorie, betrag, ust_satz,"
             " beleg_name, beleg_typ, beleg_pruefsumme, mail_message_id, erkannt_json, paperless_id, ocr)"
-            " VALUES ('neu', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (belegdatum, belegdatum, v["lieferant"] or "", v["beschreibung"] or "", kategorie, v["betrag"], v["ust_satz"],
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (PAPIERKORB if in_papierkorb else "neu", belegdatum, belegdatum, v["lieferant"] or "", v["beschreibung"] or "", kategorie, v["betrag"], v["ust_satz"],
              name, v["typ"], pruef, v["message_id"], json.dumps(v), pl_id, ocr)).lastrowid
         rel = os.path.join("belege", belegdatum[:4], f"{aid}_{_dateiname(name)}")
         ziel = os.path.join(db.DATA_DIR, rel)
@@ -221,7 +239,7 @@ def ausgaben_liste():
 def lieferanten():
     with db.connect() as con:
         return jsonify([r[0] for r in con.execute(
-            "SELECT lieferant FROM ausgaben WHERE lieferant != '' GROUP BY lieferant COLLATE NOCASE ORDER BY COUNT(*) DESC, lieferant")])
+            "SELECT lieferant FROM ausgaben WHERE lieferant != '' AND status != 'papierkorb' GROUP BY lieferant COLLATE NOCASE ORDER BY COUNT(*) DESC, lieferant")])
 
 
 @bp.post("/api/ausgaben/belege")
@@ -230,9 +248,9 @@ def belege_hochladen():
     return jsonify(dateien_aufnehmen((f.filename or "Beleg", f.read()) for f in request.files.getlist("dateien")))
 
 
-def dateien_aufnehmen(eingang):
-    """[(name, bytes)] → {neu, doppelt, fehler}. Postfach-Exporte (.mbox) werden in einzelne Mails aufgeteilt."""
-    neu, doppelt, fehler = [], [], []
+def dateien_aufnehmen(eingang, automatisch=False):
+    """[(name, bytes)] → {neu, doppelt, papierkorb, fehler}. Postfach-Exporte (.mbox) werden in einzelne Mails aufgeteilt."""
+    neu, doppelt, papierkorb, fehler = [], [], [], []
     dateien = []
     for name, daten in eingang:
         if not daten:
@@ -246,15 +264,15 @@ def dateien_aufnehmen(eingang):
             dateien.append((name, daten))
     for name, daten in dateien:
         try:
-            a, vorhanden = beleg_aufnehmen(name, daten)
+            a, vorhanden = beleg_aufnehmen(name, daten, automatisch=automatisch)
         except Exception as e:   # defekte Datei darf den Rest nicht aufhalten
             fehler.append({"datei": name, "fehler": f"Konnte nicht gelesen werden ({type(e).__name__})"})
             continue
-        if vorhanden:
-            doppelt.append({"datei": name, "id": vorhanden})
-        else:
+        if a:
             neu.append(a)
-    return {"neu": neu, "doppelt": doppelt, "fehler": fehler}
+        elif vorhanden:
+            (papierkorb if _im_papierkorb(vorhanden) else doppelt).append({"datei": name, "id": vorhanden})
+    return {"neu": neu, "doppelt": doppelt, "papierkorb": papierkorb, "fehler": fehler}
 
 
 @bp.post("/api/ausgaben")
@@ -283,6 +301,8 @@ def ausgabe_holen(aid):
 def ausgabe_aendern(aid):
     """Werte speichern; mit {"uebernehmen": true} wird eine neue Ausgabe bestätigt (Status ok)."""
     alt = holen(aid) or abort(404)
+    if alt["status"] == PAPIERKORB:
+        return _fehler(LIEGT_IM_PAPIERKORB, 409)
     d = _daten()
     w, fehler = _pruefen(d)
     gesamt = {**alt, **w}
@@ -298,25 +318,101 @@ def ausgabe_aendern(aid):
             w["bezahlt_am"] = gesamt.get("belegdatum")
     if w:
         with db.connect() as con:
-            con.execute(f"UPDATE ausgaben SET {', '.join(k + ' = ?' for k in w)} WHERE id = ?", [*w.values(), aid])
+            # Status auch hier prüfen: kann seit dem Lesen oben in einem anderen Fenster gelöscht worden sein
+            if not con.execute(f"UPDATE ausgaben SET {', '.join(k + ' = ?' for k in w)} WHERE id = ? AND status != 'papierkorb'",
+                               [*w.values(), aid]).rowcount:
+                return _fehler(LIEGT_IM_PAPIERKORB, 409)
     anlage_zur_ausgabe(aid)
     return jsonify(holen(aid))
 
 
 @bp.delete("/api/ausgaben/<int:aid>")
 def ausgabe_loeschen(aid):
-    """Verwerfen (neu) bzw. löschen – die Belegdatei wird mit entfernt."""
-    a = holen(aid) or abort(404)
+    """Verwerfen (neu) bzw. Löschen (übernommen): in den Papierkorb. Datei und zugehöriges Gerät bleiben erhalten."""
     with db.connect() as con:
-        con.execute("DELETE FROM ausgaben WHERE id = ?", (aid,))
+        n = con.execute("UPDATE ausgaben SET status_vorher = status, status = 'papierkorb', geloescht_am = ?"
+                        " WHERE id = ? AND status != 'papierkorb'",
+                        (datetime.now().isoformat(timespec="seconds"), aid)).rowcount
+        if not n and not con.execute("SELECT 1 FROM ausgaben WHERE id = ?", (aid,)).fetchone():
+            abort(404)
+    return "", 204
+
+
+# ---------- Papierkorb ----------
+
+@bp.get("/api/papierkorb")
+def papierkorb_liste():
+    with db.connect() as con:
+        zeilen = [_zeile(r) for r in con.execute("SELECT * FROM ausgaben WHERE status = 'papierkorb'"
+                                                 " ORDER BY geloescht_am DESC, id DESC")]
+        for z in zeilen:
+            # Warnung vorm Wiederherstellen: sonst zählt z. B. Original + Archivfassung desselben Belegs doppelt
+            r = con.execute("SELECT lieferant FROM ausgaben WHERE status != 'papierkorb' AND betrag = ?"
+                            " AND belegdatum = ? LIMIT 1", (z["betrag"], z["belegdatum"])).fetchone() if z["betrag"] else None
+            z["aehnlich"] = (r["lieferant"] or "ohne Lieferant") if r else None
+    return jsonify(zeilen)
+
+
+@bp.get("/api/papierkorb/anzahl")
+def papierkorb_anzahl():
+    with db.connect() as con:
+        return jsonify({"anzahl": con.execute("SELECT COUNT(*) FROM ausgaben WHERE status = 'papierkorb'").fetchone()[0]})
+
+
+@bp.post("/api/papierkorb/<int:aid>/wiederherstellen")
+def papierkorb_wiederherstellen(aid):
+    """Zurück in den vorherigen Status. Das Gerät im Anlagenverzeichnis blieb unverändert und zählt damit wieder."""
+    with db.connect() as con:
+        n = con.execute("UPDATE ausgaben SET status = CASE WHEN status_vorher = 'ok' THEN 'ok' ELSE 'neu' END,"
+                        " status_vorher = NULL, geloescht_am = NULL WHERE id = ? AND status = 'papierkorb'", (aid,)).rowcount
+        if not n:
+            abort(404)
+    _ocr_wecker.set()       # evtl. wartet noch die Texterkennung
+    return jsonify(holen(aid))
+
+
+def _endgueltig_loeschen(aid):
+    """Nur aus dem Papierkorb heraus. → True, wenn gelöscht."""
+    pfad = None
+    with db.connect() as con:
+        con.execute("BEGIN IMMEDIATE")
+        r = con.execute("SELECT * FROM ausgaben WHERE id = ? AND status = 'papierkorb'", (aid,)).fetchone()
+        if not r:
+            return False
+        a = dict(r)
+        if a["beleg_pruefsumme"] or a["paperless_id"]:
+            con.execute("INSERT INTO ausgaben_geloescht (pruefsumme, paperless_id, geloescht_am) VALUES (?, ?, ?)",
+                        (a["beleg_pruefsumme"], a["paperless_id"], datetime.now().isoformat(timespec="seconds")))
         con.execute("DELETE FROM anlagen WHERE ausgabe_id = ?", (aid,))
-    pfad = _beleg_pfad(a)
+        con.execute("DELETE FROM ausgaben WHERE id = ?", (aid,))
+        pfad = _beleg_pfad(a)
+        if pfad:    # beleg_datei kann aus einer fremden Sicherung stammen: keine Datei einer anderen Ausgabe entfernen
+            for x in con.execute("SELECT beleg_datei FROM ausgaben WHERE beleg_datei IS NOT NULL"):
+                if os.path.basename(x["beleg_datei"]) == os.path.basename(pfad) and _beleg_pfad(dict(x)) == pfad:
+                    pfad = None
+                    break
     if pfad:
         try:
             os.remove(pfad)
         except OSError:
             pass
+    return True
+
+
+@bp.delete("/api/papierkorb/<int:aid>")
+def papierkorb_endgueltig(aid):
+    if not _endgueltig_loeschen(aid):
+        abort(404)
     return "", 204
+
+
+@bp.post("/api/papierkorb/leeren")
+def papierkorb_leeren():
+    """Nur die angezeigten Einträge – nicht, was seitdem dazugekommen ist. Ohne ids wird nichts gelöscht."""
+    ids = _daten().get("ids")
+    if not isinstance(ids, list) or not all(type(i) is int for i in ids):
+        return _fehler("Bitte angeben, welche Einträge gelöscht werden sollen")
+    return jsonify({"anzahl": sum(_endgueltig_loeschen(i) for i in ids)})
 
 
 def _beleg_bytes(a):
@@ -759,7 +855,7 @@ def anlagen_liste(jahr=None):
     with db.connect() as con:
         rows = [dict(r) for r in con.execute(
             "SELECT an.*, au.lieferant AS ausgabe_lieferant, au.beleg_datei IS NOT NULL AS ausgabe_mit_beleg FROM anlagen an"
-            " LEFT JOIN ausgaben au ON au.id = an.ausgabe_id ORDER BY COALESCE(an.anschaffung_am, an.start_jahr || '-01-01') DESC, an.id DESC")]
+            " LEFT JOIN ausgaben au ON au.id = an.ausgabe_id WHERE COALESCE(au.status, '') != 'papierkorb' ORDER BY COALESCE(an.anschaffung_am, an.start_jahr || '-01-01') DESC, an.id DESC")]
     if not jahr:
         return rows
     out = []
@@ -830,6 +926,8 @@ def anlage_anlegen():
 def anlage_aendern(aid):
     with db.connect() as con:
         alt = con.execute("SELECT * FROM anlagen WHERE id = ?", (aid,)).fetchone() or abort(404)
+    if _im_papierkorb(alt["ausgabe_id"]):
+        return _fehler(LIEGT_IM_PAPIERKORB, 409)
     w, fehler = _anlage_werte(_daten())
     fehler_text = "; ".join(fehler) or _anlage_pruefen(dict(alt) | w)
     if fehler_text:
@@ -846,7 +944,7 @@ def anlage_loeschen(aid):
     with db.connect() as con:
         a = con.execute("SELECT * FROM anlagen WHERE id = ?", (aid,)).fetchone() or abort(404)
         if a["ausgabe_id"]:
-            return _fehler("Dieses Gerät stammt aus einer Ausgabe – bitte dort die Kategorie ändern oder die Ausgabe löschen.", 409)
+            return _fehler("Dieses Gerät stammt aus einer Ausgabe – bitte dort die Kategorie ändern oder die Ausgabe löschen (kommt dann in den Papierkorb).", 409)
         con.execute("DELETE FROM anlagen WHERE id = ?", (aid,))
     return "", 204
 
@@ -1278,9 +1376,14 @@ def paperless_abholen():
         st["meldung"] = "Dokumente werden gesucht …"
         docs = paperless.dokumente(url, token, tag, ssl_k)
         with db.connect() as con:
-            schon = {r[0] for r in con.execute("SELECT paperless_id FROM ausgaben WHERE paperless_id IS NOT NULL")}
-        offen = [d for d in docs if d["id"] not in schon]
-        st.update(gesamt=len(offen), vorhanden=len(docs) - len(offen), meldung="")
+            schon = {r[0] for r in con.execute("SELECT paperless_id FROM ausgaben WHERE paperless_id IS NOT NULL"
+                                              " AND status != 'papierkorb'")}
+            weg = {r[0] for r in con.execute("SELECT paperless_id FROM ausgaben WHERE paperless_id IS NOT NULL"
+                                            " AND status = 'papierkorb' UNION SELECT paperless_id FROM ausgaben_geloescht"
+                                            " WHERE paperless_id IS NOT NULL")} - schon
+        offen = [d for d in docs if d["id"] not in schon and d["id"] not in weg]
+        verworfen = sum(d["id"] in weg for d in docs)
+        st.update(gesamt=len(offen), vorhanden=len(docs) - len(offen) - verworfen, verworfen=verworfen, meldung="")
         namen = paperless.korrespondenten(url, token, ssl_k) if offen else {}
         for d in offen:
             try:
@@ -1292,10 +1395,14 @@ def paperless_abholen():
                     "titel": (d.get("title") or "").strip() or None, "text": d.get("content") or ""})
                 if a_neu:
                     st["neu"] += 1
+                elif not vorhanden:     # endgültig gelöscht: Nummer merken, damit nicht jedes Mal heruntergeladen wird
+                    with db.connect() as con:
+                        con.execute("INSERT INTO ausgaben_geloescht (paperless_id) VALUES (?)", (d["id"],))
+                    st["verworfen"] += 1
                 else:   # gleicher Beleg schon von Hand hochgeladen → mit Paperless verknüpfen, damit er nicht erneut kommt
                     with db.connect() as con:
                         con.execute("UPDATE ausgaben SET paperless_id = ? WHERE id = ? AND paperless_id IS NULL", (d["id"], vorhanden))
-                    st["doppelt"] += 1
+                    st["verworfen" if _im_papierkorb(vorhanden) else "doppelt"] += 1
             except paperless.PaperlessFehler:
                 raise
             except Exception as e:   # ein kaputtes Dokument hält den Rest nicht auf
@@ -1315,7 +1422,7 @@ def paperless_abholen_start():
     if not _pl_sperre.acquire(blocking=False):
         return jsonify(_pl_status)
     _pl_status.clear()
-    _pl_status.update(laeuft=True, gesamt=None, fertig=0, neu=0, doppelt=0, vorhanden=0, fehler=[], abbruch=None,
+    _pl_status.update(laeuft=True, gesamt=None, fertig=0, neu=0, doppelt=0, vorhanden=0, verworfen=0, fehler=[], abbruch=None,
                       meldung="Verbindung zu Paperless …")
     _im_hintergrund(paperless_abholen)
     return jsonify(_pl_status)
@@ -1367,7 +1474,7 @@ BELEG_ENDUNGEN = (".pdf", ".eml", ".msg", ".mbox", ".jpg", ".jpeg", ".png", ".he
 UEBERNOMMEN, NICHT_LESBAR = "übernommen", "nicht lesbar"
 ORDNER_TAKT = 60          # Sekunden zwischen zwei Durchläufen im Hintergrund
 _ordner_sperre = threading.Lock()
-_ordner_stand = {"laeuft": False, "geprueft": None, "neu": 0, "doppelt": 0, "fehler": [], "problem": None}
+_ordner_stand = {"laeuft": False, "geprueft": None, "neu": 0, "doppelt": 0, "papierkorb": [], "fehler": [], "problem": None}
 
 
 def belege_ordner(a=None):
@@ -1434,6 +1541,66 @@ def _verschieben(pfad, ordner, ziel_name):
         quelle = os.path.dirname(quelle)
 
 
+ABGLEICH_ERLEDIGT = "_papierkorb_abgleich"
+
+
+def _standard_ordner():
+    from main import FELDER
+    return FELDER["belege_ordner"][1]
+
+
+def _abgleich_vor_16(a):
+    """Einmalig nach dem Update: Was vor 1.6 aus einem Ordner verworfen wurde, liegt dort noch → in den Papierkorb.
+
+    - Nur-lesen-Ordner: Dateien, die die App schon gesehen hat, die aber keine Ausgabe (mehr) sind.
+    - „übernommen“ im eingestellten und im Standard-Ordner.
+    Gelesen wird nur, was auch der Wächter lesen würde – nie Pfade aus der Datenbank (können aus einer fremden
+    Sicherung stammen). Ist der eingestellte Ordner gerade nicht da, wird es später noch einmal versucht."""
+    if db.get_settings().get(ABGLEICH_ERLEDIGT):
+        return 0
+    muster = belege_ordner(a)
+    eingestellt = _ordner_liste(muster) if muster else []
+    if muster and not eingestellt:
+        return 0
+    eigene = os.path.realpath(_belege_ordner())
+
+    def fremd(o):
+        echt = os.path.realpath(o)
+        return echt != eigene and not echt.startswith(eigene + os.sep) and not eigene.startswith(echt + os.sep)
+
+    with db.connect() as con:
+        gesehen = {r[0] for r in con.execute("SELECT pfad FROM belege_ordner_dateien")}
+    standard = _standard_ordner()
+    pfade = {}
+    for o in dict.fromkeys(eingestellt + (_ordner_liste(standard) if standard else [])):
+        if not fremd(o):
+            continue
+        if o in eingestellt and gesehen:
+            pfade.update(dict.fromkeys(p for p in _ordner_dateien(o, 0) if p in gesehen))
+        erledigt = os.path.join(o, UEBERNOMMEN)
+        if os.path.isdir(erledigt) and fremd(erledigt):
+            pfade.update(dict.fromkeys(_ordner_dateien(erledigt, 0)))
+    n = 0
+    for pfad in pfade:
+        name = os.path.basename(pfad)
+        if name == "mbox":
+            name = os.path.basename(os.path.dirname(pfad)) or name
+        try:
+            with open(pfad, "rb") as f:
+                daten = f.read()
+            teile = belege.mbox_aufteilen(daten) if belege.ist_mbox(name, daten) else [(name, daten)]
+            for teil_name, teil in teile:
+                if teil:
+                    neu, _ = beleg_aufnehmen(teil_name, teil, automatisch=True, in_papierkorb=True)
+                    n += bool(neu)
+        except Exception as x:
+            print(f"Papierkorb-Abgleich, {name}: {type(x).__name__}", flush=True)
+    db.save_settings({ABGLEICH_ERLEDIGT: datetime.now().isoformat(timespec="seconds")})
+    if n:
+        print(f"Papierkorb-Abgleich: {n} früher verworfene Belege in den Papierkorb gelegt", flush=True)
+    return n
+
+
 def ordner_einlesen(ruhe=5):
     """Einen Durchlauf machen. Gibt den Stand zurück; läuft schon einer, passiert nichts."""
     st = _ordner_stand
@@ -1442,6 +1609,10 @@ def ordner_einlesen(ruhe=5):
     try:
         st["laeuft"] = True
         a = _einstellungen()
+        try:
+            _abgleich_vor_16(a)                # muss vor dem Einlesen laufen (unter derselben Sperre)
+        except Exception as x:                 # darf das Einlesen nie blockieren
+            print(f"Papierkorb-Abgleich: {type(x).__name__}: {x}", flush=True)
         muster = belege_ordner(a)
         verschieben = a.get("belege_ordner_verschieben", True)
         st["problem"] = None
@@ -1471,17 +1642,19 @@ def ordner_einlesen(ruhe=5):
             try:
                 with open(pfad, "rb") as f:
                     daten = f.read()
-                e = dateien_aufnehmen([(name, daten)])
+                e = dateien_aufnehmen([(name, daten)], automatisch=not verschieben)
             except Exception as x:
-                e = {"neu": [], "doppelt": [], "fehler": [{"datei": name, "fehler": type(x).__name__}]}
+                e = {"neu": [], "doppelt": [], "papierkorb": [], "fehler": [{"datei": name, "fehler": type(x).__name__}]}
             st["neu"] += len(e["neu"])
             st["doppelt"] += len(e["doppelt"])
             st["fehler"] = (st["fehler"] + [f["datei"] for f in e["fehler"]])[-20:]
+            if verschieben:       # absichtlich noch einmal abgelegt → Wiederherstellen anbieten
+                st["papierkorb"] = list(dict.fromkeys(st.get("papierkorb", []) + [x["id"] for x in e["papierkorb"]]))[-500:]
             if not verschieben:   # fremde Ablage (z. B. Paperless): nichts anfassen, nur merken
                 _gesehen_merken(pfad)
                 continue
             try:
-                _verschieben(pfad, ordner, NICHT_LESBAR if e["fehler"] and not (e["neu"] or e["doppelt"]) else UEBERNOMMEN)
+                _verschieben(pfad, ordner, NICHT_LESBAR if e["fehler"] and not (e["neu"] or e["doppelt"] or e["papierkorb"]) else UEBERNOMMEN)
             except OSError as x:
                 st["problem"] = f"Konnte {name} nicht verschieben ({type(x).__name__}) – bitte Schreibrechte des Ordners prüfen"
                 break
@@ -1531,7 +1704,8 @@ def ordner_stand():
 
 
 def _ordner_status(vorher=None):
-    return {**_ordner_stand, "ordner": belege_ordner(),
+    ids = _ordner_stand.get("papierkorb", [])
+    return {**_ordner_stand, "ordner": belege_ordner(), "papierkorb": [i for i in ids if _im_papierkorb(i)],
             "start_neu": vorher[0] if vorher else None, "start_doppelt": vorher[1] if vorher else None}
 
 
@@ -1598,7 +1772,7 @@ def _ocr_uebernehmen(aid, pruef, stand, text=None, problem=None):
         if not a:
             return                          # inzwischen verworfen oder Sicherung eingespielt
         w = {"ocr": stand}
-        if a["status"] == "neu":
+        if a["status"] == "neu" or (a["status"] == PAPIERKORB and a["status_vorher"] != "ok"):
             v = json.loads(a["erkannt_json"] or "{}")
             hinweise = [h for h in v.get("hinweise", []) if not re.search(
                 r"Betrag eintragen|keine automatische|Gesamtbetrag nicht|Texterkennung", h) and h != UNSICHER]
@@ -1645,7 +1819,7 @@ def texterkennung_durchlauf():
             # „laeuft“ ohne laufende Erkennung: App wurde mittendrin beendet. Einmal wiederholen, dann aufgeben –
             # falls der Beleg das Gerät überfordert, darf daraus keine Neustart-Schleife werden.
             con.execute("UPDATE ausgaben SET ocr = CASE WHEN ocr_versuche < 2 THEN 'wartet' ELSE 'fehler' END WHERE ocr = 'laeuft'")
-            con.execute("UPDATE ausgaben SET ocr = NULL WHERE ocr = 'wartet' AND status != 'neu'")
+            con.execute("UPDATE ausgaben SET ocr = NULL WHERE ocr = 'wartet' AND status = 'ok'")
         while True:
             with db.connect() as con:
                 a = con.execute("SELECT id, beleg_datei, beleg_pruefsumme FROM ausgaben WHERE ocr = 'wartet' AND status = 'neu'"
