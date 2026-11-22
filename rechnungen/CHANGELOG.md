@@ -2,6 +2,22 @@
 
 Alle Änderungen an DJ Office Studio. Neueste Version oben.
 
+## 1.5.0 – 2026-11-22
+
+### Neu
+- **Texterkennung für Fotos und Scans**: Die App liest Lieferant, Datum, Betrag und Umsatzsteuer aus fotografierten Bons und eingescannten PDFs – auch schief, quer oder auf dem Kopf, auch iPhone-Fotos (HEIC).
+  - Vollständig lokal und ohne Netzwerk; kein Beleg verlässt das Gerät.
+  - Läuft im Hintergrund. Eigene Eingaben und übernommene Belege werden nie überschrieben.
+  - Bereits vorhandene, noch ungeprüfte Fotos und Scans ohne Betrag werden nach dem Update automatisch nachgelesen.
+  - Kassenbons: Summen ohne €-Zeichen und Datum mit zweistelligem Jahr werden erkannt; gegebenes Bargeld wird nicht als Betrag genommen.
+
+### Sicherheit
+- Eine **manipulierte Sicherungsdatei** konnte (seit 1.1.0) nach dem Einspielen dazu führen, dass beim Verwerfen eines Belegs fremde Dateien gelöscht oder in den Steuerberater-Export aufgenommen werden. Belegpfade gelten jetzt nur noch innerhalb der Belegablage. Selbst erstellte Sicherungen waren nicht betroffen.
+
+### Hinweise
+- Das Update und die Downloads der Desktop-App sind deutlich größer (Modelle und Bibliotheken der Texterkennung); das erste Update in Home Assistant dauert länger.
+- Die Texterkennung braucht kurzzeitig etwa 300–600 MB freien Arbeitsspeicher und am Mac mindestens macOS 13.
+
 ## 1.4.3 – 2026-11-21
 
 ### Behoben

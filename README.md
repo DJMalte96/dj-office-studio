@@ -30,7 +30,7 @@ DJ Office Studio ist eine App zum Schreiben von DJ-Rechnungen und -Angeboten –
 - **Angebote**: Im selben Editor wie Rechnungen (Kunde, Rechnungsposten mit von/bis-Zeiten, Preise) – mit eigenem Nummernkreis, Angebotsdatum, **Gültig bis** (Bindefrist, Standard 30 Tage), optionaler Zahlungsbedingung und freien **Hinweisen** (z. B. Verlängerungsstunde, Leistungsumfang, GEMA). Das PDF hat dasselbe Layout wie die Rechnung (`Angebot_001_120627.pdf`). Oben in der Angebotsansicht und auf der Startseite: **Offene Angebote** mit Angebotsdatum und Restlaufzeit („noch 12 Tage“, „seit 3 Tagen abgelaufen“), auf der Startseite zusätzlich ein Hinweis, wenn ein Angebot in den nächsten 3 Tagen abläuft. In der Angebotsliste: mehrere markieren und als ZIP herunterladen oder an Paperless senden, Status (offen / angenommen / abgelehnt), Restlaufzeit bzw. „abgelaufen“ und **→ Rechnung**, das Kunde und Positionen in eine neue Rechnung übernimmt und das Angebot als angenommen markiert.
 - **Import alter Rechnungen und Angebote**: Bisherige PDFs hochladen (gemischt möglich – die App erkennt Rechnung oder Angebot selbst). Empfänger, Positionen und Vorschläge für Rechnungsposten werden erkannt und können übernommen werden, optional auch die Rechnungen selbst als Archiv und die Angebote (mit „gültig bis“ und Hinweisen) in die Angebotsliste.
 - **Finanzen**
-  - **Ausgaben mit Belegen**: PDF-Rechnungen, Fotos (JPG, PNG, HEIC) und Kauf-Mails (.eml, .msg – z. B. von Beatport, iTunes/Apple, Amazon, Qobuz, Bandcamp) per Drag & Drop hochladen – auch ganze Mail-Ordner (Postfach-Export .mbox) oder Finder-Ordner mit Hunderten Mails auf einmal. Die App liest Lieferant, Datum, Betrag und Umsatzsteuer aus und schlägt eine Kategorie vor; man prüft nur noch und übernimmt. Ein **Belege-Ordner** wird automatisch eingelesen (Home Assistant: `/share/belege`) – praktisch mit Scanner-Apps, Cloud-Ordnern oder Mail-Regeln. Wer **Paperless-ngx** nutzt, lässt die App einfach den Ordner lesen, in dem Paperless die Ausgaben ablegt. Die Originale bleiben unverändert gespeichert, doppelte Belege werden erkannt. Ausgaben ohne Beleg (z. B. Parkautomat) gehen mit Notiz. Privatanteil in Prozent (z. B. Handyvertrag).
+  - **Ausgaben mit Belegen**: PDF-Rechnungen, Fotos (JPG, PNG, HEIC) und Kauf-Mails (.eml, .msg – z. B. von Beatport, iTunes/Apple, Amazon, Qobuz, Bandcamp) per Drag & Drop hochladen – auch ganze Mail-Ordner (Postfach-Export .mbox) oder Finder-Ordner mit Hunderten Mails auf einmal. Die App liest Lieferant, Datum, Betrag und Umsatzsteuer aus – bei **Fotos und Scans mit Texterkennung, vollständig lokal** – und schlägt eine Kategorie vor; man prüft nur noch und übernimmt. Ein **Belege-Ordner** wird automatisch eingelesen (Home Assistant: `/share/belege`) – praktisch mit Scanner-Apps, Cloud-Ordnern oder Mail-Regeln. Wer **Paperless-ngx** nutzt, lässt die App einfach den Ordner lesen, in dem Paperless die Ausgaben ablegt. Die Originale bleiben unverändert gespeichert, doppelte Belege werden erkannt. Ausgaben ohne Beleg (z. B. Parkautomat) gehen mit Notiz. Privatanteil in Prozent (z. B. Handyvertrag).
   - **Fahrten**: Zu jeder Rechnung wird automatisch die Hin- und Rückfahrt zum Veranstaltungsort erfasst – auf Wunsch mit Kilometern von OpenStreetMap, sonst von Hand. Pro Rechnung abwählbar, eigene Fahrten (z. B. zum Musikladen) lassen sich ergänzen. Mit Privatfahrzeug zählt die Kilometerpauschale (Standard 0,30 €/km).
   - **Anschaffungen & Abschreibung**: Geräte über 800 € netto werden über die Nutzungsdauer abgeschrieben (linear, monatsgenau; Computer im Kaufjahr voll). Anlagenverzeichnis mit Restwerten, Übernahme von Geräten aus Vorjahren und Verkauf/Ausscheiden.
   - **Übersicht** mit Einnahmen, Ausgaben und Gewinn des Jahres, Diagramm je Monat (auch als Tabelle) und Ausgaben nach Kategorie.
@@ -77,6 +77,10 @@ Oben in der Kopfzeile gibt es auf jeder Seite das Menü: **Start**, **Rechnungen
 **Übersicht:** Einnahmen, Ausgaben und Gewinn des gewählten Jahres – so gerechnet wie in der EÜR: Einnahmen zählen am Tag des Zahlungseingangs, Ausgaben am Tag der Bezahlung. Für Kleinunternehmer folgt die Karte **Kleinunternehmer-Grenzen** (Umsatz nach Zahlungseingang gegenüber 25.000 € und 100.000 €, Vorjahresumsatz, offene Rechnungen, grobe Hochrechnung) mit Warnungen, wenn es eng wird. Darunter Hinweise auf offene Punkte, das Diagramm je Monat (Maus darüber zeigt die Werte, **Als Tabelle** zeigt alle Zahlen) und die Ausgaben nach Kategorie. Die Abschreibung steht als Jahresbetrag im Dezember.
 
 ![Screenshot: Finanzen – Übersicht](docs/bilder/finanzen.png)
+
+**Texterkennung für Fotos und Scans:** Fotos (auch HEIC, schief, quer oder auf dem Kopf) und PDFs ohne Text liest die App im Hintergrund, einen nach dem anderen – in der Liste steht solange „Text wird gelesen …“. Man kann den Beleg währenddessen schon öffnen und ausfüllen; eigene Eingaben werden nie überschrieben. Danach sind Lieferant, Datum, Betrag und – wenn er rechnerisch passt – der Umsatzsteuersatz vorgeschlagen. Gibt es keine Summenzeile, weist die App darauf hin. **Immer mit dem Beleg vergleichen:** Texterkennung kann sich verlesen, Handschrift und stark verblasste Bons liest sie oft nicht. Bei PDFs werden die ersten drei Seiten gelesen. Mit **Text erkennen** lässt sich ein Beleg ohne Betrag erneut lesen.
+
+Die Erkennung läuft vollständig auf dem eigenen Gerät und ohne Netzwerk. Sie braucht kurzzeitig etwa 300–600 MB freien Arbeitsspeicher und auf einem Mac mindestens macOS 13; wo sie nicht läuft, trägt man die Werte von Hand ein.
 
 **Ausgaben:** Belege in das Feld ziehen – PDFs, Fotos oder Kauf-Mails als .eml/.msg. **Apple Mail** gibt Mails beim Ziehen nicht direkt an den Browser weiter – entweder die Mails erst auf den Schreibtisch bzw. in einen Finder-Ordner ziehen und von dort in die App, oder einen ganzen Mail-Ordner auf einmal: Ordner anklicken → **Postfach → Postfach exportieren …** → den entstandenen Ordner „….mbox“ in die App ziehen. Thunderbird-Ordner (mbox-Dateien) gehen genauso; doppelte Mails werden erkannt. Neue Belege stehen unter **Neu – bitte prüfen**. **Alle nacheinander prüfen** öffnet sie der Reihe nach: links der Beleg, rechts die erkannten Angaben. Wo der Betrag gefunden wurde, steht darunter („erkannt: Gesamt … 3,63 €“). Kurz vergleichen, ggf. korrigieren, **Übernehmen**. Erst übernommene Ausgaben zählen in der EÜR. Viele kleine Musikkäufe lassen sich in der Liste je Monat und Shop **zusammengefasst** anzeigen.
 
@@ -215,9 +219,11 @@ Die App zeigt diesen Hinweis beim ersten Start einmal an; danach steht er unter 
 
 DJ Office Studio steht unter der [MIT-Lizenz](LICENSE): Nutzen, Weitergeben und Verändern sind ausdrücklich erlaubt.
 
+Die Texterkennung verwendet [RapidOCR](https://github.com/RapidAI/RapidOCR) (© RapidOCR Authors) mit Modellen aus [PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR) (© Baidu bzw. PaddleOCR Authors), beides unter der Apache-Lizenz 2.0, dazu ONNX Runtime (MIT), OpenCV (Apache 2.0) und PDFium über pypdfium2 (BSD-3-Clause/Apache 2.0).
+
 ## Lokale Entwicklung
 
-Voraussetzung: Python 3.9 oder neuer (im Container läuft 3.12).
+Voraussetzung: Python 3.10 bis 3.12 (im Container läuft 3.12; die Pakete der Texterkennung gibt es nicht für 3.9).
 
 ```bash
 cd rechnungen
@@ -276,6 +282,7 @@ rechnungen/
     mail.py              E-Mail-Versand per SMTP, Textvorlagen
     finanzen.py          Finanzen: Ausgaben, Fahrten, Anschaffungen/Abschreibung, EÜR, Export
     belege.py            Auslesen von Belegen (PDF, Fotos, Kauf-Mails .eml/.msg/.mbox)
+    texterkennung.py     Texterkennung für Fotos und Scans (lokal, im eigenen Prozess)
     paperless.py         Abholen von Ausgaben-Belegen aus Paperless-ngx (REST-Schnittstelle, nur lesend)
     strecken.py          Entfernungen über OpenStreetMap (Nominatim, OSRM) mit Zwischenspeicher
     static/              Oberfläche (HTML, CSS, JavaScript)

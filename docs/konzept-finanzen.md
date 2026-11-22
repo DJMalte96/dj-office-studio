@@ -34,7 +34,7 @@ Auf der Startseite kommt eine kleine Kachel „Gewinn dieses Jahr“ hinzu.
   - **Gesamtbetrag** (sucht „Gesamt“, „Summe“, „Rechnungsbetrag“, „zu zahlen“ …; im Zweifel höchster Euro-Betrag)
   - **Umsatzsteuer** auf dem Beleg (19 % / 7 % / keine), falls erkennbar
   - **Kategorie** (aus der letzten Ausgabe beim selben Lieferanten)
-- **Fotos und Scans**: in Stufe 1 ohne automatische Erkennung – Beleg wird gespeichert, Werte trägt man ein. Texterkennung (OCR) folgt in Stufe 3 (siehe 8.).
+- **Fotos und Scans**: in Stufe 1 ohne automatische Erkennung – Beleg wird gespeichert, Werte trägt man ein. Texterkennung (OCR) folgt in Stufe 3 (siehe 8.) – **umgesetzt in 1.5.0** (lokal mit RapidOCR).
 - Ansicht beim Übernehmen: **links der Beleg, rechts die Felder** – Vorschlag prüfen, korrigieren, speichern.
 - Der Beleg wird **unverändert** in der App abgelegt (Aufbewahrungspflicht 8 Jahre) und ist in der Datensicherung enthalten. Doppelt hochgeladene Belege werden erkannt (Prüfsumme).
 
