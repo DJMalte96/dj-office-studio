@@ -8,6 +8,7 @@ Alle Änderungen an DJ Office Studio. Neueste Version oben.
 - **Präparierte PDFs können die App nicht mehr lahmlegen**: Jedes fremde PDF wird in einem eigenen Prozess mit Grenzen für Arbeitsspeicher und Zeit gelesen, ohne Netz. Wird eine Grenze erreicht, bleibt der Beleg erhalten und bekommt einen Hinweis. Das gilt für Belege, PDF-Anhänge in Mails, den Import alter Rechnungen und die Texterkennung.
 - **Präparierte Texte und Mails**: Riesige Ziffernfolgen, Zeilen, Kopfzeilen und kaputtes HTML halten die Auswertung nicht mehr an.
 - **pypdf 5.1.0 → 7.1.1**: schließt die bekannten Lücken der PDF-Bibliothek.
+- **waitress 3.0.0 → 3.0.2**: schließt die bekannten Lücken des Webservers.
 
 ### Behoben
 - **Betragserkennung in PDFs**: „Gesamtbetrag der Abschläge“ und andere Teilsummen gelten nicht mehr als Gesamtbetrag, „Bruttosumme“ und „Zahlbetrag“ werden auch ohne €-Zeichen erkannt. Außerdem liest die neue PDF-Bibliothek Text aus PDFs, die bisher leer blieben.
