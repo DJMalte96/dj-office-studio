@@ -15,6 +15,10 @@ SCHALTER = "--texterkennung"     # damit startet die gepackte Desktop-App als Ki
 MAX_SEITE = 1600                 # längere Bildseite in Pixeln
 MAX_PDF_SEITEN = 3
 ZEITLIMIT = 240                  # Sekunden je Beleg (langsame Geräte wie Raspberry Pi)
+PDF_SPEICHER_MB = 550            # nur fürs Öffnen fremder Dateien, nicht für die Erkennung
+BILD_SPEICHER_MB = 1100          # 48-MP-HEIC vom iPhone braucht beim Dekodieren knapp 800 MB
+BILD_ZEITLIMIT = 45
+MIN_KANTE = 64                   # RapidOCR vergrößert dünnere Streifen auf Zehntausende Pixel Breite
 
 
 class NichtVerfuegbar(Exception):
@@ -39,7 +43,8 @@ def lesen(pfad, zeitlimit=ZEITLIMIT):
         ausgabe = os.path.join(tmp, "ergebnis.json")    # Datei statt stdout: Windows-Fensterprogramme haben keins
         extra = {"creationflags": subprocess.CREATE_NO_WINDOW} if os.name == "nt" else {}
         try:
-            p = subprocess.run(_befehl() + [os.path.abspath(pfad), ausgabe], timeout=zeitlimit, stdin=subprocess.DEVNULL,
+            umgebung = {k: v for k, v in os.environ.items() if k not in ("SUPERVISOR_TOKEN", "HASSIO_TOKEN")}
+            p = subprocess.run(_befehl() + [os.path.abspath(pfad), ausgabe], timeout=zeitlimit, stdin=subprocess.DEVNULL, env=umgebung,
                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, **extra)
         except subprocess.TimeoutExpired as e:
             raise Fehlgeschlagen("hat zu lange gedauert") from e
@@ -49,7 +54,10 @@ def lesen(pfad, zeitlimit=ZEITLIMIT):
             with open(ausgabe, encoding="utf-8") as f:
                 d = json.load(f)
         except (OSError, ValueError) as e:
-            raise Fehlgeschlagen(f"abgebrochen (Code {p.returncode}), evtl. zu wenig Arbeitsspeicher") from e
+            # 86/87: die Grenzen aus grenzen.py (dieses Modul importiert hier nichts aus der App)
+            grund = {86: "braucht zu viel Arbeitsspeicher", 87: "dauert zu lange"}.get(
+                p.returncode, f"abgebrochen (Code {p.returncode}), evtl. zu wenig Arbeitsspeicher")
+            raise Fehlgeschlagen(grund) from e
     if d.get("nicht_verfuegbar"):
         raise NichtVerfuegbar(d["nicht_verfuegbar"])
     if d.get("fehler"):
@@ -123,12 +131,15 @@ def _engine():
     return engine
 
 
+def _ist_pdf(pfad):
+    with open(pfad, "rb") as f:
+        return b"%PDF-" in f.read(1024)
+
+
 def _bilder(pfad):
     """Foto bzw. die ersten PDF-Seiten als verkleinerte RGB-Bilder."""
     from PIL import Image, ImageOps
-    with open(pfad, "rb") as f:
-        ist_pdf = b"%PDF-" in f.read(1024)
-    if ist_pdf:
+    if _ist_pdf(pfad):
         import pypdfium2
         pdf = pypdfium2.PdfDocument(pfad)
         try:
@@ -154,6 +165,15 @@ def _bilder(pfad):
             bild = Image.new("RGB", rgba.size, "white")
             bild.paste(rgba, mask=rgba.getchannel("A"))
         yield bild.convert("RGB")
+
+
+def _mit_rand(bild):
+    if min(bild.size) >= MIN_KANTE:
+        return bild
+    from PIL import Image
+    feld = Image.new("RGB", (max(bild.width, MIN_KANTE), max(bild.height, MIN_KANTE)), "white")
+    feld.paste(bild, (0, 0))
+    return feld
 
 
 def erkennen(bild, engine):
@@ -186,26 +206,38 @@ def kind(pfad, ausgabe):
         if getattr(sys, name) is None:
             setattr(sys, name, open(os.devnull, "w"))
 
+    if not getattr(sys, "frozen", False):
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))      # -I: der eigene Ordner fehlt im Suchpfad
+    import grenzen
     # Belege verlassen das Gerät nicht: In diesem Prozess gibt es kein Netz, auch kein Nachladen von Modellen.
-    import socket
-
-    def gesperrt(*_a, **_k):
-        raise OSError("Die Texterkennung arbeitet ohne Netzwerk")
-    socket.socket.connect = socket.socket.connect_ex = socket.create_connection = socket.getaddrinfo = gesperrt
+    grenzen.ohne_netz()
     if hasattr(os, "nice"):
         try:
             os.nice(10)                                 # Home Assistant hat Vorrang
         except OSError:
             pass
+    d = bilder = None
+    # Zuerst die fremde Datei öffnen, unter engen Grenzen. Die Erkennung danach sieht nur noch kleine Bilder.
     try:
-        engine = _engine()
-    except Exception as e:
+        grenzen.prozess_begrenzen(PDF_SPEICHER_MB if _ist_pdf(pfad) else BILD_SPEICHER_MB, BILD_ZEITLIMIT)
+        bilder = [_mit_rand(b) for b in _bilder(pfad)]
+    except MemoryError:
+        os._exit(grenzen.ZU_VIEL_SPEICHER)
+    except ImportError as e:
         d = {"nicht_verfuegbar": f"{type(e).__name__}: {e}"[:300]}
-    else:
+    except Exception as e:
+        d = {"fehler": f"nicht lesbar ({type(e).__name__})"}
+    if d is None:
+        grenzen.prozess_begrenzen(None, ZEITLIMIT)
         try:
-            d = {"text": "\n".join(z for bild in _bilder(pfad) for z in erkennen(bild, engine))}
+            engine = _engine()
         except Exception as e:
-            d = {"fehler": f"nicht lesbar ({type(e).__name__})"}
+            d = {"nicht_verfuegbar": f"{type(e).__name__}: {e}"[:300]}
+        else:
+            try:
+                d = {"text": "\n".join(z for bild in bilder for z in erkennen(bild, engine))}
+            except Exception as e:
+                d = {"fehler": f"nicht lesbar ({type(e).__name__})"}
     with open(ausgabe, "w", encoding="utf-8") as f:
         json.dump(d, f)
 

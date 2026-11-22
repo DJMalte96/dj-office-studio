@@ -56,6 +56,8 @@ jobs:
           docker run -d --name djos --network none --memory 1g --memory-swap 1g --cpus 2 -v "$PWD/tests:/pruefung:ro" djos
           docker exec djos python3 /pruefung/ocr_rauchtest.py http://127.0.0.1:8099
           docker exec -e PYTHONDONTWRITEBYTECODE=1 djos python3 /pruefung/erechnung_rauchtest.py http://127.0.0.1:8099
+          docker exec -e PYTHONDONTWRITEBYTECODE=1 djos python3 /pruefung/pdf_rauchtest.py http://127.0.0.1:8099
+          test "$(docker inspect -f '{{.State.OOMKilled}}' djos)" = false
           echo "Speicherspitze: $(( $(docker exec djos cat /sys/fs/cgroup/memory.peak) / 1048576 )) MB"
       - name: Protokoll
         if: always()

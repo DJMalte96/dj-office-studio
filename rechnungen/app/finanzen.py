@@ -603,8 +603,9 @@ def _esc(s):
 
 
 def _html_bereinigen(roh):
-    roh = re.sub(r"(?is)<(script|iframe|object|embed|form|link|meta|base)[^>]*>.*?</\1\s*>", "", roh)
-    roh = re.sub(r"(?is)<(script|iframe|object|embed|form|link|meta|base)[^>]*/?>", "", roh)
+    aktiv = ("script", "iframe", "object", "embed", "form", "link", "meta", "base")
+    roh = belege.ohne_bloecke(roh[:belege.MAX_HTML], aktiv)
+    roh = belege.ohne_tags(roh, rf"(?is)<(?:{'|'.join(aktiv)})[^>]*>", "")
     roh = re.sub(r"(?i)\son\w+\s*=\s*(\"[^\"]*\"|'[^']*'|[^\s>]+)", "", roh)       # onclick, onload …
     roh = re.sub(r"(?i)(href|src)\s*=\s*([\"'])\s*javascript:[^\"']*\2", r'\1="#"', roh)
     return roh

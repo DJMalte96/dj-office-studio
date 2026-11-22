@@ -8,12 +8,31 @@ import email
 import hashlib
 import html
 import re
+import time
 import unicodedata
 from datetime import date, datetime, timedelta
 from email import policy
 from email.utils import parsedate_to_datetime, parseaddr
 
 import erechnung
+import grenzen
+import pdflesen
+
+# ---------- Mail ----------
+
+MAX_KOPFFELD = 2000         # Zeichen je Kopfzeile, bevor Pythons Mail-Parser sie zerlegt
+
+
+class _MailRegeln(policy.EmailPolicy):
+    """Wie policy.default. Dessen Parser braucht bei langen Kopfzeilen quadratisch lange (400 KB „Von“: Minuten)."""
+
+    def header_fetch_parse(self, name, value):
+        if not hasattr(value, "name") and len(value) > MAX_KOPFFELD:
+            value = value[:MAX_KOPFFELD]
+        return super().header_fetch_parse(name, value)
+
+
+MAIL_REGELN = _MailRegeln()
 
 # ---------- Beträge ----------
 
@@ -80,6 +99,11 @@ def _betrag_nach(zeilen, i, umfang=3, mit_stelle=False):
 
 GESAMT_WOERTER = [r"gesamtbetrag", r"gesamtsumme", r"rechnungsbetrag", r"zu zahlen(?:der betrag)?", r"endbetrag",
                   r"zahlbetrag", r"bruttobetrag", r"gesamt(?:preis)?", r"summe", r"order total", r"grand total", r"total"]
+# „Gesamtbetrag der Abschläge“, „Summe der Rabatte“: Teilsummen, nie der Gesamtbetrag
+TEILSUMME = re.compile(r"(?i)(?:gesamt(?:betrag|summe)?|summe) der (?:zu|ab)schläge|(?:gesamt(?:betrag|summe)?|summe) der (?:rabatte|nachlässe)")
+# Eindeutige Schlusszeile ohne €-Zeichen („Bruttosumme 235,62“) – nur, wenn der Beleg Euro nennt
+SCHLUSSZEILE = [re.compile(rf"(?i)^{wort}\s*:?\s*((?:\d{{1,3}}(?:\.\d{{3}})+|\d{{1,9}}),\d{{2}})$")
+                for wort in ("bruttosumme", "zahlbetrag")]
 STEUER_WOERTER = r"(?:mwst\.?|mehrwertsteuer|ust\.?|umsatzsteuer|vat|erhobene steuer|steuer|tax)"
 
 
@@ -89,15 +113,21 @@ def gesamt_vorschlag(zeilen):
     # Vorrang: ausdrücklich Bruttobetrag („Total EUR inkl. MwSt.“, „Gesamt brutto“) – sonst greift „Gesamt“
     # womöglich in der Steuertabelle den Nettobetrag ab
     brutto = re.compile(r"(?i)(?:gesamt|summe|total|betrag|zu zahlen).*(?:inkl|incl|brutto)|(?:inkl|incl|brutto).*(?:gesamt|summe|total)")
+    if any(WAEHRUNG.search(z) for z in zeilen):
+        for muster in SCHLUSSZEILE:
+            for z in zeilen:
+                m = muster.match(z)
+                if m:
+                    return zahl(m.group(1)), z[:80]
     for i, z in enumerate(zeilen):
-        if brutto.search(z) and not re.search(r"(?i)zwischen|sub\s*total|subtotal|einzelpreis", z):
+        if brutto.search(z) and not TEILSUMME.search(z) and not re.search(r"(?i)zwischen|sub\s*total|subtotal|einzelpreis", z):
             b, stelle = _betrag_nach(zeilen, i, umfang=2, mit_stelle=True)
             if b is not None:
                 return b, stelle[:80]
     for wort in GESAMT_WOERTER:
         muster = re.compile(rf"(?<![a-zäöü]){wort}(?![a-zäöü])", re.I)
         for i, z in enumerate(zeilen):
-            if muster.search(z) and not re.search(r"(?i)zwischen|sub\s*total|subtotal|vor steuern|netto|ohne", z):
+            if muster.search(z) and not TEILSUMME.search(z) and not re.search(r"(?i)zwischen|sub\s*total|subtotal|vor steuern|netto|ohne", z):
                 b, stelle = _betrag_nach(zeilen, i, mit_stelle=True)
                 if b is not None:
                     return b, stelle[:80]
@@ -201,17 +231,50 @@ def shop_aus_absender(absender):
 
 # ---------- Text aus Belegen ----------
 
+MAX_HTML = 2_000_000
+MAX_KOPFZEILE = 500         # Absender, Betreff
+MAX_MAIL_PDFS = 10
+UNGEPRUEFT = "PDF-Anhänge nicht geprüft"
+MAIL_PDF_ZEIT = 45          # Sekunden für alle PDF-Anhänge einer Mail zusammen
+
+
+def ohne_bloecke(roh, tags, ersatz=""):
+    """<tag …> bis </tag> entfernen. Ein Muster dafür („<tag>.*?</tag>“) sucht bei jedem unverschlossenen Tag erneut
+    bis ans Ende – 20.000 „<script>“ hielten die App sekundenlang an."""
+    ende = roh.rfind(">") + 1                   # dahinter kann kein Tag mehr enden
+    zu = {t: re.compile(rf"(?i)</{t}\s*>") for t in tags}
+    fehlt, aus, pos = set(), [], 0
+    for m in re.compile(rf"(?i)<({'|'.join(tags)})\b[^>]*>").finditer(roh, 0, ende):
+        tag = m.group(1).lower()
+        if m.start() < pos or tag in fehlt or tag not in zu:
+            continue
+        schluss = zu[tag].search(roh, m.end())
+        if not schluss:
+            fehlt.add(tag)
+            continue
+        aus += [roh[pos:m.start()], ersatz]
+        pos = schluss.end()
+    return "".join(aus) + roh[pos:]
+
+
+def ohne_tags(roh, muster=r"<[^>]+>", ersatz=" "):
+    """Muster wie „<[^>]+>“ suchen ab jedem „<“ bis zum nächsten „>“ – hinter dem letzten „>“ also vergeblich bis ans Ende."""
+    ende = roh.rfind(">") + 1
+    return re.sub(muster, ersatz, roh[:ende]) + roh[ende:]
+
+
 def html_zu_text(roh):
-    roh = re.sub(r"(?is)<(style|script|head)[^>]*>.*?</\1>", " ", roh)
+    roh = ohne_bloecke(roh[:MAX_HTML], ("style", "script", "head"), " ")
     roh = re.sub(r"(?i)<br\s*/?>|</(p|div|tr|li|h\d|table)>", "\n", roh)
     roh = re.sub(r"(?i)</t[dh]>", "\n", roh)
-    text = html.unescape(re.sub(r"<[^>]+>", " ", roh))
+    roh = re.sub(r"&#[xX]?[0-9a-fA-F]{8,};?", " ", roh)    # kein Zeichen – über 4300 Ziffern wirft int() einen Fehler
+    text = html.unescape(ohne_tags(roh))
     return text
 
 
 def zeilen_aus(text):
     zeilen = []
-    for z in text.replace("\r", "").split("\n"):
+    for z in grenzen.text_begrenzen(text.replace("\r", "")).split("\n"):
         z = re.sub(r"[ \t ‌​͏]+", " ", z).strip()
         if z:
             zeilen.append(z)
@@ -219,20 +282,13 @@ def zeilen_aus(text):
 
 
 def pdf_text(daten):
-    from pypdf import PdfReader
-    import io
-    seiten = []
-    for seite in PdfReader(io.BytesIO(daten)).pages:
-        try:
-            seiten.append(seite.extract_text() or "")
-        except Exception:
-            continue
-    return "\n".join(seiten)
+    """Wirft pdflesen.Abgebrochen (Grenze erreicht) bzw. pdflesen.Kaputt."""
+    return grenzen.text_begrenzen(pdflesen.text(daten)[0])
 
 
 def mail_lesen(daten):
     """.eml → dict(absender, betreff, datum, message_id, text, html, anhaenge=[(name, typ, bytes)])."""
-    msg = email.message_from_bytes(daten, policy=policy.default)
+    msg = email.message_from_bytes(daten, policy=MAIL_REGELN)
     text_teil = msg.get_body(preferencelist=("plain",))
     html_teil = msg.get_body(preferencelist=("html",))
     anhaenge = []
@@ -244,7 +300,8 @@ def mail_lesen(daten):
         datum = parsedate_to_datetime(msg["Date"]).astimezone().date().isoformat() if msg["Date"] else None
     except (TypeError, ValueError):
         datum = None
-    return {"absender": str(msg["From"] or ""), "betreff": str(msg["Subject"] or "").strip(), "datum": datum,
+    return {"absender": str(msg["From"] or "")[:MAX_KOPFZEILE], "betreff": str(msg["Subject"] or "").strip()[:MAX_KOPFZEILE],
+            "datum": datum,
             "message_id": str(msg["Message-ID"] or "").strip() or None,
             "text": text_teil.get_content() if text_teil else "",
             "html": html_teil.get_content() if html_teil else ""}, anhaenge
@@ -254,7 +311,7 @@ def mail_teile(daten):
     """PDF- und XML-Teile einer Mail → [(name, bytes)] – auch ohne Dateinamen, in weitergeleiteten Mails oder wenn
     die Mail nur aus der Datei besteht (das alles übersieht iter_attachments)."""
     aus = []
-    for teil in email.message_from_bytes(daten, policy=policy.default).walk():
+    for teil in email.message_from_bytes(daten, policy=MAIL_REGELN).walk():
         if teil.is_multipart():
             continue
         roh = teil.get_payload(decode=True) or b""
@@ -266,15 +323,25 @@ def mail_teile(daten):
 
 def erechnungen(typ, daten):
     """E-Rechnungen in einem Beleg → (Rechnungen, Probleme)."""
+    bis, gelesen, ausgelassen = time.monotonic() + MAIL_PDF_ZEIT, [], []
+
+    def aus_pdf(pdf):
+        if len(gelesen) >= MAX_MAIL_PDFS or time.monotonic() > bis:
+            ausgelassen.append(1)
+            return []
+        gelesen.append(1)
+        return pdflesen.lesen(pdf).anhaenge
+
     try:
         if typ == "xml":
             return [erechnung.lesen(daten)], []
-        if typ == "pdf":
-            return erechnung.suchen([("Beleg.pdf", daten)])
-        if typ == "mail":
-            return erechnung.suchen(mail_teile(daten))
-        if typ == "msg":
-            return erechnung.suchen([(n, d) for n, _, d in msg_lesen(daten)[1]])
+        if typ in ("pdf", "mail", "msg"):
+            teile = ([("Beleg.pdf", daten)] if typ == "pdf" else mail_teile(daten) if typ == "mail"
+                     else [(n, d) for n, _, d in msg_lesen(daten)[1]])
+            funde, probleme = erechnung.suchen(teile, aus_pdf)
+            if ausgelassen:
+                probleme.append(f"{len(ausgelassen)} weitere {UNGEPRUEFT}")
+            return funde, probleme
     except erechnung.Unlesbar as e:
         return [], [str(e)]
     except Exception:       # kaputte Mail: meldet die normale Auswertung
@@ -297,7 +364,7 @@ def mbox_aufteilen(daten):
         if not teil.strip():
             continue
         teil = re.sub(rb"(?m)^>(>*From )", rb"\1", teil)          # mboxrd: „>From “ im Text zurückwandeln
-        kopf = email.message_from_bytes(teil.split(b"\n\n", 1)[0] + b"\n\n", policy=policy.default)
+        kopf = email.message_from_bytes(teil.split(b"\n\n", 1)[0] + b"\n\n", policy=MAIL_REGELN)
         betreff = re.sub(r"[^\w äöüÄÖÜß.,()+-]+", " ", str(kopf["Subject"] or ""))[:60].strip(" ,.(-") or "Mail"
         mails.append((f"{betreff} ({len(mails) + 1}).eml", teil))
     return mails
@@ -312,7 +379,7 @@ def msg_lesen(daten):
                     for a in m.attachments if getattr(a, "data", None) and isinstance(a.data, bytes)]
         datum = m.date.astimezone().date().isoformat() if getattr(m, "date", None) else None
         body_html = m.htmlBody.decode("utf-8", "replace") if isinstance(m.htmlBody, bytes) else (m.htmlBody or "")
-        return {"absender": m.sender or "", "betreff": (m.subject or "").strip(), "datum": datum,
+        return {"absender": (m.sender or "")[:MAX_KOPFZEILE], "betreff": (m.subject or "").strip()[:MAX_KOPFZEILE], "datum": datum,
                 "message_id": (m.messageId or "").strip() or None, "text": m.body or "", "html": body_html}, anhaenge
     finally:
         m.close()
@@ -351,26 +418,37 @@ def auswerten(name, daten):
         v["hinweise"].append("Dateityp nicht erkannt – bitte Werte eintragen")
         return v
     rechnungen, probleme = erechnungen(typ, daten)
-    v["hinweise"] += [f"E-Rechnung nicht lesbar ({p}) – bitte Werte prüfen" for p in probleme]
+    v["hinweise"] += [f"{p} – bitte selbst ansehen" if p.endswith(UNGEPRUEFT) else
+                      f"E-Rechnung nicht lesbar ({p}) – bitte Werte prüfen" for p in probleme]
     if typ == "xml":
         if rechnungen:
             _aus_erechnung(v, rechnungen)
         return v
 
     if typ == "pdf":
+        abgebrochen = None
         try:
             text = pdf_text(daten)
+        except pdflesen.Abgebrochen as e:
+            text, abgebrochen = "", e.grund
         except Exception:
             text = ""
         if rechnungen:
             _aus_erechnung(v, rechnungen)
+            if abgebrochen:     # sonst ließe sich die Warnung „steht so nicht im PDF“ mit einem teuren PDF aushebeln
+                v["hinweise"].append(f"Das sichtbare PDF ließ sich nicht prüfen ({abgebrochen}) – bitte den Betrag selbst vergleichen")
             # Die eingebettete XML sieht man nicht – weicht sie vom sichtbaren PDF ab, muss das auffallen
             if len(rechnungen) == 1 and v["betrag"] and (BETRAG.search(text) or ZAHL_OHNE.search(text)) and not _betrag_im_text(v["betrag"], text):
                 v["hinweise"].append("Der Betrag aus der eingebetteten E-Rechnung steht so nicht im sichtbaren PDF – bitte vergleichen")
             return v
+        if abgebrochen:
+            v["hinweise"].append(f"PDF aus Sicherheitsgründen nicht ausgewertet: {abgebrochen} – bitte Werte eintragen")
+            return v
         if not text.strip():
             v["hinweise"].append("PDF ohne Text (Scan) – bitte Betrag eintragen")
             return v
+        if pdflesen.lesen(daten).gekuerzt:
+            v["hinweise"].append(f"Langes PDF: nur die ersten {pdflesen.MAX_SEITEN - 10} und die letzten 10 Seiten gelesen")
         zeilen = zeilen_aus(text)
         v["lieferant"] = _lieferant_aus_pdf(zeilen)
     else:
@@ -396,12 +474,16 @@ def auswerten(name, daten):
         if pdf_anhang:
             try:
                 text = pdf_text(pdf_anhang)
+            except pdflesen.Abgebrochen as e:
+                text = ""
+                v["hinweise"].append(f"Angehängtes PDF aus Sicherheitsgründen nicht ausgewertet ({e.grund}) – bitte mit dem Anhang vergleichen")
             except Exception:
                 text = ""
             if text.strip():
                 v["hinweise"].append("Werte aus der angehängten PDF-Rechnung")
         if not text.strip():
-            text = mail["text"] if mail["text"].strip() and BETRAG.search(mail["text"]) else html_zu_text(mail["html"])
+            klartext = grenzen.text_begrenzen(mail["text"])
+            text = klartext if klartext.strip() and BETRAG.search(klartext) else html_zu_text(mail["html"])
         zeilen = zeilen_aus(text)
         if shop and shop[0] == "Amazon":
             v["hinweise"].append("Amazon-Bestellbestätigung – die Rechnung gibt es im Amazon-Konto unter Bestellungen. "
@@ -526,7 +608,7 @@ def ocr_steuer(zeilen, gesamt):
 
 def ocr_vorschlaege(text, absender=None):
     """Vorschläge aus erkanntem Text. Lieber kein Wert als ein falscher – unsichere werden gekennzeichnet."""
-    zeilen = zeilen_aus(ocr_bereinigen(text))
+    zeilen = zeilen_aus(ocr_bereinigen(grenzen.text_begrenzen(text)))
     betrag, stelle = ocr_gesamt(zeilen)
     satz, steuer = ocr_steuer(zeilen, betrag)
     datum = datum_vorschlag(zeilen)
@@ -547,6 +629,8 @@ def braucht_texterkennung(typ, betrag, daten):
         return False
     try:
         return len("".join(pdf_text(daten).split())) < 100
+    except pdflesen.Abgebrochen:
+        return False    # schon das Lesen sprengt die Grenzen – nicht auch noch von selbst rendern
     except Exception:
         return True     # pypdf scheitert – das Rendern als Bild kann trotzdem gelingen
 

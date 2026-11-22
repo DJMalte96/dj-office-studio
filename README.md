@@ -100,6 +100,8 @@ Die Erkennung läuft vollständig auf dem eigenen Gerät und ohne Netzwerk. Sie 
 
 ![Screenshot: E-Rechnung prüfen](docs/bilder/e-rechnung.png)
 
+**Schutz vor präparierten Dateien:** Fremde PDFs liest die App in einem eigenen Prozess mit Grenzen für Arbeitsspeicher (400 MB) und Zeit (20 Sekunden), ohne Netz. Wird eine Grenze erreicht, steht am Beleg „PDF aus Sicherheitsgründen nicht ausgewertet“ – das Original bleibt gespeichert, die Werte trägt man von Hand ein. Von PDFs über 100 Seiten werden die ersten 90 und die letzten 10 gelesen.
+
 **Papierkorb:** **Verwerfen** (ungeprüfter Beleg) und **Löschen** (übernommene Ausgabe) legen den Eintrag samt Beleg in den Papierkorb (Finanzen → Ausgaben → **Papierkorb**). Was dort liegt, zählt nicht in EÜR, Übersicht, Abschreibung und Export.
 
 - **Wiederherstellen** bringt den Eintrag so zurück, wie er war – eine Anschaffung samt eingestellter Nutzungsdauer. Gibt es schon eine Ausgabe mit gleichem Betrag und Datum, fragt die App vorher nach.
@@ -305,6 +307,8 @@ rechnungen/
     finanzen.py          Finanzen: Ausgaben, Fahrten, Anschaffungen/Abschreibung, EÜR, Export
     belege.py            Auslesen von Belegen (PDF, Fotos, Kauf-Mails .eml/.msg/.mbox)
     texterkennung.py     Texterkennung für Fotos und Scans (lokal, im eigenen Prozess)
+    pdflesen.py          Lesen fremder PDFs im eigenen Prozess
+    grenzen.py           Grenzen für Speicher, Zeit und Textlänge
     erechnung.py         Lesen von E-Rechnungen (XRechnung, ZUGFeRD/Factur-X) samt Lesefassung
     paperless.py         Abholen von Ausgaben-Belegen aus Paperless-ngx (REST-Schnittstelle, nur lesend)
     strecken.py          Entfernungen über OpenStreetMap (Nominatim, OSRM) mit Zwischenspeicher

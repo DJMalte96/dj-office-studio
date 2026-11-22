@@ -353,12 +353,14 @@ def _entpacken(strom):
     return aus if len(aus) <= MAX_BYTES else None
 
 
-def pdf_anhaenge(daten):
-    """Eingebettete XML-Dateien → [(name, bytes)], bekannte Namen zuerst. Eigener Durchlauf, weil pypdf 5.1 den
-    Namensbaum nur flach liest (ohne /Kids) und /AF gar nicht."""
+def pdf_anhaenge(daten, leser=None):
+    """Eingebettete XML-Dateien → [(name, bytes)], bekannte Namen zuerst. Eigener Durchlauf: findet auch /AF und
+    entpackt begrenzt. Öffnet das PDF selbst – deshalb nur im Kindprozess von pdflesen aufrufen."""
     try:
-        from pypdf import PdfReader
-        katalog = _aufloesen(PdfReader(io.BytesIO(daten)).trailer["/Root"])
+        if leser is None:
+            from pypdf import PdfReader
+            leser = PdfReader(io.BytesIO(daten))
+        katalog = _aufloesen(leser.trailer["/Root"])
         specs = []
         namen = _aufloesen(katalog.get("/Names"))
         offen = [namen.get("/EmbeddedFiles")] if namen else []
@@ -390,16 +392,18 @@ def pdf_anhaenge(daten):
                     break
                 aus.append((name, inhalt))
         return aus
+    except MemoryError:
+        raise
     except Exception:       # kaputtes oder verschlüsseltes PDF: dann eben ohne E-Rechnung
         return []
 
 
-def suchen(teile):
+def suchen(teile, aus_pdf=pdf_anhaenge):
     """[(name, bytes)] (XML oder PDF) → (verschiedene Rechnungen, Probleme). Doppelt Mitgeschicktes zählt einmal."""
     def kandidaten():       # nacheinander, damit nie alle entpackten Anhänge zugleich im Speicher liegen
         for name, daten in teile:
             if daten[:5] == b"%PDF-":
-                yield from pdf_anhaenge(daten)
+                yield from aus_pdf(daten)
             elif ist_xml(name, daten):
                 yield name, daten
 

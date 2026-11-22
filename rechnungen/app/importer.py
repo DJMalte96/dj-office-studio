@@ -6,11 +6,11 @@ Das Parsen orientiert sich am Aufbau der bisherigen Vorlage:
 Angebote sind gleich aufgebaut ("Angebot Nr.: …"); nach der Tabelle folgen dort
 „gültig bis …“ und Hinweise statt der Zahlungsbedingung.
 """
-import io
 import re
 from datetime import date
 
-from pypdf import PdfReader
+import grenzen
+import pdflesen
 
 # Preis: "960,- Euro", "1.234,50 Euro", "45 Euro", "45,50 €" – aber NICHT "750€ für 6 Stunden" (kein Komma)
 PRICE = re.compile(
@@ -32,14 +32,10 @@ TIMES = re.compile(r"(\d{1,2}[:.]\d{2})(\s*Uhr\s*(?:bis|-|–)\s*)(\d{1,2}[:.]\d
 
 def pdf_text(data):
     """Text mit Layout-Erhalt: Word-PDFs liefern im Standardmodus einzelne Wörter pro Zeile."""
-    reader = PdfReader(io.BytesIO(data))
-    pages = []
-    for page in reader.pages:
-        try:
-            pages.append(page.extract_text(extraction_mode="layout") or "")
-        except Exception:
-            pages.append(page.extract_text() or "")
-    return "\n".join(pages)
+    text, gekuerzt = pdflesen.text(data, layout=True)
+    if gekuerzt:
+        raise ValueError(f"PDF hat über {pdflesen.MAX_SEITEN} Seiten – bitte je Rechnung eine Datei")
+    return grenzen.text_begrenzen(text)
 
 
 def _iso(m):

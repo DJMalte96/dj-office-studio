@@ -314,8 +314,18 @@ def texterkennung_kind(pfad, ausgabe):
     texterkennung.kind(pfad, ausgabe)
 
 
+def pdf_lesen_kind(ordner, art):
+    """Die App ruft sich zum Lesen fremder PDFs selbst als Kindprozess auf – ohne Fenster und ohne Server."""
+    if not getattr(sys, "frozen", False):
+        sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "rechnungen" / "app"))
+    import pdflesen
+    pdflesen.kind(ordner, art)
+
+
 if __name__ == "__main__":
-    if len(sys.argv) == 4 and sys.argv[1] == "--texterkennung":   # vor allem anderen: sonst öffnet sich ein zweites Fenster
+    if len(sys.argv) == 4 and sys.argv[1] == "--pdf-lesen":         # vor allem anderen: sonst öffnet sich ein zweites Fenster
+        pdf_lesen_kind(sys.argv[2], sys.argv[3])
+    elif len(sys.argv) == 4 and sys.argv[1] == "--texterkennung":   # vor allem anderen: sonst öffnet sich ein zweites Fenster
         texterkennung_kind(sys.argv[2], sys.argv[3])
     else:
         main()
