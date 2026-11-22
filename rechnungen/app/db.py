@@ -86,7 +86,7 @@ CREATE TABLE IF NOT EXISTS ausgaben (
     privatanteil REAL DEFAULT 0,                 -- Prozent
     beleg_datei TEXT,                            -- relativ zum Datenordner
     beleg_name TEXT,
-    beleg_typ TEXT,                              -- pdf | mail | msg | bild | unbekannt
+    beleg_typ TEXT,                              -- pdf | xml | mail | msg | bild | unbekannt
     beleg_pruefsumme TEXT,
     mail_message_id TEXT,
     erkannt_json TEXT,                           -- Vorschläge und Fundstellen der Auswertung

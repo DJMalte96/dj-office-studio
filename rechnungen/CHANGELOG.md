@@ -2,6 +2,28 @@
 
 Alle Änderungen an DJ Office Studio. Neueste Version oben.
 
+## 1.7.0 – 2026-11-22
+
+### Neu
+- **E-Rechnungen empfangen**: XRechnung (UBL und CII) und ZUGFeRD/Factur-X – als XML, im PDF eingebettet oder als Anhang einer Mail, per Hochladen und über den Belege-Ordner.
+  - Verkäufer, Rechnungsnummer, Datum, Bruttobetrag und Umsatzsteuer kommen aus den Rechnungsdaten statt aus dem Text. Bestätigt wird wie bisher.
+  - **Lesefassung** mit Positionen und Summen. Das Original bleibt unverändert und kommt in Export und Sicherung.
+  - **Warnungen**: eigene Rechnung, Gutschrift (wird negativ vorgeschlagen), Fremdwährung, Anzahlung, Steuerschuld des Empfängers, abweichender Betrag im sichtbaren PDF und dieselbe Rechnung schon in anderer Form vorhanden.
+  - Gelesen wird lokal. Die App prüft die Dateien nicht amtlich auf Gültigkeit.
+- **Belege-Ordner meldet, was liegen bleibt**: andere Dateitypen, XML ohne Rechnung, beschädigte Dateien.
+- **Beim Update**: Bisher übersprungene XML-Rechnungen im Belege-Ordner werden eingelesen, ungeprüfte Belege mit E-Rechnung einmalig nachgelesen. Übernommene und von Hand geänderte Werte bleiben, wie sie sind.
+
+### Geändert
+- **Aus Paperless abholen** lädt PDFs, XML und Mails als Original, damit die E-Rechnung erhalten bleibt. Reine Scans kommen weiter als Archivfassung mit Texterkennung. Schon Abgeholtes bleibt unverändert.
+
+### Behoben
+- **Belege-Ordner im Nur-lesen-Modus**: Eine Datei, deren Einlesen scheitert, wird noch einmal versucht statt als gesehen gemerkt.
+- **Handy**: Ein langer Pfad des Belege-Ordners schiebt die Seite nicht mehr breiter.
+
+### Sicherheit
+- CSV-Export: Texte aus Belegen können in Excel nicht mehr als Formel ausgeführt werden.
+- Desktop-App: Als PDF erkannte Belege werden nur noch mit der Endung .pdf geöffnet.
+
 ## 1.6.1 – 2026-11-22
 
 ### Behoben

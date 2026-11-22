@@ -1,6 +1,6 @@
 """Finanzen: Ausgaben mit Belegen (Stufe 1 von Version 1.1).
 
-Belege (PDF, Fotos, Kauf-Mails) werden unverändert im Datenordner unter belege/<Jahr>/ abgelegt;
+Belege (PDF, E-Rechnungen, Fotos, Kauf-Mails) werden unverändert im Datenordner unter belege/<Jahr>/ abgelegt;
 die Datenbank speichert Pfad, Prüfsumme und die bestätigten Werte. Neu hochgeladene Belege haben den
 Status „neu“, bis sie in der App geprüft und übernommen wurden. Die Tabellen stehen in db.SCHEMA.
 """
@@ -13,6 +13,7 @@ from flask import Blueprint, Response, abort, jsonify, request
 
 import belege
 import db
+import erechnung
 import texterkennung
 
 bp = Blueprint("finanzen", __name__)
@@ -122,10 +123,22 @@ EIGENER_NAME = ("An der Stelle des Lieferanten stand dein eigener Name oder dein
                 "Ist es eine Rechnung von dir, gehört sie nicht in die Ausgaben: bitte verwerfen.")
 
 
+EIGENE_ERECHNUNG = ("Laut E-Rechnung bist du selbst der Verkäufer – das ist keine Ausgabe, bitte verwerfen. "
+                    "Sie würde deinen Gewinn zu Unrecht senken.")
+
+
 def _lieferant_vorschlagen(v, paperless):
     """Bester Vorschlag, der nicht man selbst ist. Lieber keiner als die nächstbeste Zeile (oft Straße oder Kunde)."""
     ich = _einstellungen()
     adresse = v.pop("absender_adresse", None)
+    er = v.get("erechnung")
+    if er and belege.ist_eigener_verkaeufer(er, ich):
+        v["lieferant"] = None       # auch kein Korrespondent aus Paperless: das wäre der Kunde
+        v["hinweise"].insert(0, EIGENE_ERECHNUNG)
+        return
+    if er and er["steuer_gemischt"] and not er.get("mehrere") and not ich.get("kleinunternehmer"):
+        v["hinweise"].append("Mehrere oder ungewöhnliche Steuersätze – die App kann die Vorsteuer hier nicht ausrechnen, "
+                             "bitte je Steuersatz eine Ausgabe erfassen")
     erkannt = v["lieferant"]
     selbst = belege.ist_eigen(erkannt, ich) or belege.ist_eigene_adresse(adresse, ich)
     auswahl = [None if selbst else erkannt]
@@ -156,7 +169,7 @@ def beleg_aufnehmen(name, daten, paperless=None, automatisch=False, in_papierkor
     pl_id = None
     if paperless:
         pl_id = paperless["id"]
-        if v["betrag"] is None and (paperless.get("text") or "").strip():   # z. B. Foto/Scan: Texterkennung von Paperless nutzen
+        if v["betrag"] is None and not v.get("erechnung") and (paperless.get("text") or "").strip():   # z. B. Foto/Scan: Texterkennung von Paperless nutzen
             t = belege.text_vorschlaege(paperless["text"])
             v["betrag"], v["ust_satz"], v["ust_betrag"] = t["betrag"], t["ust_satz"], t["ust_betrag"]
             v["fundstellen"]["betrag"] = t["fundstelle"]
@@ -171,8 +184,10 @@ def beleg_aufnehmen(name, daten, paperless=None, automatisch=False, in_papierkor
         v["hinweise"].append(f"Aus Paperless (Dokument {pl_id})")
     _lieferant_vorschlagen(v, paperless)
     kategorie = _kategorie_fuer(v["lieferant"]) or v["kategorie"] or "sonstiges"
+    if kategorie == "anschaffung" and (v["betrag"] or 0) < 0:
+        kategorie = "sonstiges"     # gelernt vom Kauf, aber eine Gutschrift ist keine Anschaffung
     belegdatum = v["belegdatum"] or date.today().isoformat()
-    ocr = "wartet" if belege.braucht_texterkennung(v["typ"], v["betrag"], daten) else None
+    ocr = "wartet" if not v.get("erechnung") and belege.braucht_texterkennung(v["typ"], v["betrag"], daten) else None
     if not v["belegdatum"]:
         v["datum_ersatz"] = belegdatum      # Platzhalter: den darf die Texterkennung später ersetzen
     with db.connect() as con:
@@ -233,6 +248,13 @@ def _pflicht(a):
     return fehlt
 
 
+def _gutschrift_pruefen(a):
+    if a.get("kategorie") == "anschaffung" and (a.get("betrag") or 0) < 0:
+        return ["Eine Gutschrift kann keine Anschaffung sein – bitte eine andere Kategorie wählen "
+                "und das Gerät ggf. unter Anschaffungen anpassen"]
+    return []
+
+
 def _fehler(text, code=400):
     return jsonify({"error": text}), code
 
@@ -286,6 +308,12 @@ def dateien_aufnehmen(eingang, automatisch=False):
             dateien.append((name, daten))
     for name, daten in dateien:
         try:
+            if belege.typ_von(name, daten) == "xml":    # XML nur als E-Rechnung – sonst sagen, warum nicht
+                try:
+                    erechnung.lesen(daten)
+                except erechnung.Unlesbar as e:
+                    fehler.append({"datei": name, "fehler": str(e), "unpassend": True})
+                    continue
             a, vorhanden = beleg_aufnehmen(name, daten, automatisch=automatisch)
         except Exception as e:   # defekte Datei darf den Rest nicht aufhalten
             fehler.append({"datei": name, "fehler": f"Konnte nicht gelesen werden ({type(e).__name__})"})
@@ -301,6 +329,8 @@ def dateien_aufnehmen(eingang, automatisch=False):
 def ausgabe_anlegen():
     """Ausgabe ohne Beleg (z. B. Parkautomat) – direkt übernommen."""
     w, fehler = _pruefen(_daten(), ohne_beleg=True)
+    if not fehler:
+        fehler += _gutschrift_pruefen(w)
     w.setdefault("kategorie", "sonstiges")
     w.setdefault("bezahlt_am", w.get("belegdatum"))
     fehlt = _pflicht(w)
@@ -316,7 +346,44 @@ def ausgabe_anlegen():
 
 @bp.get("/api/ausgaben/<int:aid>")
 def ausgabe_holen(aid):
-    return jsonify(holen(aid) or abort(404))
+    a = holen(aid) or abort(404)
+    return jsonify(a | {"doppelt_verdacht": _doppelt_verdacht(a)})
+
+
+def _doppelt_verdacht(a):
+    """Dieselbe Rechnung schon in anderer Form da (PDF, Mail, XML)? Nur Warnung, beim Öffnen frisch ermittelt.
+    Sicher: gleiche Nummer, gleiches Datum, gleicher Verkäufer. Vermutlich: gleicher Betrag binnen 10 Tagen, wenn
+    genau eine der beiden eine E-Rechnung ist – zwei E-Rechnungen mit verschiedenen Nummern sind zwei Käufe."""
+    if a["status"] != "neu":
+        return None
+    e = a["erkannt"].get("erechnung")
+    with db.connect() as con:
+        andere = [_zeile(r) for r in con.execute("SELECT * FROM ausgaben WHERE id != ? AND status != 'papierkorb'"
+                                                 " ORDER BY status = 'neu', id", (a["id"],))]
+
+    def wer(er):
+        return re.sub(r"[\W_]+", "", (er.get("verkaeufer") or "").lower())
+
+    def treffer(x, sicher):
+        return {"id": x["id"], "sicher": sicher, "status": x["status"], "lieferant": x["lieferant"] or x["beleg_name"] or "",
+                "datum": x["belegdatum"], "betrag": x["betrag"]}
+
+    for x in andere:
+        e2 = x["erkannt"].get("erechnung")
+        if e and e2 and e["nummer"] and (e["nummer"], e["datum"], wer(e)) == (e2["nummer"], e2["datum"], wer(e2)):
+            return treffer(x, True)
+    for x in andere:
+        if bool(e) == bool(x["erkannt"].get("erechnung")) or a["betrag"] is None or x["betrag"] is None:
+            continue
+        if abs(a["betrag"] - x["betrag"]) > 0.004:
+            continue
+        try:
+            tage = abs((date.fromisoformat(a["belegdatum"]) - date.fromisoformat(x["belegdatum"])).days)
+        except (TypeError, ValueError):
+            continue
+        if tage <= 10:
+            return treffer(x, False)
+    return None
 
 
 @bp.put("/api/ausgaben/<int:aid>")
@@ -332,6 +399,8 @@ def ausgabe_aendern(aid):
         fehlt = _pflicht(gesamt)
         if fehlt:
             fehler.append(f"Bitte ergänzen: {', '.join(fehlt)}")
+        if not fehler:
+            fehler += _gutschrift_pruefen(gesamt)
     if fehler:
         return _fehler("; ".join(fehler))
     if d.get("uebernehmen"):
@@ -445,18 +514,19 @@ def _beleg_bytes(a):
         return f.read()
 
 
-MIME = {"pdf": "application/pdf", "mail": "message/rfc822", "msg": "application/vnd.ms-outlook"}
+MIME = {"pdf": "application/pdf", "mail": "message/rfc822", "msg": "application/vnd.ms-outlook", "xml": "application/xml"}
 
 
 @bp.get("/api/ausgaben/<int:aid>/beleg")
 def beleg_original(aid):
-    """Originaldatei (PDF, Foto, .eml/.msg) – PDFs und Bilder inline, Mails zum Herunterladen."""
+    """Originaldatei – PDFs und Bilder inline, Mails und XML nur zum Herunterladen (XHTML darin würde Skripte ausführen)."""
     a = holen(aid) or abort(404)
     daten = _beleg_bytes(a)
     name = a["beleg_name"] or "Beleg"
     typ = MIME.get(a["beleg_typ"]) or _bild_mime(daten) or "application/octet-stream"
     inline = a["beleg_typ"] in ("pdf", "bild")
     return Response(daten, mimetype=typ, headers={
+        "X-Content-Type-Options": "nosniff",
         "Content-Disposition": f'{"inline" if inline else "attachment"}; filename="{_ascii(name)}"; filename*=UTF-8\'\'{_url(name)}'})
 
 
@@ -488,8 +558,13 @@ def beleg_ansicht(aid):
     """Vorschau zum Prüfen: PDF/Bild direkt, Mails als bereinigtes HTML, HEIC-Fotos als JPEG (falls möglich)."""
     a = holen(aid) or abort(404)
     daten = _beleg_bytes(a)
+    if a["beleg_typ"] == "xml" or (a["beleg_typ"] == "pdf" and request.args.get("daten")):
+        rechnungen, probleme = belege.erechnungen(a["beleg_typ"], daten)
+        inhalt = "<hr>".join(erechnung.lesefassung(r) for r in rechnungen) or \
+            f"<p>{_esc('; '.join(probleme) or 'Keine E-Rechnung in dieser Datei.')} Über „Original öffnen“ ansehen.</p>"
+        return _seite(inhalt)
     if a["beleg_typ"] == "pdf":
-        return Response(daten, mimetype="application/pdf")
+        return Response(daten, mimetype="application/pdf", headers={"X-Content-Type-Options": "nosniff"})
     if a["beleg_typ"] == "bild":
         mime = _bild_mime(daten)
         if mime:
@@ -505,10 +580,17 @@ def beleg_ansicht(aid):
         kopf = (f"<div style='font:12px/1.5 Arial,sans-serif;color:#555;border-bottom:1px solid #e5e5e5;padding:0 0 10px;margin:0 0 14px'>"
                 f"Von: {_esc(mail['absender'])}<br>Betreff: {_esc(mail['betreff'])}<br>Datum: {_esc(_de_datum(mail['datum']))}"
                 + (f"<br>Anhänge: {_esc(', '.join(n for n, _, _ in anhaenge))}" if anhaenge else "") + "</div>")
-        seite = f"<!DOCTYPE html><html><head><meta charset='utf-8'></head><body style='margin:16px;background:#fff;color:#111'>{kopf}{inhalt}</body></html>"
-        return Response(seite, mimetype="text/html", headers={"Content-Security-Policy": MAIL_CSP,
-                                                             "X-Content-Type-Options": "nosniff"})
+        # E-Rechnungen aus den Anhängen stehen vor dem Mailtext
+        daraus = "".join(f"{erechnung.lesefassung(r)}<hr style='margin:18px 0;border:0;border-top:2px solid #ddd'>"
+                         for r in belege.erechnungen(a["beleg_typ"], daten)[0])
+        return _seite(f"{daraus}{kopf}{inhalt}")
     return _fehler("Keine Vorschau für diesen Dateityp.", 415)
+
+
+def _seite(inhalt):
+    seite = f"<!DOCTYPE html><html><head><meta charset='utf-8'></head><body style='margin:16px;background:#fff;color:#111'>{inhalt}</body></html>"
+    return Response(seite, mimetype="text/html", headers={"Content-Security-Policy": MAIL_CSP,
+                                                         "X-Content-Type-Options": "nosniff"})
 
 
 def _de_datum(iso):
@@ -1311,8 +1393,15 @@ def _csv(zeilen):
     import csv
     import io
     buf = io.StringIO()
-    csv.writer(buf, delimiter=";").writerows(zeilen)
+    csv.writer(buf, delimiter=";").writerows([[_zelle(x) for x in z] for z in zeilen])
     return "﻿" + buf.getvalue()           # BOM: Excel erkennt Umlaute
+
+
+def _zelle(x):
+    """Text von Fremden (Mail, E-Rechnung) darf in Excel keine Formel werden. Zahlen wie -12,00 bleiben Zahlen."""
+    if isinstance(x, str) and x[:1] in ("=", "+", "-", "@", "\t", "\r") and not re.fullmatch(r"-?\d+(?:,\d+)?", x):
+        return "'" + x
+    return x
 
 
 def _b(v):
@@ -1354,7 +1443,7 @@ def export_finanzen(zf, jahr, a):
         if x.get("beleg_datei"):
             pfad = _beleg_pfad(x)
             if pfad:
-                endung = os.path.splitext(x["beleg_name"] or x["beleg_datei"])[1].lower() or ".dat"
+                endung = ".xml" if x["beleg_typ"] == "xml" else os.path.splitext(x["beleg_name"] or x["beleg_datei"])[1].lower() or ".dat"
                 stamm = _dateiname(f"{x['bezahlt_am'] or x['belegdatum']}_{x['lieferant']}_{_b(x['betrag'])}")
                 datei, n = f"{stamm}{endung}", 2
                 while datei in benutzt:
@@ -1406,6 +1495,11 @@ def _pl_https(url):
     return _ssl() if url.lower().startswith("https") else None
 
 
+def _nur_scan(daten):
+    return (daten[:5] == b"%PDF-" and belege.braucht_texterkennung("pdf", None, daten)
+            and not belege.erechnungen("pdf", daten)[0])
+
+
 def paperless_abholen():
     """Alle Dokumente mit dem Tag holen, die noch nicht übernommen sind (läuft im Hintergrund, Stand in _pl_status)."""
     st = _pl_status
@@ -1430,7 +1524,10 @@ def paperless_abholen():
         namen = paperless.korrespondenten(url, token, ssl_k) if offen else {}
         for d in offen:
             try:
-                daten, name, _typ = paperless.herunterladen(url, token, d["id"], ssl_k)
+                original = paperless.original_noetig(d)
+                daten, name, _typ = paperless.herunterladen(url, token, d["id"], ssl_k, original=original)
+                if original and _nur_scan(daten):   # Scan: die Archivfassung hat die Texterkennung von Paperless
+                    daten, name, _typ = paperless.herunterladen(url, token, d["id"], ssl_k)
                 name = name or d.get("original_file_name") or f"{d.get('title') or 'Paperless'}.pdf"
                 datum = str(d.get("created_date") or d.get("created") or "")[:10] or None
                 a_neu, vorhanden = beleg_aufnehmen(name, daten, {
@@ -1513,11 +1610,16 @@ import glob  # noqa: E402
 import shutil  # noqa: E402
 import time  # noqa: E402
 
-BELEG_ENDUNGEN = (".pdf", ".eml", ".msg", ".mbox", ".jpg", ".jpeg", ".png", ".heic", ".heif", ".webp")
+BELEG_ENDUNGEN = (".pdf", ".xml", ".eml", ".msg", ".mbox", ".jpg", ".jpeg", ".png", ".heic", ".heif", ".webp")
 UEBERNOMMEN, NICHT_LESBAR = "übernommen", "nicht lesbar"
 ORDNER_TAKT = 60          # Sekunden zwischen zwei Durchläufen im Hintergrund
 _ordner_sperre = threading.Lock()
-_ordner_stand = {"laeuft": False, "geprueft": None, "neu": 0, "doppelt": 0, "papierkorb": [], "fehler": [], "problem": None}
+_ordner_stand = {"laeuft": False, "geprueft": None, "neu": 0, "doppelt": 0, "papierkorb": [], "fehler": [], "problem": None,
+                 "uebergangen": [], "uebergangen_anzahl": 0}
+_unpassend = {}     # (pfad, größe, geändert) → Grund – damit fremde XML nicht jede Minute neu gelesen werden
+# Hilfsdateien von Systemen und Programmen: weder Beleg noch eine Meldung wert
+NEBENDATEIEN = ("table_of_contents", "thumbs.db", "desktop.ini", "icon\r")
+HALBFERTIG = (".tmp", ".part", ".partial", ".crdownload", ".download")
 
 
 def belege_ordner(a=None):
@@ -1546,16 +1648,27 @@ def _gesehen_merken(pfad):
                     (pfad, s.st_size, s.st_mtime))
 
 
-def _ordner_dateien(ordner, ruhe=5):
+def _ordner_dateien(ordner, ruhe=5, gemeldet=None):
     """Belegdateien im Ordner (auch in Unterordnern), ohne „übernommen“/„nicht lesbar“, versteckte Dateien und
-    Dateien, die gerade noch geschrieben werden (in den letzten Sekunden geändert)."""
+    Dateien, die gerade noch geschrieben werden (in den letzten Sekunden geändert).
+    gemeldet: Liste, in die alles kommt, was liegen bleibt → (pfad, grund)."""
     jetzt = time.time()
-    for wurzel, ordner_namen, namen in os.walk(ordner):
+
+    def gesperrt(e):
+        if gemeldet is not None:
+            gemeldet.append((e.filename or ordner, "Ordner nicht lesbar – bitte Leserechte prüfen"))
+
+    for wurzel, ordner_namen, namen in os.walk(ordner, onerror=gesperrt):
         ordner_namen[:] = [o for o in ordner_namen if not o.startswith(".") and
                            not (wurzel == ordner and o in (UEBERNOMMEN, NICHT_LESBAR))]
         for n in sorted(namen):
             pfad = os.path.join(wurzel, n)
-            if n.startswith(".") or not (n.lower().endswith(BELEG_ENDUNGEN) or n == "mbox"):
+            if n.startswith("."):
+                continue
+            klein = n.lower()
+            if not (klein.endswith(BELEG_ENDUNGEN) or n == "mbox"):
+                if gemeldet is not None and klein not in NEBENDATEIEN and not klein.endswith(HALBFERTIG) and not n.startswith("~$"):
+                    gemeldet.append((pfad, "Dateityp wird nicht gelesen"))
                 continue
             try:
                 if ruhe <= 0 or jetzt - os.path.getmtime(pfad) >= ruhe:   # Windows: Zeitstempel kann minimal vorgehen
@@ -1624,6 +1737,7 @@ def _abgleich_vor_16(a):
         if os.path.isdir(erledigt) and fremd(erledigt):
             pfade.update(dict.fromkeys(_ordner_dateien(erledigt, 0)))
     n = 0
+    pfade = [p for p in pfade if not p.lower().endswith(".xml")]    # vor 1.6 gab es keine XML-Belege
     for pfad in pfade:
         name = os.path.basename(pfad)
         if name == "mbox":
@@ -1644,11 +1758,95 @@ def _abgleich_vor_16(a):
     return n
 
 
+def _melden(st, gemeldet, muster):
+    """Was im Belege-Ordner liegen blieb, für die Anzeige (relativ zum Ordner, sofern es nur einer ist)."""
+    def kurz(pfad):
+        if muster and not glob.has_magic(muster) and pfad.startswith(os.path.join(muster, "")):
+            return pfad[len(os.path.join(muster, "")):]
+        return pfad
+
+    st["uebergangen"] = [{"datei": kurz(p), "grund": g} for p, g in gemeldet[:50]]
+    st["uebergangen_anzahl"] = len(gemeldet)
+
+
+NACHGELESEN = "_erechnung_nachgelesen"
+
+
+def _nachlesen_17():
+    """Einmalig nach dem Update: ungeprüfte Belege, in denen eine E-Rechnung steckt, noch einmal auswerten.
+    Ändert nur Felder, die noch den alten Vorschlag enthalten – nie etwas Übernommenes."""
+    if db.get_settings().get(NACHGELESEN):
+        return 0
+    with db.connect() as con:
+        ids = [r[0] for r in con.execute(
+            "SELECT id FROM ausgaben WHERE beleg_datei IS NOT NULL AND (beleg_typ = 'unbekannt' OR (beleg_typ IN ('pdf', 'mail', 'msg', 'xml')"
+            " AND (status = 'neu' OR (status = 'papierkorb' AND COALESCE(status_vorher, '') != 'ok'))))")]
+    n = 0
+    for aid in ids:
+        try:
+            n += _neu_auswerten(aid)
+        except Exception as x:
+            print(f"E-Rechnung nachlesen, Beleg {aid}: {type(x).__name__}", flush=True)
+    db.save_settings({NACHGELESEN: datetime.now().isoformat(timespec="seconds")})
+    if n:
+        print(f"E-Rechnungen: {n} vorhandene Belege nachgelesen", flush=True)
+    return n
+
+
+def _neu_auswerten(aid):
+    a = holen(aid)
+    pfad = _beleg_pfad(a) if a else None
+    if not pfad:
+        return 0
+    with open(pfad, "rb") as f:
+        daten = f.read()
+    neu = belege.auswerten(a["beleg_name"] or os.path.basename(pfad), daten)
+    if not neu.get("erechnung"):
+        return 0
+    _lieferant_vorschlagen(neu, None)
+    with db.connect() as con:
+        con.execute("BEGIN IMMEDIATE")
+        r = con.execute("SELECT * FROM ausgaben WHERE id = ? AND beleg_pruefsumme IS ?", (aid, a["beleg_pruefsumme"])).fetchone()
+        if not r:
+            return 0
+        w = {}
+        if r["beleg_typ"] == "unbekannt":
+            w["beleg_typ"] = neu["typ"]         # damit es die Lesefassung gibt
+        if r["status"] == "neu" or (r["status"] == PAPIERKORB and r["status_vorher"] != "ok"):
+            alt = json.loads(r["erkannt_json"] or "{}")
+            if r["betrag"] == alt.get("betrag"):
+                w.update(betrag=neu["betrag"])
+                if r["ust_satz"] == alt.get("ust_satz"):
+                    w.update(ust_satz=neu["ust_satz"])
+                if r["kategorie"] == "anschaffung" and (neu["betrag"] or 0) < 0:
+                    w.update(kategorie="sonstiges")
+            selbst = EIGENE_ERECHNUNG in neu["hinweise"]
+            behalten = r["paperless_id"] and r["lieferant"]     # Korrespondent aus Paperless
+            if (r["lieferant"] or "") == (alt.get("lieferant") or "") and (selbst or (neu["lieferant"] and not behalten)):
+                w["lieferant"] = neu["lieferant"] or ""
+            if (r["beschreibung"] or "") == (alt.get("beschreibung") or "") and neu["beschreibung"]:
+                w["beschreibung"] = neu["beschreibung"]
+            if neu["belegdatum"]:
+                bisher = {alt["belegdatum"]} if alt.get("belegdatum") else _platzhalter_tage(dict(r), alt)
+                for feld in ("belegdatum", "bezahlt_am"):
+                    if r[feld] in bisher:
+                        w[feld] = neu["belegdatum"]
+            neu["hinweise"] += [h for h in alt.get("hinweise", []) if h.startswith("Aus Paperless")]
+            w["erkannt_json"] = json.dumps(neu)
+            if r["ocr"] == "wartet":
+                w["ocr"] = None
+        if not w:
+            return 0
+        con.execute(f"UPDATE ausgaben SET {', '.join(k + ' = ?' for k in w)} WHERE id = ?", [*w.values(), aid])
+    return 1
+
+
 def ordner_einlesen(ruhe=5):
     """Einen Durchlauf machen. Gibt den Stand zurück; läuft schon einer, passiert nichts."""
     st = _ordner_stand
     if not _ordner_sperre.acquire(blocking=False):
         return st
+    gemeldet, muster = [], ""
     try:
         st["laeuft"] = True
         a = _einstellungen()
@@ -1656,6 +1854,10 @@ def ordner_einlesen(ruhe=5):
             _abgleich_vor_16(a)                # muss vor dem Einlesen laufen (unter derselben Sperre)
         except Exception as x:                 # darf das Einlesen nie blockieren
             print(f"Papierkorb-Abgleich: {type(x).__name__}: {x}", flush=True)
+        try:
+            _nachlesen_17()
+        except Exception as x:
+            print(f"E-Rechnungen nachlesen: {type(x).__name__}: {x}", flush=True)
         muster = belege_ordner(a)
         verschieben = a.get("belege_ordner_verschieben", True)
         st["problem"] = None
@@ -1676,8 +1878,18 @@ def ordner_einlesen(ruhe=5):
         if not ordner_liste:
             st["problem"] = f"Belege-Ordner {muster} wurde nicht gefunden"
             return st
-        for ordner, pfad in [(o, p) for o in ordner_liste for p in _ordner_dateien(o, ruhe)]:
-            if not verschieben and _schon_gesehen(pfad):
+        for ordner, pfad in [(o, p) for o in ordner_liste for p in _ordner_dateien(o, ruhe, gemeldet)]:
+            try:
+                if not verschieben and _schon_gesehen(pfad):
+                    continue
+                s = os.stat(pfad)
+            except OSError:         # gerade verschoben oder gelöscht
+                continue
+            schluessel = (pfad, s.st_size, s.st_mtime)
+            if schluessel not in _unpassend and pfad.lower().endswith(".xml") and s.st_size > erechnung.MAX_BYTES:
+                _unpassend[schluessel] = "XML-Datei ist zu groß (über 20 MB)"
+            if schluessel in _unpassend:
+                gemeldet.append((pfad, _unpassend[schluessel]))
                 continue
             name = os.path.basename(pfad)
             if name == "mbox":   # Apple-Mail-Export „Name.mbox/mbox“ → Name des Postfachs verwenden
@@ -1688,21 +1900,40 @@ def ordner_einlesen(ruhe=5):
                 e = dateien_aufnehmen([(name, daten)], automatisch=not verschieben)
             except Exception as x:
                 e = {"neu": [], "doppelt": [], "papierkorb": [], "fehler": [{"datei": name, "fehler": type(x).__name__}]}
+            nichts = not (e["neu"] or e["doppelt"] or e["papierkorb"])
+            if nichts and e["fehler"] and all(f.get("unpassend") for f in e["fehler"]):
+                # kein Beleg (z. B. irgendeine XML): liegen lassen und melden, nicht anfassen
+                _unpassend[schluessel] = e["fehler"][0]["fehler"]
+                gemeldet.append((pfad, _unpassend[schluessel]))
+                continue
             st["neu"] += len(e["neu"])
             st["doppelt"] += len(e["doppelt"])
             st["fehler"] = (st["fehler"] + [f["datei"] for f in e["fehler"]])[-20:]
             if verschieben:       # absichtlich noch einmal abgelegt → Wiederherstellen anbieten
                 st["papierkorb"] = list(dict.fromkeys(st.get("papierkorb", []) + [x["id"] for x in e["papierkorb"]]))[-500:]
             if not verschieben:   # fremde Ablage (z. B. Paperless): nichts anfassen, nur merken
-                _gesehen_merken(pfad)
+                if e["fehler"]:
+                    gemeldet.append((pfad, "Konnte nicht gelesen werden"))
+                    if nichts:
+                        continue    # nicht merken – beim nächsten Durchlauf noch einmal versuchen
+                try:
+                    _gesehen_merken(pfad)
+                except OSError:
+                    pass
                 continue
             try:
                 _verschieben(pfad, ordner, NICHT_LESBAR if e["fehler"] and not (e["neu"] or e["doppelt"] or e["papierkorb"]) else UEBERNOMMEN)
             except OSError as x:
                 st["problem"] = f"Konnte {name} nicht verschieben ({type(x).__name__}) – bitte Schreibrechte des Ordners prüfen"
                 break
+        if verschieben:
+            for o in ordner_liste:
+                for wurzel, _, namen in os.walk(os.path.join(o, NICHT_LESBAR)):
+                    gemeldet += [(os.path.join(wurzel, n), "Konnte nicht gelesen werden, liegt in „nicht lesbar“")
+                                 for n in sorted(namen) if not n.startswith(".")]
         return st
     finally:
+        _melden(st, gemeldet, muster)
         st["laeuft"] = False
         st["geprueft"] = time.strftime("%Y-%m-%dT%H:%M:%S")
         _ordner_sperre.release()

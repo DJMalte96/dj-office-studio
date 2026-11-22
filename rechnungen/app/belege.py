@@ -1,4 +1,4 @@
-"""Belege auslesen: PDF-Rechnungen, Kauf-Mails (.eml/.msg) und Fotos.
+"""Belege auslesen: PDF-Rechnungen, E-Rechnungen, Kauf-Mails (.eml/.msg) und Fotos.
 
 Liefert Vorschläge für eine Ausgabe – Lieferant, Datum, Gesamtbetrag, Umsatzsteuer, Beschreibung, Kategorie –
 die der Nutzer in der App bestätigt. Für die häufigsten Musik-Shops gibt es eigene Regeln (deren Mails sind immer
@@ -12,6 +12,8 @@ import unicodedata
 from datetime import date, datetime, timedelta
 from email import policy
 from email.utils import parsedate_to_datetime, parseaddr
+
+import erechnung
 
 # ---------- Beträge ----------
 
@@ -248,6 +250,38 @@ def mail_lesen(daten):
             "html": html_teil.get_content() if html_teil else ""}, anhaenge
 
 
+def mail_teile(daten):
+    """PDF- und XML-Teile einer Mail → [(name, bytes)] – auch ohne Dateinamen, in weitergeleiteten Mails oder wenn
+    die Mail nur aus der Datei besteht (das alles übersieht iter_attachments)."""
+    aus = []
+    for teil in email.message_from_bytes(daten, policy=policy.default).walk():
+        if teil.is_multipart():
+            continue
+        roh = teil.get_payload(decode=True) or b""
+        name = teil.get_filename() or ("anhang.xml" if teil.get_content_type() in ("application/xml", "text/xml") else "")
+        if roh[:5] == b"%PDF-" or erechnung.ist_xml(name, roh):
+            aus.append((name or "Anhang", roh))
+    return aus[:50]
+
+
+def erechnungen(typ, daten):
+    """E-Rechnungen in einem Beleg → (Rechnungen, Probleme)."""
+    try:
+        if typ == "xml":
+            return [erechnung.lesen(daten)], []
+        if typ == "pdf":
+            return erechnung.suchen([("Beleg.pdf", daten)])
+        if typ == "mail":
+            return erechnung.suchen(mail_teile(daten))
+        if typ == "msg":
+            return erechnung.suchen([(n, d) for n, _, d in msg_lesen(daten)[1]])
+    except erechnung.Unlesbar as e:
+        return [], [str(e)]
+    except Exception:       # kaputte Mail: meldet die normale Auswertung
+        pass
+    return [], []
+
+
 def ist_mbox(name, daten):
     """Postfach-Export (Apple Mail „Postfach exportieren“, Thunderbird …): viele Mails in einer Datei."""
     n = (name or "").lower().rsplit("/", 1)[-1]
@@ -294,6 +328,8 @@ def typ_von(name, daten):
     n = (name or "").lower()
     if daten[:5] == b"%PDF-" or n.endswith(".pdf"):
         return "pdf"
+    if erechnung.ist_xml(name, daten):
+        return "xml"
     if n.endswith(".eml") or (b"\nFrom:" in daten[:4000] and b"\nSubject:" in daten[:8000]) or daten[:5] in (b"From:", b"Recei", b"Retur", b"Deliv"):
         return "mail"
     if n.endswith(".msg") or daten[:8] == b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1":
@@ -314,12 +350,24 @@ def auswerten(name, daten):
     if typ == "unbekannt":
         v["hinweise"].append("Dateityp nicht erkannt – bitte Werte eintragen")
         return v
+    rechnungen, probleme = erechnungen(typ, daten)
+    v["hinweise"] += [f"E-Rechnung nicht lesbar ({p}) – bitte Werte prüfen" for p in probleme]
+    if typ == "xml":
+        if rechnungen:
+            _aus_erechnung(v, rechnungen)
+        return v
 
     if typ == "pdf":
         try:
             text = pdf_text(daten)
         except Exception:
             text = ""
+        if rechnungen:
+            _aus_erechnung(v, rechnungen)
+            # Die eingebettete XML sieht man nicht – weicht sie vom sichtbaren PDF ab, muss das auffallen
+            if len(rechnungen) == 1 and v["betrag"] and (BETRAG.search(text) or ZAHL_OHNE.search(text)) and not _betrag_im_text(v["betrag"], text):
+                v["hinweise"].append("Der Betrag aus der eingebetteten E-Rechnung steht so nicht im sichtbaren PDF – bitte vergleichen")
+            return v
         if not text.strip():
             v["hinweise"].append("PDF ohne Text (Scan) – bitte Betrag eintragen")
             return v
@@ -339,6 +387,9 @@ def auswerten(name, daten):
         v["lieferant"] = shop[0] if shop else _anzeigename(mail["absender"])
         v["kategorie"] = shop[1] if shop else None
         v["beschreibung"] = mail["betreff"][:120] or None
+        if rechnungen:
+            _aus_erechnung(v, rechnungen, shop)
+            return v
         # Angehängte PDF-Rechnung hat Vorrang vor dem Mailtext
         pdf_anhang = next((d for n, t, d in anhaenge if d[:5] == b"%PDF-"), None)
         text = ""
@@ -372,6 +423,40 @@ def auswerten(name, daten):
     if betrag is None:
         v["hinweise"].append("Gesamtbetrag nicht gefunden – bitte eintragen")
     return v
+
+
+def _aus_erechnung(v, rechnungen, shop=None):
+    """Werte aus der E-Rechnung statt aus dem Text. Bei Mails bleibt der Name bekannter Shops (Gruppierung, Kategorie)."""
+    r = rechnungen[0]
+    verkaeufer = {x["verkaeufer"]["name"] for x in rechnungen}
+    v["erechnung"] = erechnung.kurz(r)
+    if len(verkaeufer) == 1 and r["verkaeufer"]["name"]:
+        v.pop("absender_adresse", None)     # der Verkäufer zählt, nicht wer die Mail weitergeleitet hat
+        if not shop:
+            v["lieferant"] = r["verkaeufer"]["name"][:80]
+    if len(rechnungen) > 1:
+        v["erechnung"]["mehrere"] = len(rechnungen)
+        v["hinweise"].append(f"{len(rechnungen)} verschiedene E-Rechnungen in einer Datei – bitte die Anhänge einzeln "
+                             "hochladen und diesen Beleg verwerfen, oder die Summe von Hand eintragen")
+        return
+    v["belegdatum"] = r["datum"] or v["belegdatum"]
+    v["beschreibung"] = erechnung.beschreibung(r) or v["beschreibung"]
+    v["betrag"] = erechnung.ausgabe_betrag(r)
+    if v["betrag"] is not None:
+        v["fundstellen"]["betrag"] = f"{r['format']}, Gesamt brutto {erechnung.geld(r['brutto'])}"
+        v["ust_satz"] = erechnung.ust_satz(r)
+        v["ust_betrag"] = abs(r["steuer"]) if v["ust_satz"] else None
+    v["hinweise"] += erechnung.hinweise(r)
+
+
+def _betrag_im_text(betrag, text):
+    ganz, cent = f"{abs(betrag):.2f}".split(".")
+    gruppen = []
+    while ganz:
+        ganz, g = ganz[:-3], ganz[-3:]
+        gruppen.insert(0, g)
+    muster = r"[.,'\s]?".join(gruppen) + (r"(?:[.,]00|,-|[.,]?(?![\d.,]))" if cent == "00" else rf"[.,]{cent}")
+    return bool(re.search(rf"(?<!\d){muster}(?!\d)", text))
 
 
 def text_vorschlaege(text):
@@ -487,6 +572,17 @@ def ist_eigen(text, absender):
             return True
     strasse, ort = ("".join(_woerter(absender.get(k))) for k in ("strasse", "plz_ort"))
     return zeile in {x for x in (strasse, ort, strasse + ort) if x}
+
+
+def ist_eigener_verkaeufer(er, absender):
+    """E-Rechnung von einem selbst: am Namen, an Steuernummer bzw. USt-IdNr. oder an der Mailadresse erkannt."""
+    def kennung(x):
+        return re.sub(r"[^0-9A-Z]", "", (x or "").upper())
+
+    eigene = {k for k in (kennung(absender.get("steuernummer")), kennung(absender.get("ust_idnr"))) if len(k) >= 8}
+    return (ist_eigen(er.get("verkaeufer"), absender)
+            or any(kennung(x) in eigene for x in er.get("steuer_ids") or [])
+            or any(ist_eigene_adresse(m, absender) for m in er.get("mails") or []))
 
 
 def ist_eigene_adresse(adresse, absender):

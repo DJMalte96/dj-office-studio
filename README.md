@@ -35,6 +35,7 @@ DJ Office Studio ist eine App zum Schreiben von DJ-Rechnungen und -Angeboten –
   - **Anschaffungen & Abschreibung**: Geräte über 800 € netto werden über die Nutzungsdauer abgeschrieben (linear, monatsgenau; Computer im Kaufjahr voll). Anlagenverzeichnis mit Restwerten, Übernahme von Geräten aus Vorjahren und Verkauf/Ausscheiden.
   - **Übersicht** mit Einnahmen, Ausgaben und Gewinn des Jahres, Diagramm je Monat (auch als Tabelle) und Ausgaben nach Kategorie.
   - **Kleinunternehmer-Grenzen**: Die Übersicht zeigt, wie viel Umsatz im Jahr schon zusammengekommen ist – gemessen an den 25.000 € (entscheidet, ob man im nächsten Jahr noch Kleinunternehmer ist) und den 100.000 € (darüber sofort umsatzsteuerpflichtig), dazu den Vorjahresumsatz. Wird es knapp – auch mit offenen Rechnungen –, warnen Übersicht, Startseite und Prüfliste.
+  - **E-Rechnungen empfangen**: XRechnung und ZUGFeRD/Factur-X aus XML, PDF oder Mail lesen – mit Lesefassung, Original und Warnungen (eigene Rechnung, Gutschrift, Fremdwährung, doppelt).
   - **EÜR & Export**: Einnahmen-Überschuss-Rechnung nach Zahlungseingang und -ausgang mit Vorschlag für die Zeilen der Anlage EÜR, Prüfliste vor dem Export (ungeprüfte Belege, fehlende Bezahlt-Daten, fehlende Kilometer …) und ein ZIP für den Steuerberater mit allen Tabellen, Rechnungen und Belegen. Sonstige Einnahmen ohne Rechnung (z. B. Verkauf eines alten Geräts) lassen sich ergänzen.
 - **Stammdaten** für Kunden, Rechnungsposten und Zahlungsbedingungen.
 - Helles und dunkles Design (folgt der Geräteeinstellung, umschaltbar oben rechts), nutzbar am Computer, Tablet und Handy.
@@ -89,6 +90,15 @@ Die Erkennung läuft vollständig auf dem eigenen Gerät und ohne Netzwerk. Sie 
 ![Screenshot: Ausgaben](docs/bilder/ausgaben.png)
 
 ![Screenshot: Beleg prüfen](docs/bilder/beleg-pruefen.png)
+
+**E-Rechnungen:** XRechnung (XML, UBL und CII) und ZUGFeRD/Factur-X (PDF mit eingebetteter XML) kommen wie andere Belege herein – hochladen, als Anhang einer Mail oder über den Belege-Ordner.
+
+- Die Werte stammen aus den Rechnungsdaten. Bei XML und Mails zeigt die App eine Lesefassung, bei PDFs schaltet **Rechnungsdaten anzeigen** um.
+- Maßgeblich und aufzubewahren ist die XML bzw. das PDF im Original – die App speichert sie unverändert, der Export legt sie unter `Belege/` ab.
+- Gutschriften werden negativ vorgeschlagen. Bei Fremdwährung trägt man den abgebuchten Euro-Betrag ein. Bei mehreren Steuersätzen bleibt der Satz leer.
+- Die App prüft nicht amtlich, ob eine E-Rechnung gültig ist, und schreibt selbst keine E-Rechnungen. XML-Dateien über 20 MB liest sie nicht.
+
+![Screenshot: E-Rechnung prüfen](docs/bilder/e-rechnung.png)
 
 **Papierkorb:** **Verwerfen** (ungeprüfter Beleg) und **Löschen** (übernommene Ausgabe) legen den Eintrag samt Beleg in den Papierkorb (Finanzen → Ausgaben → **Papierkorb**). Was dort liegt, zählt nicht in EÜR, Übersicht, Abschreibung und Export.
 
@@ -160,7 +170,7 @@ Unter *Erweitert* lassen sich Adresse und API-Token auch von Hand eintragen – 
 
 **Belege-Ordner allgemein:** Was im Belege-Ordner landet, liest die App jede Minute und beim Öffnen der Ausgaben ein; erkannte Belege erscheinen unter „Neu – bitte prüfen“. Ist „Eingelesene Dateien verschieben“ an (Standard), wandern sie danach in den Unterordner `übernommen` (unlesbare nach `nicht lesbar`); aus = nur lesen, die App merkt sich, was sie schon kennt. Dateien, die gerade noch geschrieben werden, wartet sie kurz ab. Doppelte Belege werden erkannt.
 
-Beim Abholen über die Schnittstelle kommen alle Dokumente mit dem Tag – auch aus früheren Jahren –, die noch nicht übernommen sind. Die App speichert eine Kopie (die PDF mit Texterkennung aus Paperless), damit Export und Sicherung auch ohne laufendes Paperless funktionieren. Lieferant (Korrespondent) und Datum kommen aus Paperless, der Betrag wird aus dem Text gelesen; die Belege stehen dann unter **Neu – bitte prüfen**. Wurde ein Beleg schon von Hand hochgeladen, wird er nur verknüpft und nicht doppelt angelegt. In Paperless wird nichts verändert. Der API-Token wird wie das E-Mail-Passwort nur lokal gespeichert und ist nicht in der Sicherung enthalten.
+Beim Abholen über die Schnittstelle kommen alle Dokumente mit dem Tag – auch aus früheren Jahren –, die noch nicht übernommen sind. Die App speichert eine Kopie (PDFs, XML und Mails im Original, damit E-Rechnungen vollständig bleiben; Scans und Fotos als PDF mit Texterkennung aus Paperless), damit Export und Sicherung auch ohne laufendes Paperless funktionieren. Lieferant (Korrespondent) und Datum kommen aus Paperless, der Betrag wird aus dem Text gelesen; die Belege stehen dann unter **Neu – bitte prüfen**. Wurde ein Beleg schon von Hand hochgeladen, wird er nur verknüpft und nicht doppelt angelegt. In Paperless wird nichts verändert. Der API-Token wird wie das E-Mail-Passwort nur lokal gespeichert und ist nicht in der Sicherung enthalten.
 
 ## Installation
 
@@ -295,6 +305,7 @@ rechnungen/
     finanzen.py          Finanzen: Ausgaben, Fahrten, Anschaffungen/Abschreibung, EÜR, Export
     belege.py            Auslesen von Belegen (PDF, Fotos, Kauf-Mails .eml/.msg/.mbox)
     texterkennung.py     Texterkennung für Fotos und Scans (lokal, im eigenen Prozess)
+    erechnung.py         Lesen von E-Rechnungen (XRechnung, ZUGFeRD/Factur-X) samt Lesefassung
     paperless.py         Abholen von Ausgaben-Belegen aus Paperless-ngx (REST-Schnittstelle, nur lesend)
     strecken.py          Entfernungen über OpenStreetMap (Nominatim, OSRM) mit Zwischenspeicher
     static/              Oberfläche (HTML, CSS, JavaScript)

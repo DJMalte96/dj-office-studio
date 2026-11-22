@@ -185,6 +185,16 @@ def dokumente(url, token, tag_id, ssl_kontext=None):
                  ssl_kontext)
 
 
-def herunterladen(url, token, doc_id, ssl_kontext=None):
-    """Archivfassung (PDF mit Texterkennung) bzw. Original, falls es keine gibt → (bytes, dateiname, typ)."""
-    return _anfrage(url, token, f"/api/documents/{int(doc_id)}/download/", roh=True, timeout=120, ssl_kontext=ssl_kontext)
+def original_noetig(dokument):
+    """PDF, XML und Mails zuerst als Original: In der Archivfassung fehlt die E-Rechnung. Bei Fotos und Office-Dateien
+    ist die Archivfassung (PDF) besser – die kann die App anzeigen. (Scans: siehe finanzen._nur_scan.)"""
+    typ = dokument.get("mime_type")
+    if typ:
+        return typ in ("application/pdf", "application/xml", "text/xml", "message/rfc822")
+    return (dokument.get("original_file_name") or "").lower().endswith((".pdf", ".xml", ".eml"))
+
+
+def herunterladen(url, token, doc_id, ssl_kontext=None, original=False):
+    """Original bzw. Archivfassung (gibt es keine, liefert Paperless das Original) → (bytes, dateiname, typ)."""
+    pfad = f"/api/documents/{int(doc_id)}/download/" + ("?original=true" if original else "")
+    return _anfrage(url, token, pfad, roh=True, timeout=120, ssl_kontext=ssl_kontext)

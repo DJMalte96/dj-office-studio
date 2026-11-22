@@ -14,7 +14,7 @@ const fin = {
 
 const euro2 = v => (Number(v) || 0).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €";
 const katName = id => (fin.kategorien.find(k => k.id === id) || {}).name || id;
-const TYP_KURZ = { pdf: "PDF", mail: "MAIL", msg: "MAIL", bild: "FOTO", unbekannt: "DATEI" };
+const TYP_KURZ = { pdf: "PDF", xml: "XML", mail: "MAIL", msg: "MAIL", bild: "FOTO", unbekannt: "DATEI" };
 
 async function ladeKategorien() {
   if (fin.kategorien.length) return;
@@ -54,7 +54,7 @@ function renderAusgaben() {
   $("#ausgaben-neu-anzahl").textContent = `${neu.length} Beleg${neu.length === 1 ? "" : "e"}`;
   $("#ausgaben-neu").innerHTML = neu.map(a => {
     const e = a.erkannt || {};
-    const erkannt = [e.betrag != null && "Gesamt", e.ust_betrag != null && "MwSt.", e.kategorie && "Kategorie"].filter(Boolean);
+    const erkannt = [e.erechnung && (e.erechnung.gutschrift ? "E-Rechnung (Gutschrift)" : "E-Rechnung"), e.betrag != null && "Gesamt", e.ust_betrag != null && "MwSt.", e.kategorie && "Kategorie"].filter(Boolean);
     const info = ocrLaeuft(a) ? "Text wird gelesen …"
       : erkannt.length ? `erkannt: ${erkannt.join(", ")}` : "nichts erkannt – bitte Werte eintragen";
     return `<div class="neu-beleg" data-id="${a.id}">
@@ -180,7 +180,7 @@ async function belegeHochladen(dateien) {
       papierkorbAnbieten(gesamt.papierkorb.map(x => x.id));
     }
     if (gesamt.fehler.length) {
-      const namen = gesamt.fehler.length <= 3 ? ` (${gesamt.fehler.map(x => x.datei).join(", ")})` : "";
+      const namen = gesamt.fehler.length <= 3 ? ` (${gesamt.fehler.map(x => x.fehler ? `${x.datei}: ${x.fehler}` : x.datei).join(", ")})` : "";
       teile.push(`${gesamt.fehler.length} nicht lesbar${namen}`);
     }
     if (abbruch) {
@@ -201,7 +201,7 @@ const drop = $("#beleg-drop");
 drop.addEventListener("dragover", e => { e.preventDefault(); drop.classList.add("over"); });
 drop.addEventListener("dragleave", () => drop.classList.remove("over"));
 // Ordner (auch Apple-Mail-Export „….mbox“) werden durchsucht; Hilfsdateien wie table_of_contents bleiben draußen.
-const BELEG_ENDUNG = /\.(pdf|eml|msg|mbox|jpe?g|png|heic|heif|webp)$/i;
+const BELEG_ENDUNG = /\.(pdf|xml|eml|msg|mbox|jpe?g|png|heic|heif|webp)$/i;
 const brauchbar = f => BELEG_ENDUNG.test(f.name) || f.name === "mbox";
 
 function eintragLesen(eintrag) {
@@ -340,13 +340,16 @@ async function oeffneBeleg(id) {
     $("#beleg-original").textContent = "";
   } else {
     v.innerHTML = belegVorschauHtml(a);
-    $("#beleg-original").innerHTML = `${a.beleg_typ === "mail" || a.beleg_typ === "msg" ? "Original-Mail" : "Original"} wird unverändert gespeichert · `
-      + `<a href="#" id="beleg-original-link">Original öffnen</a>`;
+    $("#beleg-original").innerHTML = `${a.beleg_typ === "mail" || a.beleg_typ === "msg" ? "Original-Mail" : a.beleg_typ === "xml" ? "Original-XML" : "Original"} wird unverändert gespeichert · `
+      + `<a href="#" id="beleg-original-link">${a.beleg_typ === "xml" ? "Original herunterladen" : "Original öffnen"}</a>`
+      + (a.beleg_typ === "pdf" && a.erkannt?.erechnung ? ` · <a href="#" id="beleg-daten-link">Rechnungsdaten anzeigen</a>` : "");
   }
   showTab("beleg");
   window.scrollTo(0, 0);
-  const feld = !f.elements.betrag.value ? f.elements.betrag : !f.elements.lieferant.value ? f.elements.lieferant : f.querySelector("[type=submit]");
-  setTimeout(() => feld.focus(), 50);
+  const speichern = f.querySelector("[type=submit]");
+  const feld = !f.elements.betrag.value ? f.elements.betrag : !f.elements.lieferant.value ? f.elements.lieferant : speichern;
+  // Gibt es eine Warnung, nicht an ihr vorbei zum Knopf scrollen
+  setTimeout(() => feld.focus({ preventScroll: feld === speichern && !!$("#beleg-hinweise").children.length }), 50);
 }
 
 function belegVorschauHtml(a) {
@@ -360,6 +363,17 @@ document.addEventListener("click", e => {
   if (e.target.id !== "beleg-original-link") return;
   e.preventDefault();
   belegOriginal(fin.aktuell);
+});
+
+// PDF mit eingebetteter E-Rechnung: zwischen sichtbarem PDF und Rechnungsdaten umschalten
+document.addEventListener("click", e => {
+  if (e.target.id !== "beleg-daten-link") return;
+  e.preventDefault();
+  const daten = e.target.dataset.an !== "1", a = fin.aktuell;
+  e.target.dataset.an = daten ? "1" : "";
+  e.target.textContent = daten ? "PDF anzeigen" : "Rechnungsdaten anzeigen";
+  $("#beleg-vorschau").innerHTML = daten
+    ? `<iframe src="api/ausgaben/${a.id}/ansicht?daten=1" title="Rechnungsdaten" sandbox=""></iframe>` : belegVorschauHtml(a);
 });
 
 function naechsterOderListe() {
@@ -376,6 +390,7 @@ $("#beleg-form").addEventListener("submit", async e => {
   const d = Object.fromEntries(["lieferant", "belegdatum", "bezahlt_am", "beschreibung", "kategorie", "notiz", "privatanteil",
     "betrag", "ust_satz", "rechnung_id"].map(k => [k, f.elements[k].value]));
   const a = fin.aktuell;
+  if (a?.status === "neu" && a.doppelt_verdacht && !confirm(`${doppeltText(a.doppelt_verdacht)}\n\nTrotzdem übernehmen?`)) return;
   try {
     if (!a) {
       await api("ausgaben", { method: "POST", body: d });
@@ -911,12 +926,23 @@ $("#paperless-abholen").addEventListener("click", async e => {
 const uhrzeit = iso => iso ? iso.slice(11, 16) : "";
 
 function zeigeOrdnerStand(st) {
+  zeigeUebergangen(st);
   const el = $("#ordner-stand");
   el.hidden = !st.ordner;
   if (!st.ordner) return;
   el.classList.toggle("warn", !!st.problem);
   el.innerHTML = st.problem ? `⚠ ${esc(st.problem)} – <a href="#" class="zu-einstellungen">Einstellungen</a>`
     : `↻ Belege-Ordner <b>${esc(st.ordner)}</b> wird automatisch eingelesen${st.laeuft ? " – gerade …" : st.geprueft ? ` · zuletzt ${uhrzeit(st.geprueft)} Uhr` : ""}`;
+}
+
+function zeigeUebergangen(st) {
+  const el = $("#ordner-uebergangen"), liste = st.uebergangen || [], n = st.uebergangen_anzahl || 0;
+  el.hidden = !st.ordner || !n;
+  el.querySelector("summary").textContent = `⚠ ${n} Datei${n === 1 ? "" : "en"} im Belege-Ordner nicht eingelesen`;
+  const html = liste.map(x => `<li><b>${esc(x.datei)}</b> – ${esc(x.grund)}</li>`).join("")
+    + (n > liste.length ? `<li>… und ${n - liste.length} weitere</li>` : "");
+  const ul = el.querySelector("ul");
+  if (ul.dataset.html !== html) ul.innerHTML = ul.dataset.html = html;
 }
 
 async function ordnerPruefen() {
@@ -993,6 +1019,12 @@ function zeichneGrenzen(g) {
 
 // ---------- Texterkennung (Fotos, Scans) ----------
 
+function doppeltText(d) {
+  const was = `${d.lieferant}${d.datum ? `, ${fmtDate(d.datum)}` : ""}${d.betrag != null ? `, ${euro2(d.betrag)}` : ""}${d.status === "neu" ? ", noch ungeprüft" : ""}`;
+  return d.sicher ? `Diese Rechnung gibt es schon (${was}). Übernommen würde sie doppelt zählen – bitte eine von beiden verwerfen.`
+    : `Vermutlich gibt es diese Rechnung schon in anderer Form (${was}). Dann bitte eine von beiden verwerfen – die E-Rechnung ist das Original.`;
+}
+
 function ocrLaeuft(a) { return !!a && a.status === "neu" && (a.ocr === "wartet" || a.ocr === "laeuft"); }
 
 function zeigeErkennung(a, neu) {
@@ -1000,11 +1032,11 @@ function zeigeErkennung(a, neu) {
   $("#ocr-stand").hidden = !laeuft;
   $("#ocr-stand").textContent = a?.ocr === "wartet" ? "Text wird gleich gelesen – du kannst die Werte auch schon eintragen."
     : "Text wird gelesen … – du kannst die Werte auch schon eintragen.";
-  $("#ocr-starten").hidden = laeuft || !neu || !a || a.betrag != null || !["bild", "pdf"].includes(a.beleg_typ);
-  $("#beleg-hinweise").innerHTML = laeuft ? "" : (e.hinweise || []).map(h => `<li class="gelb">${esc(h)}</li>`).join("");
+  $("#ocr-starten").hidden = laeuft || !neu || !a || a.betrag != null || !!e.erechnung || !["bild", "pdf"].includes(a.beleg_typ);
+  $("#beleg-hinweise").innerHTML = laeuft ? "" : [...(neu && a?.doppelt_verdacht ? [doppeltText(a.doppelt_verdacht)] : []), ...(e.hinweise || [])].map(h => `<li class="gelb">${esc(h)}</li>`).join("");
   // nur, solange das Feld noch den erkannten Wert hat – nicht unter selbst Getipptem
-  $("#erkannt-lieferant").textContent = neu && a && e.lieferant && $("#beleg-form").elements.lieferant.value === e.lieferant ? (a.beleg_typ === "mail" || a.beleg_typ === "msg"
-    ? "erkannt am Absender der Mail" : "aus dem Briefkopf übernommen – bitte prüfen") : "";
+  $("#erkannt-lieferant").textContent = neu && a && e.lieferant && $("#beleg-form").elements.lieferant.value === e.lieferant ? (e.erechnung && e.lieferant === e.erechnung.verkaeufer ? "Verkäufer laut E-Rechnung"
+    : a.beleg_typ === "mail" || a.beleg_typ === "msg" ? "erkannt am Absender der Mail" : "aus dem Briefkopf übernommen – bitte prüfen") : "";
   $("#erkannt-betrag").innerHTML = neu && e.betrag != null ? `erkannt: <b>${esc(e.fundstellen?.betrag || "")}</b>`
     + (e.ust_betrag != null ? ` · Umsatzsteuer <b>${euro2(e.ust_betrag)}</b>` : "") + " – bitte kurz mit dem Beleg vergleichen" : "";
   $("#erkannt-kategorie").textContent = neu && a && a.lieferant ? (e.kategorie && e.kategorie === a.kategorie

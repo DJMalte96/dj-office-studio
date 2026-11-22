@@ -660,9 +660,13 @@ table.euer-tabelle tr.gewinn td { font-weight: 800; font-size: 17px; border-top:
 .pl-verbunden { color: var(--text); margin: 0 0 10px; }
 .pl-erweitert { margin: 4px 0 14px; font-size: 14px; }
 .pl-erweitert summary { cursor: pointer; color: var(--muted); margin-bottom: 10px; }
-.ordner-stand { margin: 12px 0 0; font-size: 13px; color: var(--muted); text-align: center; }
+.ordner-stand { overflow-wrap: anywhere; margin: 12px 0 0; font-size: 13px; color: var(--muted); text-align: center; }
 .ordner-stand.warn { color: var(--text); }
 .ordner-stand a { color: var(--text); }
+.ordner-uebergangen { margin: 8px auto 0; max-width: 760px; font-size: 13px; color: var(--muted); }
+.ordner-uebergangen summary { cursor: pointer; text-align: center; color: var(--text); }
+.ordner-uebergangen ul { margin: 8px 0 0; padding-left: 18px; max-height: 220px; overflow: auto; }
+.ordner-uebergangen li { overflow-wrap: anywhere; margin: 3px 0; }
 .belege-ordner-hinweis { margin: -4px 0 14px; }
 .pl-text code { font-size: 12.5px; }
 #pl-api > summary { color: var(--muted); }

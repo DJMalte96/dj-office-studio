@@ -120,6 +120,7 @@ jobs:
           if echo "$STRECKE" | grep -q '"km_einfach"'; then echo "Kartendienst ok"; else echo "::warning::Kartendienst nicht erreichbar: $STRECKE"; fi
           # Texterkennung in der gepackten App (eigener Prozess, Modelle, native Bibliotheken)
           python tests/ocr_rauchtest.py http://127.0.0.1:8765
+          python tests/erechnung_rauchtest.py http://127.0.0.1:8765
           kill %1 || true
 
       - name: Packen (macOS)

@@ -389,7 +389,7 @@
               <input name="belege_ordner" placeholder="/share/belege"></label>
             <label class="inline"><input type="checkbox" name="belege_ordner_verschieben">
               Eingelesene Dateien in den Unterordner „übernommen“ verschieben <span class="opt">(aus = nur lesen, z. B. für die Ablage von Paperless)</span></label>
-            <p class="mini-hinweis belege-ordner-hinweis">Alles, was in diesem Ordner landet (PDFs, Fotos, Mails), erscheint unter Finanzen → Ausgaben bei „Neu – bitte prüfen“. Praktisch mit Scanner-Apps, Cloud-Ordnern oder Mail-Regeln. Mit <code>*</code> im Pfad werden mehrere Ordner gelesen, z. B. <code>…/DJ/*/Ausgaben</code> für alle Jahre.</p>
+            <p class="mini-hinweis belege-ordner-hinweis">Alles, was in diesem Ordner landet (PDFs, E-Rechnungen, Fotos, Mails), erscheint unter Finanzen → Ausgaben bei „Neu – bitte prüfen“. Praktisch mit Scanner-Apps, Cloud-Ordnern oder Mail-Regeln. Mit <code>*</code> im Pfad werden mehrere Ordner gelesen, z. B. <code>…/DJ/*/Ausgaben</code> für alle Jahre.</p>
             <label class="inline"><input type="checkbox" name="paperless_installiert">
               Paperless-ngx ist installiert – „An Paperless senden“ anzeigen</label>
             <label>Paperless-Eingangsordner (consume) <span class="opt nur-desktop">(z. B. Netzlaufwerk von Paperless)</span><input name="paperless_eingangsordner" placeholder="/share/paperless/consume"></label>
@@ -558,12 +558,13 @@
       </div>
       <div class="card">
         <label class="dropzone" id="beleg-drop">
-          <input type="file" id="beleg-dateien" multiple accept=".pdf,.eml,.msg,.mbox,.jpg,.jpeg,.png,.heic,.heif,.webp,application/pdf,image/*,message/rfc822,application/mbox">
+          <input type="file" id="beleg-dateien" multiple accept=".pdf,.xml,.eml,.msg,.mbox,.jpg,.jpeg,.png,.heic,.heif,.webp,application/pdf,application/xml,text/xml,image/*,message/rfc822,application/mbox">
           <strong>Belege hierher ziehen</strong>
-          <span>PDF-Rechnungen · Fotos (JPG, PNG, HEIC) · Kauf-Mails (.eml, .msg) · ganze Mail-Ordner (.mbox) – auch viele auf einmal</span>
+          <span>PDF-Rechnungen · E-Rechnungen (XML, ZUGFeRD) · Fotos (JPG, PNG, HEIC) · Kauf-Mails (.eml, .msg) · ganze Mail-Ordner (.mbox) – auch viele auf einmal</span>
           <span class="hint" id="beleg-status">oder klicken zum Auswählen</span>
         </label>
         <p class="ordner-stand" id="ordner-stand" hidden></p>
+        <details class="ordner-uebergangen" id="ordner-uebergangen" hidden><summary></summary><ul></ul></details>
         <div class="papierkorb-angebot hidden" id="papierkorb-angebot" role="status">
           <span id="papierkorb-angebot-text"></span>
           <div class="knopf-zeile">

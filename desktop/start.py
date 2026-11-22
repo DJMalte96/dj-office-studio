@@ -199,11 +199,11 @@ class DesktopApi:
     def pdf_oeffnen(self, pfad):
         """PDF der App im PDF-Programm des Systems öffnen (Vorschau, Edge, Acrobat …)."""
         name, daten = self._laden(pfad)
-        return self._anzeigen(name, daten)
+        return self._anzeigen(_als_pdf(name), daten)
 
     def pdf_daten_oeffnen(self, name, inhalt_base64):
         """Im Browser erzeugtes PDF (z. B. Vorschau) im PDF-Programm des Systems öffnen."""
-        return self._anzeigen(_sicherer_name(name or "Dokument.pdf"), base64.b64decode(inhalt_base64))
+        return self._anzeigen(_als_pdf(_sicherer_name(name or "Dokument.pdf")), base64.b64decode(inhalt_base64))
 
     def _anzeigen(self, name, daten):
         ordner = Path(tempfile.gettempdir()) / APP_NAME
@@ -245,6 +245,11 @@ class DesktopApi:
     def daten_ordner(self):
         ordner_oeffnen(BASIS)
         return True
+
+
+def _als_pdf(name):
+    """Das System öffnet nach der Endung: Ein Beleg „rechnung.hta“ mit PDF-Anfang würde sonst ausgeführt."""
+    return name if name.lower().endswith(".pdf") else name + ".pdf"
 
 
 def _sicherer_name(name):

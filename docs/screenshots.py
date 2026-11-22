@@ -29,7 +29,7 @@ finanzen.HINTERGRUND = False   # keine Streckenberechnung im Hintergrund (kein I
 _ordner_liste = finanzen._ordner_liste
 finanzen._ordner_liste = lambda muster: ["/share/belege"] if muster == "/share/belege" else _ordner_liste(muster)
 _ordner_dateien = finanzen._ordner_dateien
-finanzen._ordner_dateien = lambda o, ruhe=5: iter(()) if o == "/share/belege" else _ordner_dateien(o, ruhe)
+finanzen._ordner_dateien = lambda o, *a, **k: iter(()) if o == "/share/belege" else _ordner_dateien(o, *a, **k)
 
 db.init()
 db.save_settings({
@@ -223,6 +223,18 @@ with sync_playwright() as p:
     page.wait_for_timeout(1500)
     page.mouse.move(5, 890)
     page.screenshot(path=str(ZIEL / "beleg-pruefen.png"))
+    sys.path.insert(0, str(ROOT / "tests"))
+    from erechnung_muster import ubl
+    xml = ubl("2026-0815", str(date.today() - timedelta(days=3)), "178.50", "150.00", "28.50", posten="Funkmikrofon-Set")
+    page.locator("#beleg-schliessen").click()
+    page.set_input_files("#beleg-dateien", files=[{"name": "rechnung-2026-0815.xml", "mimeType": "application/xml", "buffer": xml}])
+    page.wait_for_timeout(1500)
+    page.locator("#ausgaben-neu .neu-beleg", has_text="Musikhaus Probe").locator("[data-act=pruefen]").click()
+    page.wait_for_timeout(1500)
+    page.screenshot(path=str(ZIEL / "e-rechnung.png"))
+    page.once("dialog", lambda d: d.accept())     # danach wieder wegräumen, die übrigen Bilder bleiben ohne sie
+    page.locator("#beleg-verwerfen").click()
+    page.wait_for_timeout(6000)     # bis die Meldung unten verschwunden ist
     oeffne(page, "Finanzen", "fahrten")
     page.screenshot(path=str(ZIEL / "fahrten.png"), full_page=True)
     oeffne(page, "Finanzen", "euer")
