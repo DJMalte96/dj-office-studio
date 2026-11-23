@@ -182,6 +182,36 @@ CREATE TABLE IF NOT EXISTS jahresabschluss (
     grund TEXT,
     PRIMARY KEY (jahr, fassung)
 );
+-- seit 1.9: Abos (wiederkehrende Ausgaben). Fällige Abbuchungen bestätigt man; erst dann gibt es eine Ausgabe.
+CREATE TABLE IF NOT EXISTS abos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lieferant TEXT NOT NULL,
+    beschreibung TEXT DEFAULT '',
+    kategorie TEXT NOT NULL DEFAULT 'musik',
+    betrag REAL NOT NULL,                        -- brutto, bis zur ersten Preisänderung
+    rhythmus TEXT NOT NULL DEFAULT 'monatlich',  -- woechentlich | vierwochen | monatlich | … | eigen
+    anzahl INTEGER DEFAULT 1,                    -- nur „eigen“: alle <anzahl> <einheit>
+    einheit TEXT DEFAULT 'monate',               -- wochen | monate | jahre
+    tag INTEGER DEFAULT 1,                       -- Tag im Monat (nicht bei Wochen-Rhythmen)
+    beginn TEXT NOT NULL,
+    ende TEXT,
+    privatanteil REAL DEFAULT 0,
+    erfasst_bis TEXT,                            -- Abbuchungen bis hierhin gelten als schon erfasst (nicht nachtragen)
+    erstellt TEXT DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS abo_preise (
+    abo_id INTEGER NOT NULL REFERENCES abos(id) ON DELETE CASCADE,
+    ab TEXT NOT NULL,
+    betrag REAL NOT NULL,
+    PRIMARY KEY (abo_id, ab)
+);
+CREATE TABLE IF NOT EXISTS abo_termine (
+    abo_id INTEGER NOT NULL REFERENCES abos(id) ON DELETE CASCADE,
+    datum TEXT NOT NULL,
+    status TEXT NOT NULL,                        -- ok (gebucht) | aus (nicht abgebucht)
+    ausgabe_id INTEGER,
+    PRIMARY KEY (abo_id, datum)
+);
 -- seit 1.8: Kleinunternehmer und Fahrzeug je Jahr (fehlt ein Jahr: aktuelle Einstellungen)
 CREATE TABLE IF NOT EXISTS jahr_einstellungen (
     jahr INTEGER PRIMARY KEY,
@@ -361,6 +391,9 @@ def init():
         # seit 1.8: Jahr der EÜR abweichend vom Bezahlt-Datum (10-Tage-Regel für regelmäßige Zahlungen um Silvester)
         if "euer_jahr" not in {r["name"] for r in con.execute("PRAGMA table_info(ausgaben)")}:
             con.execute("ALTER TABLE ausgaben ADD COLUMN euer_jahr TEXT")
+        # seit 1.9: Ausgabe aus einem Abo
+        if "abo_id" not in {r["name"] for r in con.execute("PRAGMA table_info(ausgaben)")}:
+            con.execute("ALTER TABLE ausgaben ADD COLUMN abo_id INTEGER")
         _trigger_anlegen(con)
         for (titel, text), anlass in LEGACY_TEXTBAUSTEINE.items():
             con.execute("UPDATE textbausteine SET titel = ?, text = ?, preis = NULL, grundpreis = NULL,"

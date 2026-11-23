@@ -20,6 +20,7 @@ from flask import Flask, Response, abort, jsonify, request, send_file, send_from
 
 import sqlite3
 
+import abos
 import abschluss
 import db
 import finanzen
@@ -36,6 +37,7 @@ app = Flask(__name__, static_folder=None)
 
 app.register_blueprint(finanzen.bp)   # Finanzen: Ausgaben, Belege (seit 1.1)
 app.register_blueprint(abschluss.bp)  # Jahresabschluss (seit 1.8)
+app.register_blueprint(abos.bp)       # Abos / wiederkehrende Ausgaben (seit 1.9)
 
 
 @app.errorhandler(abschluss.Gesperrt)

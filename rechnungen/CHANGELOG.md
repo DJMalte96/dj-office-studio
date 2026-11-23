@@ -2,6 +2,15 @@
 
 Alle Änderungen an DJ Office Studio. Neueste Version oben.
 
+## 1.9.0 – 2026-11-23
+
+### Neu
+- **Abos – wiederkehrende Ausgaben** (Finanzen → Ausgaben → ↻ Abos): Musikpool, DJ-Software & Co. einmal anlegen. Rhythmus wöchentlich, alle 4 Wochen, monatlich, alle 2 Monate, vierteljährlich, halbjährlich, jährlich, alle 2 Jahre oder eigener Rhythmus („alle 18 Monate“). Liste mit Kosten im Monat und im Jahr.
+- **Fällige Abbuchungen bestätigen**: Am Tag der Abbuchung steht das Abo unter „Neu – bitte prüfen“ – bestätigen, Betrag ändern (nur diesmal oder ab jetzt) oder aussetzen. Erst Bestätigtes zählt in der EÜR. Die Startseite erinnert daran.
+- **Nichts doppelt**: Eine passende Rechnungs-Mail bzw. ein PDF (auch aus Paperless oder dem Belege-Ordner) oder eine schon erfasste Ausgabe erkennt die App und verknüpft sie mit der Abbuchung.
+- **10-Tage-Regel für Abos automatisch**: Abbuchungen ab dem 22.12. zählen zum neuen Jahr (nicht bei wöchentlichen Abos).
+- **Jahresabschluss**: Nicht bestätigte Abo-Abbuchungen des Jahres sind ein roter Punkt; in ein abgeschlossenes Jahr wird nichts gebucht.
+
 ## 1.8.1 – 2026-11-23
 
 ### Behoben

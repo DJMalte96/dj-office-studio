@@ -268,6 +268,28 @@ with sync_playwright() as p:
     page.locator("#absender-dialog").screenshot(path=str(ZIEL / "absender.png"))
     page.click("#absender-abbrechen")
 
+    # Abos: zwei fällige Abbuchungen unter „Neu – bitte prüfen“ und die Abo-Liste
+    for w in ({"lieferant": "Musikpool Beispiel", "beschreibung": "DJ-Musikpool (Monatsabo)", "betrag": "19,99", "rhythmus": "monatlich",
+               "tag": 1, "beginn": date(heute.year, heute.month, 1).isoformat(), "nachtragen": True},
+              {"lieferant": "DJ-Software Pro", "beschreibung": "Software-Abo (Jahreslizenz)", "betrag": "119", "rhythmus": "jaehrlich",
+               "tag": (heute - timedelta(days=12)).day, "beginn": (heute - timedelta(days=12)).isoformat(), "nachtragen": True},
+              {"lieferant": "Promo-Pool Muster", "beschreibung": "Promo-Downloads", "betrag": "4,99", "rhythmus": "vierwochen",
+               "beginn": (heute - timedelta(days=3)).isoformat()}):
+        assert c.post("/api/abos", json=w | {"kategorie": "musik"}).status_code == 201
+    oeffne(page, "Finanzen", "ausgaben")
+    page.wait_for_timeout(600)
+    page.evaluate("document.querySelector('#toast').classList.add('hidden'); document.querySelector('header').style.visibility = 'hidden'")
+    page.locator("#ausgaben-neu-karte").screenshot(path=str(ZIEL / "abos-faellig.png"))
+    page.evaluate("document.querySelector('header').style.visibility = ''")
+    page.click("#abos-oeffnen")
+    page.wait_for_selector("#abos-dialog[open]")
+    page.wait_for_timeout(400)
+    page.evaluate("document.activeElement && document.activeElement.blur()")
+    page.locator("#abos-dialog").screenshot(path=str(ZIEL / "abos.png"))
+    page.click("[data-abos=schliessen]")
+    for f in c.get("/api/abos/faellig").get_json():      # für die übrigen Bilder wieder erledigt
+        c.post(f"/api/abos/{f['abo_id']}/termine/{f['datum']}", json={"aktion": "ok"})
+
     # Jahresabschluss des Vorjahres: Assistent (Schritt 1), danach abgeschlossen und „wieder öffnen“
     oeffne(page, "Finanzen", "euer")
     page.select_option("#euer-jahr", str(v))

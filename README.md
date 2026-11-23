@@ -37,6 +37,7 @@ DJ Office Studio ist eine App zum Schreiben von DJ-Rechnungen und -Angeboten –
   - **Kleinunternehmer-Grenzen**: Die Übersicht zeigt, wie viel Umsatz im Jahr schon zusammengekommen ist – gemessen an den 25.000 € (entscheidet, ob man im nächsten Jahr noch Kleinunternehmer ist) und den 100.000 € (darüber sofort umsatzsteuerpflichtig), dazu den Vorjahresumsatz. Wird es knapp – auch mit offenen Rechnungen –, warnen Übersicht, Startseite und Prüfliste.
   - **E-Rechnungen empfangen**: XRechnung und ZUGFeRD/Factur-X aus XML, PDF oder Mail lesen – mit Lesefassung, Original und Warnungen (eigene Rechnung, Gutschrift, Fremdwährung, doppelt).
   - **EÜR & Export**: Einnahmen-Überschuss-Rechnung nach Zahlungseingang und -ausgang mit Vorschlag für die Zeilen der Anlage EÜR, Prüfliste vor dem Export (ungeprüfte Belege, fehlende Bezahlt-Daten, fehlende Kilometer …) und ein ZIP für den Steuerberater mit allen Tabellen, Rechnungen und Belegen. Sonstige Einnahmen ohne Rechnung (z. B. Verkauf eines alten Geräts) lassen sich ergänzen.
+  - **Abos**: Musikpool, DJ-Software & Co. einmal anlegen – wöchentlich bis alle paar Jahre oder im eigenen Rhythmus. Fällige Abbuchungen erscheinen zum Bestätigen; kommt die Rechnung als Mail oder PDF, hängt die App sie an, statt doppelt zu buchen. Preisänderungen ab einem Datum, Kündigung mit Enddatum, 10-Tage-Regel automatisch.
   - **Jahr abschließen**: Ein fertiges Jahr in drei Schritten prüfen, kontrollieren und abschließen. Die App legt ein Paket mit Abschlussblatt und Prüfsumme ab und sperrt das Jahr gegen Änderungen – ansehen, herunterladen und erneut verschicken geht weiter. Ein Jahr wird nie von selbst gesperrt; wieder öffnen geht mit Begründung. Kleinunternehmer und Fahrzeug gelten je Jahr.
 - **Stammdaten** für Kunden, Rechnungsposten und Zahlungsbedingungen.
 - Helles und dunkles Design (folgt der Geräteeinstellung, umschaltbar oben rechts), nutzbar am Computer, Tablet und Handy.
@@ -110,6 +111,18 @@ Die Erkennung läuft vollständig auf dem eigenen Gerät und ohne Netzwerk. Sie 
 - Die App prüft nicht amtlich, ob eine E-Rechnung gültig ist, und schreibt selbst keine E-Rechnungen. XML-Dateien über 20 MB liest sie nicht.
 
 ![Screenshot: E-Rechnung prüfen](docs/bilder/e-rechnung.png)
+
+**Abos (wiederkehrende Ausgaben):** Unter **Ausgaben → ↻ Abos** legt man Musikpool, DJ-Software & Co. einmal an: Lieferant, Kategorie, Betrag, Rhythmus (wöchentlich, alle 4 Wochen, monatlich, alle 2 Monate, vierteljährlich, halbjährlich, jährlich, alle 2 Jahre oder eigener Rhythmus wie „alle 18 Monate“), Tag der Abbuchung, Beginn und ggf. Privatanteil. Frühere Abbuchungen trägt die App nur auf Wunsch nach – meist sind sie schon erfasst.
+
+- Am Tag der Abbuchung steht das Abo unter **Neu – bitte prüfen**: **✓ Bestätigen** bucht die Ausgabe (mit Notiz „Beleg fehlt“), **Betrag ändern** nur für diesmal oder „ab jetzt immer“, **Diesen Monat nicht** z. B. bei einer Pause. Erst Bestätigtes zählt in der EÜR.
+- **Nichts doppelt:** Kommt die Rechnung als Mail oder PDF herein (auch aus Paperless oder dem Belege-Ordner) oder ist die Zahlung schon als Ausgabe erfasst, erkennt die App sie am Lieferanten, am Betrag und an einem Datum bis 10 Tage daneben – **Mit Beleg bestätigen** bzw. **Damit verknüpfen**.
+- **10-Tage-Regel:** Abbuchungen ab dem 22.12. für den nächsten Zeitraum zählen automatisch zum neuen Jahr (nicht bei wöchentlichen Abos).
+- **Preis ändern** gilt ab heute, frühere Buchungen bleiben. **Kündigen** = Ende eintragen. Löschen entfernt nur das Abo, gebuchte Ausgaben bleiben.
+- Im **Jahresabschluss** sind noch nicht bestätigte Abbuchungen des Jahres ein roter Punkt. In ein abgeschlossenes Jahr wird nichts gebucht.
+
+![Screenshot: Fällige Abos](docs/bilder/abos-faellig.png)
+
+![Screenshot: Abos](docs/bilder/abos.png)
 
 **Schutz vor fremden Webseiten:** Die App hat keine eigene Anmeldung. Änderungen nimmt sie deshalb nur von ihrer eigenen Oberfläche an. Die Desktop-App antwortet nur unter 127.0.0.1 bzw. localhost, das Add-on nur über Home Assistant. Mail-Passwort und Paperless-Token gehen nur an den gespeicherten Server; wer Server oder Adresse ändert, gibt sie neu ein.
 
@@ -340,6 +353,7 @@ rechnungen/
     mail.py              E-Mail-Versand per SMTP, Textvorlagen
     finanzen.py          Finanzen: Ausgaben, Fahrten, Anschaffungen/Abschreibung, EÜR, Export
     abschluss.py         Jahresabschluss: prüfen, Paket mit Prüfsumme, wieder öffnen; Kleinunternehmer/Fahrzeug je Jahr
+    abos.py              Abos: wiederkehrende Ausgaben, fällige Abbuchungen, Belege erkennen
     belege.py            Auslesen von Belegen (PDF, Fotos, Kauf-Mails .eml/.msg/.mbox)
     texterkennung.py     Texterkennung für Fotos und Scans (lokal, im eigenen Prozess)
     pdflesen.py          Lesen fremder PDFs im eigenen Prozess
@@ -359,7 +373,7 @@ desktop/
 docs/
   screenshots.py         Erzeugt die README-Screenshots (docs/bilder/) mit Beispieldaten
 tests/                   Automatische Tests (pytest): API, PDFs, Pflichtangaben, Umsatzsteuer, QR-Code, Festschreiben/Storno,
-                         Mahnungen, E-Mail-Versand, Sicherung, Import, Belege, Fahrten, Abschreibung, EÜR, Jahresabschluss …
+                         Mahnungen, E-Mail-Versand, Sicherung, Import, Belege, Fahrten, Abschreibung, EÜR, Jahresabschluss, Abos …
 ```
 
 ### Neue Version veröffentlichen

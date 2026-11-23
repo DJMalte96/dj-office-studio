@@ -556,6 +556,7 @@
       <div class="kopf">
         <div><h2>Ausgaben</h2><p class="hint">Belege hochladen, prüfen, fertig. Die Originale bleiben unverändert gespeichert.</p></div>
         <div class="knopf-zeile">
+          <button type="button" class="secondary" id="abos-oeffnen" title="Wiederkehrende Ausgaben: Musikpool, Software …">↻ Abos</button>
           <button type="button" class="secondary" id="papierkorb-oeffnen" title="Verworfene Belege und gelöschte Ausgaben">Papierkorb<span id="papierkorb-anzahl"></span></button>
           <button type="button" class="secondary hidden" id="paperless-abholen" title="Alle Dokumente mit dem Ausgaben-Tag holen, die noch nicht übernommen sind">⇩ Aus Paperless abholen</button>
           <button type="button" class="secondary" id="ausgabe-ohne-beleg">＋ Ausgabe ohne Beleg</button>
@@ -897,6 +898,13 @@
     <div class="actions"><button type="button" class="secondary" id="absender-abbrechen">Abbrechen</button>
       <button type="button" id="absender-speichern">Speichern</button></div>
   </dialog>
+  <!-- ================= Abos (seit 1.9) ================= -->
+  <dialog id="abos-dialog" class="dialog abos" aria-labelledby="abos-titel">
+    <div class="row between"><h2 id="abos-titel">Abos</h2><button type="button" id="abos-titel-knopf" data-abos="neu">＋ Abo anlegen</button></div>
+    <div id="abos-inhalt"></div>
+    <div class="actions" id="abos-aktionen"></div>
+  </dialog>
+
   <!-- ================= Jahresabschluss (seit 1.8) ================= -->
   <dialog id="abschluss-dialog" class="dialog ja" aria-labelledby="abschluss-titel">
     <h2 id="abschluss-titel">Jahr abschließen</h2>

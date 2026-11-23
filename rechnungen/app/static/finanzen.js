@@ -10,6 +10,7 @@ const fin = {
   offen: new Set(),          // aufgeklappte Gruppen (Monat)
   warteschlange: [],         // IDs, die nacheinander geprüft werden
   aktuell: null,             // Ausgabe im Prüfen-Formular (null = neue ohne Beleg)
+  faellig: [],               // fällige, noch nicht bestätigte Abo-Abbuchungen (seit 1.9)
 };
 
 const euro2 = v => (Number(v) || 0).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €";
@@ -38,9 +39,10 @@ async function ladeAusgaben() {
   const jahr = fin.jahr;
   try {
     await ladeKategorien();
-    const [liste, jahre] = await Promise.all([api(`ausgaben?jahr=${jahr}`), api("finanzen/jahre")]);
+    const [liste, jahre, faellig] = await Promise.all([api(`ausgaben?jahr=${jahr}`), api("finanzen/jahre"), api("abos/faellig")]);
     if (jahr !== fin.jahr) return;      // inzwischen ein anderes Jahr gewählt
     fin.ausgaben = liste;
+    fin.faellig = faellig;
     jahresAuswahl($("#ausgaben-jahr"), jahre, jahr);
   } catch (e) { return toast("Laden fehlgeschlagen: " + e.message, true); }
   renderAusgaben();
@@ -50,17 +52,22 @@ async function ladeAusgaben() {
 
 function renderAusgaben() {
   const neu = fin.ausgaben.filter(a => a.status === "neu");
-  $("#ausgaben-neu-karte").classList.toggle("hidden", !neu.length);
-  $("#ausgaben-neu-anzahl").textContent = `${neu.length} Beleg${neu.length === 1 ? "" : "e"}`;
-  $("#ausgaben-neu").innerHTML = neu.map(a => {
+  const abos = fin.faellig;
+  const zumAbo = new Map(abos.filter(f => f.beleg).map(f => [f.beleg.id, f]));
+  $("#ausgaben-neu-karte").classList.toggle("hidden", !neu.length && !abos.length);
+  $("#ausgaben-neu-anzahl").textContent = [abos.length && `${abos.length} Abo${abos.length === 1 ? "" : "s"}`,
+    neu.length && `${neu.length} Beleg${neu.length === 1 ? "" : "e"}`].filter(Boolean).join(" · ");
+  $("#alle-pruefen").classList.toggle("hidden", !neu.length);
+  $("#ausgaben-neu").innerHTML = abos.map(aboZeile).join("") + neu.map(a => {
     const e = a.erkannt || {};
     const erkannt = [e.erechnung && (e.erechnung.gutschrift ? "E-Rechnung (Gutschrift)" : "E-Rechnung"), e.betrag != null && "Gesamt", e.ust_betrag != null && "MwSt.", e.kategorie && "Kategorie"].filter(Boolean);
     const info = ocrLaeuft(a) ? "Text wird gelesen …"
       : erkannt.length ? `erkannt: ${erkannt.join(", ")}` : "nichts erkannt – bitte Werte eintragen";
-    return `<div class="neu-beleg" data-id="${a.id}">
+    const zuAbo = zumAbo.get(a.id);
+    return `<div class="neu-beleg${zuAbo ? " gehoert" : ""}" data-id="${a.id}">
       <div class="datei-icon">${TYP_KURZ[a.beleg_typ] || "DATEI"}</div>
       <div class="was"><strong>${esc(a.lieferant || a.beleg_name)}</strong>
-        <small>${esc(a.beschreibung || a.beleg_name)} · ${fmtDate(a.belegdatum)} · ${info}</small></div>
+        <small>${esc(a.beschreibung || a.beleg_name)} · ${fmtDate(a.belegdatum)} · ${info}${zuAbo ? ` · <b>gehört zum Abo ${esc(zuAbo.lieferant)} (oben)</b>` : ""}</small></div>
       <div class="betrag">${a.betrag != null ? euro2(a.betrag) : "– €"}</div>
       <button type="button" class="small${a === neu[0] ? "" : " secondary"}" data-act="pruefen">${a.betrag != null || ocrLaeuft(a) ? "Prüfen" : "Eintragen"}</button>
     </div>`;
@@ -73,7 +80,7 @@ function renderAusgaben() {
   const ok = fin.ausgaben.filter(a => a.status === "ok" && (!kat || a.kategorie === kat)
     && (!q || [a.lieferant, a.beschreibung, a.notiz, a.kategorie_name].join(" ").toLowerCase().includes(q)));
   const zeile = (a, kind = false) => `<tr data-id="${a.id}"${kind ? ' class="kind"' : ""}>
-      <td>${fmtDate(a.bezahlt_am || a.belegdatum)}${a.gesperrt ? schlossChip(a.jahr) : ""}${a.jahr !== (a.bezahlt_am || a.belegdatum || "").slice(0, 4)
+      <td>${fmtDate(a.bezahlt_am || a.belegdatum)}${a.gesperrt ? schlossChip(a.jahr) : ""}${a.abo_id ? ` <span class="chip-abo" title="aus einem Abo${a.beleg_datei ? "" : " – Beleg fehlt"}">ABO${a.beleg_datei ? "" : " · ohne Beleg"}</span>` : ""}${a.jahr !== (a.bezahlt_am || a.belegdatum || "").slice(0, 4)
         ? ` <span class="lock" title="Nach der 10-Tage-Regel dem Jahr ${a.jahr} zugeordnet">→ ${a.jahr}</span>` : ""}</td><td>${esc(a.lieferant)}</td>
       <td>${esc(a.beschreibung)}${a.privatanteil ? ` <small class="muted">(${a.privatanteil} % privat)</small>` : ""}</td>
       <td><span class="chip k-${a.kategorie}">${esc(a.kategorie_name)}</span></td>
@@ -862,6 +869,14 @@ async function renderStartFinanzen() {
     + (neu || grenze ? `<ul class="hinweise">`
       + (grenze ? `<li class="${grenze.stufe}">${grenze.stufe === "rot" ? "⚠ " : ""}${esc(grenze.text)} – <a href="#" data-goto-tab="finanzen">Übersicht</a></li>` : "")
       + (neu ? `<li class="gelb">${esc(neu.text)} – <a href="#" data-pruef="ausgaben">jetzt prüfen</a></li>` : "") + `</ul>` : "");
+  try {   // seit 1.9: fällige Abos
+    const n = (await api("abos/faellig")).length;
+    if (n) {
+      let ul = $("#start-finanzen-inhalt ul.hinweise");
+      if (!ul) { ul = document.createElement("ul"); ul.className = "hinweise"; $("#start-finanzen-inhalt").append(ul); }
+      ul.insertAdjacentHTML("afterbegin", `<li class="gelb">${n} Abo${n === 1 ? "" : "s"} fällig – <a href="#" data-pruef="ausgaben">bestätigen</a></li>`);
+    }
+  } catch (_) { /* nur ohne Hinweis */ }
   try {   // seit 1.8: dezenter Hinweis, wenn ein Jahr abgeschlossen werden kann (sperrt nichts, lässt sich ausblenden)
     const h = (await api("abschluss")).hinweis;
     if (!h) return;
@@ -1609,3 +1624,181 @@ document.addEventListener("submit", e => {
 }, true);
 
 ladeAbschlussZu();
+
+
+// ======================= Abos – wiederkehrende Ausgaben (seit 1.9) =======================
+// Fällige Abbuchungen stehen unter „Neu – bitte prüfen“; erst nach dem Bestätigen gibt es eine Ausgabe.
+
+const abo = { daten: null, aktuell: null };
+
+function aboZeile(f) {
+  const gesperrt = f.gesperrt;
+  const alt = f.datum.slice(0, 4) < String(new Date().getFullYear());
+  const treffer = f.beleg || f.vorhanden;
+  const ok = f.beleg ? "✓ Mit Beleg bestätigen" : f.vorhanden ? "✓ Damit verknüpfen" : "✓ Bestätigen";
+  return `<div class="neu-beleg abo" data-abo="${f.abo_id}" data-datum="${f.datum}">
+    <div class="datei-icon">ABO</div>
+    <div class="was"><strong>${esc(f.lieferant)}</strong>
+      <small>${esc(f.beschreibung || f.rhythmus_name)} · fällig ${fmtDate(f.datum)}${alt ? " · <b>noch nicht bestätigt</b>" : ""}${f.zehn_tage ? ` · zählt nach der 10-Tage-Regel zu ${f.zehn_tage}` : ""}</small>
+      ${f.beleg ? `<small class="treffer">Beleg gefunden: ${esc(f.beleg.name || f.beleg.lieferant)} vom ${fmtDate(f.beleg.datum)} – ${euro2(f.beleg.betrag)}</small>` : ""}
+      ${f.vorhanden ? `<small class="treffer">Schon erfasst: Ausgabe ${esc(f.vorhanden.lieferant)} vom ${fmtDate(f.vorhanden.datum)} – ${euro2(f.vorhanden.betrag)}</small>` : ""}
+      ${gesperrt ? `<small><b>${f.datum.slice(0, 4)} ist abgeschlossen</b> – zum Nachtragen das Jahr wieder öffnen.</small>` : ""}</div>
+    <div class="betrag">${euro2(f.betrag)}</div>
+    <div class="knoepfe">${gesperrt ? "" : `<button type="button" class="small" data-abo-act="ok"${f.beleg ? ` data-beleg="${f.beleg.id}"` : ""}${f.vorhanden ? ` data-ausgabe="${f.vorhanden.id}"` : ""}>${ok}</button>
+      ${treffer ? "" : `<button type="button" class="small secondary" data-abo-act="betrag">Betrag ändern</button>`}`}
+      <button type="button" class="small secondary" data-abo-act="aus" title="z. B. Pause oder nicht abgebucht">${
+        gesperrt ? "Nicht nachtragen" : f.rhythmus === "monatlich" ? "Diesen Monat nicht" : f.rhythmus === "woechentlich" ? "Diese Woche nicht" : "Diesmal nicht"}</button></div>
+  </div>`;
+}
+
+$("#ausgaben-neu").addEventListener("click", async e => {
+  const b = e.target.closest("[data-abo-act]");
+  if (!b) return;
+  const zeile = b.closest(".neu-beleg.abo"), url = `abos/${zeile.dataset.abo}/termine/${zeile.dataset.datum}`;
+  const f = fin.faellig.find(x => String(x.abo_id) === zeile.dataset.abo && x.datum === zeile.dataset.datum);
+  if (b.dataset.aboAct === "betrag") {
+    const box = zeile.querySelector(".betrag");
+    if (box.querySelector("input")) return;
+    box.innerHTML = `<input inputmode="decimal" value="${Number(f.betrag).toFixed(2).replace(".", ",")}" aria-label="Betrag">`;
+    box.querySelector("input").select();
+    b.remove();
+    zeile.querySelector(".was").insertAdjacentHTML("beforeend",
+      `<small><label class="inline ab-jetzt-label"><input type="checkbox" class="ab-jetzt"> ab jetzt immer (Preis geändert)</label></small>`);
+    return;
+  }
+  b.disabled = true;
+  try {
+    if (b.dataset.aboAct === "aus") {
+      await api(url, { method: "POST", body: { aktion: "aus" } });
+      toast(`${f.lieferant} ${fmtDate(f.datum)}: nicht gebucht`);
+    } else {
+      const input = zeile.querySelector(".betrag input");
+      const body = { aktion: "ok" };
+      if (input) Object.assign(body, { betrag: input.value, ab_jetzt: zeile.querySelector(".ab-jetzt").checked });
+      if (b.dataset.beleg) body.beleg_id = Number(b.dataset.beleg);
+      if (b.dataset.ausgabe) body.ausgabe_id = Number(b.dataset.ausgabe);
+      await api(url, { method: "POST", body });
+      toast(`${f.lieferant} ${fmtDate(f.datum)} bestätigt${b.dataset.beleg ? " – mit Beleg" : b.dataset.ausgabe ? " – mit der erfassten Ausgabe verknüpft" : " – Beleg kann später angehängt werden"}`);
+    }
+  } catch (err) { b.disabled = false; return toast(err.message, true); }
+  ladeAusgaben();
+  renderStartFinanzen();
+});
+
+// ---------- Abos verwalten ----------
+async function ladeAbos() {
+  try { abo.daten = await api("abos"); } catch (e) { toast(e.message, true); return null; }
+  return abo.daten;
+}
+
+function aboWann(a) {
+  if (a.wochenweise) {
+    const t = new Date(a.beginn + "T12:00").toLocaleDateString("de-DE", { weekday: "long" }).toLowerCase();
+    return `${t}s, ab ${fmtDate(a.beginn)}`;
+  }
+  const monate = { monatlich: 1, zweimonatlich: 2, vierteljaehrlich: 3, halbjaehrlich: 6, jaehrlich: 12, zweijaehrlich: 24 }[a.rhythmus]
+    ?? (a.einheit === "jahre" ? 12 * a.anzahl : a.anzahl);
+  const monat = new Date(a.beginn + "T12:00").toLocaleDateString("de-DE", { month: "long" });
+  if (monate === 1) return `am ${a.tag}.`;
+  if (monate % 12 === 0) return `am ${a.tag}. ${monat}`;
+  return `am ${a.tag}., ab ${new Date(a.beginn + "T12:00").toLocaleDateString("de-DE", { month: "long", year: "numeric" })}`;
+}
+
+async function zeigeAbos() {
+  const d = await ladeAbos();
+  if (!d) return;
+  const aktiv = d.abos.filter(a => !a.beendet);
+  $("#abos-inhalt").innerHTML = `<div class="abo-summe"><span><b>${aktiv.length}</b> aktiv</span><span>≈ <b>${euro2(d.pro_monat)}</b> im Monat</span>
+      <span>≈ <b>${euro2(d.pro_monat * 12)}</b> im Jahr</span></div>
+    <table class="abo-liste"><thead><tr><th>Abo</th><th>Rhythmus</th><th class="num">Betrag</th><th>nächste Abbuchung</th><th></th></tr></thead><tbody>
+    ${d.abos.map(a => {
+      const p = a.preise.filter(x => x.ab <= today()).at(-1);
+      return `<tr data-id="${a.id}"${a.beendet ? ' class="beendet"' : ""}>
+        <td><b>${esc(a.lieferant)}</b><small>${esc(a.beschreibung || "")}${a.beschreibung ? " · " : ""}${esc(katName(a.kategorie))}${a.privatanteil ? ` · ${String(a.privatanteil).replace(".", ",")} % privat` : ""}</small></td>
+        <td>${esc(a.rhythmus_name)}<small>${aboWann(a)}</small></td>
+        <td class="num">${euro2(a.betrag_aktuell)}${p ? `<small>seit ${fmtDate(p.ab)}</small>` : ""}</td>
+        <td>${a.beendet ? `beendet am ${fmtDate(a.ende)}` : a.naechste ? fmtDate(a.naechste) : "–"}${a.offen ? `<small><b>${a.offen} fällig</b> – unter „Neu“</small>` : ""}${a.ende && !a.beendet ? `<small>endet ${fmtDate(a.ende)}</small>` : ""}</td>
+        <td class="btns"><button type="button" class="small secondary" data-abos="bearbeiten" title="Bearbeiten, Preis ändern, kündigen">✎</button></td></tr>`;
+    }).join("") || `<tr><td colspan="5" class="hint">Noch keine Abos – z. B. Musikpool oder DJ-Software einmal anlegen.</td></tr>`}</tbody></table>
+    <p class="hint">Am Tag der Abbuchung erscheint das Abo unter „Neu – bitte prüfen“. Erst nach dem Bestätigen zählt es in der EÜR. Kommt die Rechnung als Mail oder PDF, hängt die App sie an.</p>`;
+  $("#abos-aktionen").innerHTML = `<button type="button" data-abos="schliessen">Schließen</button>`;
+  $("#abos-titel-knopf").hidden = false;
+  $("#abos-titel").textContent = "Abos";
+  if (!$("#abos-dialog").open) $("#abos-dialog").showModal();
+}
+
+function zeigeAboForm(a) {
+  const d = abo.daten;
+  abo.aktuell = a;
+  const w = a || { lieferant: "", beschreibung: "", kategorie: "musik", betrag_aktuell: "", rhythmus: "monatlich", anzahl: 6, einheit: "wochen",
+                   tag: new Date().getDate(), beginn: today(), ende: "", privatanteil: 0 };
+  $("#abos-titel").textContent = a ? a.lieferant : "Abo anlegen";
+  $("#abos-titel-knopf").hidden = true;
+  const kat = fin.kategorien.filter(k => k.id !== "anschaffung");
+  $("#abos-inhalt").innerHTML = `${a ? "" : `<div class="vorschlag-chips">${d.vorschlaege.map((v, i) => `<button type="button" class="secondary" data-vorschlag="${i}">${esc(v.lieferant)}</button>`).join("")}</div>`}
+    <form id="abo-form" class="abo-form" autocomplete="off"><div class="grid">
+      <label>Lieferant<input name="lieferant" required value="${esc(w.lieferant)}" placeholder="z. B. Musikpool Beispiel"></label>
+      <label>Beschreibung<input name="beschreibung" value="${esc(w.beschreibung || "")}" placeholder="z. B. DJ-Musikpool (Monatsabo)"></label>
+      <label>Kategorie<select name="kategorie">${kat.map(k => `<option value="${k.id}"${k.id === w.kategorie ? " selected" : ""}>${esc(k.name)}</option>`).join("")}</select></label>
+      <label>Betrag ${a ? `<span class="opt">(brutto, €)</span>` : `<span class="opt">(brutto, €)</span>`}<input name="betrag" required inputmode="decimal" value="${w.betrag_aktuell === "" ? "" : Number(w.betrag_aktuell).toFixed(2).replace(".", ",")}"></label>
+      <label>Rhythmus<select name="rhythmus">${d.rhythmen.map(r => `<option value="${r.id}"${r.id === w.rhythmus ? " selected" : ""}>${esc(r.id === "eigen" ? "eigener Rhythmus …" : r.name)}</option>`).join("")}</select></label>
+      <div class="eigen-rhythmus"><label>alle<input name="anzahl" type="number" min="1" max="99" value="${w.anzahl || 6}"></label>
+        <label>&nbsp;<select name="einheit" aria-label="Einheit">${d.einheiten.map(e => `<option value="${e.id}"${e.id === w.einheit ? " selected" : ""}>${esc(e.name)}</option>`).join("")}</select></label></div>
+      <label class="tag-feld">Abbuchung am <span class="opt">(Tag im Monat)</span><input name="tag" type="number" min="1" max="31" value="${w.tag || 1}"></label>
+      <label>Beginn<input name="beginn" type="date" required value="${w.beginn}"></label>
+      <label>Ende <span class="opt">(bei Kündigung)</span><input name="ende" type="date" value="${w.ende || ""}"></label>
+      <label>Privatanteil <span class="opt">(%)</span><input name="privatanteil" type="number" min="0" max="100" step="1" value="${w.privatanteil || 0}"></label>
+    </div>
+    ${a ? `<p class="hint abo-preis-hinweis">Ein neuer Betrag gilt ab heute – frühere Buchungen bleiben, wie sie waren.</p>`
+      : `<label class="inline"><input type="checkbox" name="nachtragen"> Frühere Abbuchungen seit dem Beginn nachtragen <span class="opt">(sonst ab heute – meist sind sie schon erfasst)</span></label>`}
+    <div class="abo-hinweis">Abbuchungen ab dem 22.12. für den nächsten Zeitraum ordnet die App nach der 10-Tage-Regel automatisch dem neuen Jahr zu (nicht bei wöchentlichen Abos).</div>
+    </form>`;
+  $("#abos-aktionen").innerHTML = `${a ? `<button type="button" class="secondary danger-text" data-abos="loeschen">Löschen</button>` : ""}
+    <button type="button" class="secondary" data-abos="liste">Abbrechen</button><button type="submit" form="abo-form">Speichern</button>`;
+  const f = $("#abo-form");
+  const felder = () => {
+    const r = f.elements.rhythmus.value;
+    const woche = ["woechentlich", "vierwochen"].includes(r) || (r === "eigen" && f.elements.einheit.value === "wochen");
+    f.querySelector(".eigen-rhythmus").hidden = r !== "eigen";
+    f.querySelector(".tag-feld").hidden = woche;
+  };
+  f.addEventListener("change", felder);
+  felder();
+  f.addEventListener("submit", async ev => {
+    ev.preventDefault();
+    const x = Object.fromEntries([...f.elements].filter(e => e.name).map(e => [e.name, e.type === "checkbox" ? e.checked : e.value]));
+    try {
+      if (a) await api(`abos/${a.id}`, { method: "PUT", body: x });
+      else await api("abos", { method: "POST", body: x });
+    } catch (err) { return toast(err.message, true); }
+    toast(a ? `${x.lieferant} gespeichert${x.ende ? ` – endet am ${fmtDate(x.ende)}` : ""}` : `Abo ${x.lieferant} angelegt`);
+    zeigeAbos();
+    ladeAusgaben();
+  });
+  f.elements.lieferant.focus();
+}
+
+$("#abos-oeffnen").addEventListener("click", () => zeigeAbos());
+$("#abos-dialog").addEventListener("click", async e => {
+  const v = e.target.closest("[data-vorschlag]");
+  if (v) {
+    const x = abo.daten.vorschlaege[v.dataset.vorschlag], f = $("#abo-form");
+    for (const k of ["lieferant", "beschreibung", "kategorie", "rhythmus"]) f.elements[k].value = x[k];
+    f.dispatchEvent(new Event("change"));
+    return f.elements.betrag.focus();
+  }
+  const b = e.target.closest("[data-abos]");
+  if (!b) return;
+  switch (b.dataset.abos) {
+    case "neu": return zeigeAboForm(null);
+    case "liste": return zeigeAbos();
+    case "schliessen": return $("#abos-dialog").close();
+    case "bearbeiten": return zeigeAboForm(abo.daten.abos.find(a => a.id === Number(b.closest("tr").dataset.id)));
+    case "loeschen":
+      if (!confirm(`Abo ${abo.aktuell.lieferant} löschen?\n\nSchon gebuchte Ausgaben bleiben erhalten. Zum Kündigen besser ein Ende eintragen.`)) return;
+      try { await api(`abos/${abo.aktuell.id}`, { method: "DELETE" }); } catch (err) { return toast(err.message, true); }
+      toast("Abo gelöscht");
+      zeigeAbos();
+      ladeAusgaben();
+  }
+});

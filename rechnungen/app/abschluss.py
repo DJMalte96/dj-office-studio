@@ -130,7 +130,7 @@ def zehn_tage_kandidaten(jahr):
     jahr = int(jahr)
     with db.connect() as con:
         rows = [finanzen._zeile(r) for r in con.execute(
-            "SELECT * FROM ausgaben WHERE status = 'ok' AND kategorie IN (" + ",".join("?" * len(REGELMAESSIG)) + ")"
+            "SELECT * FROM ausgaben WHERE status = 'ok' AND abo_id IS NULL AND kategorie IN (" + ",".join("?" * len(REGELMAESSIG)) + ")"
             " AND COALESCE(bezahlt_am, belegdatum) BETWEEN ? AND ? ORDER BY COALESCE(bezahlt_am, belegdatum)",
             (*REGELMAESSIG, f"{jahr}-12-{31 - FRIST_TAGE + 1:02d}", f"{jahr + 1}-01-{FRIST_TAGE:02d}"))]
     return rows
@@ -157,6 +157,12 @@ def pruefung(jahr):
                                    "klein": f"Wurde sie {jahr} bezahlt? Sonst zählt sie, wenn das Geld kommt."})
         else:
             punkte.append({"stufe": "ok" if p["stufe"] == "ok" else "info", "text": p["text"]})
+    import abos   # zur Laufzeit (abos bindet finanzen ein)
+    offen = abos.offene_im_jahr(jahr)
+    if offen:   # nicht bestätigte Abo-Abbuchungen: bestätigen oder „nicht abgebucht“ – sonst fehlen Ausgaben
+        punkte.insert(0, {"stufe": "rot", "aktion": "ausgaben",
+                          "text": f"{len(offen)} Abo-Abbuchung{'' if len(offen) == 1 else 'en'} {jahr} nicht bestätigt",
+                          "klein": " · ".join(f"{f['lieferant']} {_de(f['datum'])}" for f in offen[:6]) + (" …" if len(offen) > 6 else "")})
     for a in zehn_tage_kandidaten(jahr):
         tag = a["bezahlt_am"] or a["belegdatum"]
         punkte.append({"stufe": "gelb", "art": "zehn_tage", "id": a["id"], "jahre": [jahr, jahr + 1], "gewaehlt": int(a["jahr"]),
