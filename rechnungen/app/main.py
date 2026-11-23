@@ -18,6 +18,9 @@ from datetime import date, datetime, timedelta
 
 from flask import Flask, Response, abort, jsonify, request, send_from_directory
 
+import sqlite3
+
+import abschluss
 import db
 import finanzen
 import importer
@@ -32,6 +35,22 @@ app = Flask(__name__, static_folder=None)
 
 
 app.register_blueprint(finanzen.bp)   # Finanzen: Ausgaben, Belege (seit 1.1)
+app.register_blueprint(abschluss.bp)  # Jahresabschluss (seit 1.8)
+
+
+@app.errorhandler(abschluss.Gesperrt)
+def _gesperrt(e):
+    return jsonify({"error": str(e), "gesperrt": e.jahre}), 409
+
+
+@app.errorhandler(sqlite3.IntegrityError)
+def _db_fehler(e):
+    """Die Datenbank weist Änderungen an abgeschlossenen Jahren ab (Trigger) – verständliche Meldung statt 500."""
+    if db.ist_gesperrt_fehler(e):
+        zu = sorted(db.abgeschlossene_jahre())
+        return jsonify({"error": abschluss.meldung(zu), "gesperrt": zu}), 409
+    app.logger.exception("Datenbankfehler")
+    return jsonify({"error": "Datenbankfehler – bitte erneut versuchen"}), 500
 
 
 # ---------- Schutz vor fremden Webseiten und anderen Programmen ----------
@@ -295,6 +314,10 @@ def settings_put():
             if r["id"] in ids:
                 db.festschreiben(r["id"], bisher)
     hinweise = []
+    if any(k in werte and _normal(werte[k]) != _normal(alt.get(k)) for k in ("kleinunternehmer", "fahrzeug")):
+        abschluss.jahre_festhalten(alt)   # frühere Jahre behalten ihre bisherigen Werte
+        hinweise.append(f"Kleinunternehmer bzw. Fahrzeug gelten ab {date.today().year}. Frühere Jahre behalten ihre Werte "
+                        "(änderbar unter „Frühere Jahre“).")
     if (alt.get("smtp_passwort") and "smtp_passwort" not in werte
             and _smtp_anders((alt.get("smtp_server"), alt.get("smtp_benutzer")),
                              (werte.get("smtp_server", alt.get("smtp_server")), werte.get("smtp_benutzer", alt.get("smtp_benutzer"))))):
@@ -578,7 +601,10 @@ def _write_pdf_file(inv):
 @app.get("/api/rechnungen")
 def invoices_list():
     # "name" = Dateiname ohne Endung, z. B. "Rechnung_037_311026" – gleicher Name wie das PDF
-    return jsonify([inv | {"name": pdf_filename(inv).removesuffix(".pdf")} for inv in db.list_invoices()])
+    zu = db.abgeschlossene_jahre()
+    return jsonify([inv | {"name": pdf_filename(inv).removesuffix(".pdf"),
+                           "gesperrt": any(int(j) in zu for j in _rechnung_jahre(inv | {"fahrt_erfassen": False}))}
+                    for inv in db.list_invoices()])
 
 
 @app.get("/api/rechnungen/naechste-nummer")
@@ -592,9 +618,24 @@ def invoices_get(inv_id):
     return jsonify(inv)
 
 
+def _rechnung_jahre(inv):
+    """Jahre, deren EÜR eine Rechnung berührt: Zahlungseingang bzw. Storno-Datum und – mit „Fahrt erfassen“ – die Fahrt."""
+    if not inv:
+        return []
+    jahre = []
+    if inv.get("storno_von"):
+        jahre.append(inv["datum"][:4])
+    elif inv.get("bezahlt") and inv.get("bezahlt_am"):
+        jahre.append(inv["bezahlt_am"][:4])
+    if inv.get("fahrt_erfassen") and not inv.get("storno_von"):
+        jahre.append((next((p.get("lieferdatum") for p in inv.get("positionen") or [] if p.get("lieferdatum")), None) or inv["datum"])[:4])
+    return jahre
+
+
 @app.post("/api/rechnungen")
 def invoices_create():
     inv = _validate_invoice(_daten())
+    abschluss.pruefen(*_rechnung_jahre(inv))
     inv["kunde_id"] = db.upsert_customer({**inv["kunde"], "id": inv["kunde_id"]})
     inv_id = db.save_invoice(inv)
     angebot_id = _daten().get("angebot_id")
@@ -618,6 +659,7 @@ def invoices_update(inv_id):
     if alt["festgeschrieben"]:
         return _fehler(FESTGESCHRIEBEN, 409)
     inv = _validate_invoice(_daten(), inv_id)
+    abschluss.pruefen(*_rechnung_jahre(alt), *_rechnung_jahre(inv))
     inv["kunde_id"] = db.upsert_customer({**inv["kunde"], "id": inv["kunde_id"]})
     db.save_invoice(inv, inv_id)
     finanzen.fahrt_aktualisieren(inv_id, absender())
@@ -651,6 +693,7 @@ def invoices_delete(inv_id):
     inv = db.get_invoice(inv_id) or abort(404)
     if inv["festgeschrieben"]:
         return _fehler(FESTGESCHRIEBEN, 409)
+    abschluss.pruefen(*_rechnung_jahre(inv))
     finanzen.fahrten_der_rechnung_entfernen(inv_id)
     db.delete_invoice(inv_id)
     return "", 204
@@ -764,13 +807,14 @@ def backup_download():
         buf = io.BytesIO()
         with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
             zf.write(pfad, "rechnungen.db")
-            belege = os.path.join(db.DATA_DIR, "belege")
             anzahl_belege = 0
-            for wurzel, _, dateien in os.walk(belege):
-                for n in sorted(dateien):
-                    voll = os.path.join(wurzel, n)
-                    zf.write(voll, "belege/" + os.path.relpath(voll, belege).replace(os.sep, "/"))
-                    anzahl_belege += 1
+            for ordner in ("belege", abschluss.ORDNER):   # seit 1.8 auch die Pakete der Jahresabschlüsse
+                basis = os.path.join(db.DATA_DIR, ordner)
+                for wurzel, _, dateien in os.walk(basis):
+                    for n in sorted(dateien):
+                        voll = os.path.join(wurzel, n)
+                        zf.write(voll, f"{ordner}/" + os.path.relpath(voll, basis).replace(os.sep, "/"))
+                        anzahl_belege += ordner == "belege"
             zf.writestr("info.json", json.dumps({"app": "DJ Office Studio", "version": APP_VERSION,
                                                  "erstellt": datetime.now().isoformat(timespec="seconds"),
                                                  "belege": anzahl_belege}))
@@ -797,6 +841,7 @@ def backup_restore():
                     with zf.open("rechnungen.db") as src, open(pfad, "wb") as dst:
                         _begrenzt_kopieren(src, dst, rest)
                     _belege_entpacken(zf, belege_tmp, rest)
+                    _belege_entpacken(zf, os.path.join(tmp, abschluss.ORDNER), rest, abschluss.ORDNER)
             except (KeyError, zipfile.BadZipFile):
                 return _fehler("Die ZIP-Datei enthält keine Sicherung von DJ Office Studio.")
             except _ZuGross:
@@ -818,7 +863,9 @@ def backup_restore():
         letzte = db.get_settings().get("_letzte_sicherung")
         db.wiederherstellen(pfad)
         absender_festhalten()       # ältere Sicherung: mit dem Absender aus ihren eigenen Einstellungen
+        abschluss.jahre_festhalten()
         belege = _belege_uebernehmen(belege_tmp)
+        _belege_uebernehmen(os.path.join(tmp, abschluss.ORDNER), abschluss.ORDNER)
         if letzte and letzte > (db.get_settings().get("_letzte_sicherung") or ""):
             db.save_settings({"_letzte_sicherung": letzte})   # Zeitpunkt der letzten Sicherung nicht zurückdrehen
     return jsonify({"anzahl": anzahl, "belege": belege, "vorher_gesichert": vorher})
@@ -850,11 +897,11 @@ def _ordner_groesse(pfad):
     return sum(os.path.getsize(os.path.join(w, n)) for w, _, dateien in os.walk(pfad) for n in dateien)
 
 
-def _belege_entpacken(zf, ziel, rest):
-    """Nur Dateien unter belege/ aus der Sicherung, ohne Pfad-Tricks (.., absolute Pfade)."""
+def _belege_entpacken(zf, ziel, rest, ordner="belege"):
+    """Nur Dateien unter belege/ (bzw. abschluesse/) aus der Sicherung, ohne Pfad-Tricks (.., absolute Pfade)."""
     for info in zf.infolist():
         name = info.filename
-        if info.is_dir() or not name.startswith("belege/"):
+        if info.is_dir() or not name.startswith(ordner + "/"):
             continue
         teile = name.split("/")[1:]
         if not teile or any(t in ("", ".", "..") or ":" in t or "\\" in t for t in teile):
@@ -865,9 +912,9 @@ def _belege_entpacken(zf, ziel, rest):
             _begrenzt_kopieren(src, dst, rest)
 
 
-def _belege_uebernehmen(quelle):
+def _belege_uebernehmen(quelle, ordner="belege"):
     """Belege aus der Sicherung in den Datenordner kopieren. Vorhandene Dateien bleiben, nichts wird gelöscht."""
-    ziel = os.path.join(db.DATA_DIR, "belege")
+    ziel = os.path.join(db.DATA_DIR, ordner)
     anzahl = 0
     for wurzel, _, dateien in os.walk(quelle):
         for n in dateien:
@@ -888,9 +935,15 @@ def export_year():
     jahr = request.args.get("jahr") or str(date.today().year)
     if not jahr.isdigit():
         abort(400)
+    return Response(export_zip(jahr), mimetype="application/zip",
+                    headers={"Content-Disposition": f'attachment; filename="Export_{jahr}.zip"'})
+
+
+def export_zip(jahr, a=None):
+    """Inhalt des Exports als ZIP-Bytes (auch Grundlage des Jahresabschluss-Pakets)."""
     rechnungen = sorted((r for r in db.list_invoices() if r["datum"].startswith(jahr)),
                         key=lambda r: (r["datum"], r["nummer"]))
-    a = absender()
+    a = a or absender()
     csv_buf = io.StringIO()
     w = csv.writer(csv_buf, delimiter=";")
     w.writerow(["Rechnungsnummer", "Rechnungsdatum", "Leistungsdatum", "Kunde", "Ort", "Netto (EUR)", "USt-Satz",
@@ -918,8 +971,7 @@ def export_year():
         # BOM, damit Excel die Umlaute richtig erkennt
         zf.writestr(f"Rechnungen_{jahr}.csv", "\ufeff" + csv_buf.getvalue())
         finanzen.export_finanzen(zf, jahr, a)   # seit 1.1: EÜR, Einnahmen, Ausgaben, Fahrten, Anlagen, Belege
-    return Response(buf.getvalue(), mimetype="application/zip",
-                    headers={"Content-Disposition": f'attachment; filename="Export_{jahr}.zip"'})
+    return buf.getvalue()
 
 
 # ---------- E-Mail-Versand ----------
@@ -1337,6 +1389,7 @@ if __name__ == "__main__":
 
     db.init()
     absender_festhalten()
+    abschluss.jahre_festhalten()         # seit 1.8: Kleinunternehmer/Fahrzeug je Jahr
     finanzen.ordner_waechter_starten()   # Belege-Ordner regelmäßig einlesen
     finanzen.texterkennung_starten()     # Fotos und Scans im Hintergrund lesen
     port = int(os.environ.get("PORT", "8099"))

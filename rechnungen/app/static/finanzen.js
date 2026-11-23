@@ -73,13 +73,14 @@ function renderAusgaben() {
   const ok = fin.ausgaben.filter(a => a.status === "ok" && (!kat || a.kategorie === kat)
     && (!q || [a.lieferant, a.beschreibung, a.notiz, a.kategorie_name].join(" ").toLowerCase().includes(q)));
   const zeile = (a, kind = false) => `<tr data-id="${a.id}"${kind ? ' class="kind"' : ""}>
-      <td>${fmtDate(a.bezahlt_am || a.belegdatum)}</td><td>${esc(a.lieferant)}</td>
+      <td>${fmtDate(a.bezahlt_am || a.belegdatum)}${a.gesperrt ? schlossChip(a.jahr) : ""}${a.jahr !== (a.bezahlt_am || a.belegdatum || "").slice(0, 4)
+        ? ` <span class="lock" title="Nach der 10-Tage-Regel dem Jahr ${a.jahr} zugeordnet">→ ${a.jahr}</span>` : ""}</td><td>${esc(a.lieferant)}</td>
       <td>${esc(a.beschreibung)}${a.privatanteil ? ` <small class="muted">(${a.privatanteil} % privat)</small>` : ""}</td>
       <td><span class="chip k-${a.kategorie}">${esc(a.kategorie_name)}</span></td>
       <td class="num">${euro2(a.betrag)}</td>
       <td>${a.beleg_datei ? `<a href="#" class="beleg-link" data-act="beleg" title="Beleg öffnen">📎</a>`
         : `<span class="muted" title="${esc(a.notiz || "ohne Beleg")}">—</span>`}</td>
-      <td class="btns"><button type="button" class="small secondary" data-act="bearbeiten" title="Bearbeiten">✎</button></td>
+      <td class="btns"><button type="button" class="small secondary" data-act="bearbeiten" title="${a.gesperrt ? "Ansehen" : "Bearbeiten"}">${a.gesperrt ? "Ansehen" : "✎"}</button></td>
     </tr>`;
   let html = "";
   if (fin.ansicht === "gruppiert" && !q) {
@@ -111,6 +112,7 @@ function renderAusgaben() {
   }
   $("#ausgaben-body").innerHTML = html
     || `<tr><td colspan="7" class="hint">${q || kat ? "Keine Treffer." : `Noch keine Ausgaben für ${fin.jahr} – Belege oben hineinziehen.`}</td></tr>`;
+  gesperrtZeile($("#ausgaben-body").closest("table"), fin.jahr);
   const summe = ok.reduce((s, a) => s + (a.betrag || 0), 0);
   $("#ausgaben-summe").textContent = ok.length ? `${fin.jahr}: ${ok.length} Ausgabe${ok.length === 1 ? "" : "n"} · Summe ${euro2(summe)}` : "";
 }
@@ -328,6 +330,8 @@ async function oeffneBeleg(id) {
   f.elements.rechnung_id.value = w.rechnung_id || "";
   const ohneBeleg = !a || !a.beleg_datei;
   f.elements.notiz.required = ohneBeleg;
+  lesemodus($("#tab-beleg"), a && a.gesperrt ? Number(a.jahr) : null);      // abgeschlossenes Jahr: nur ansehen
+  if (a && a.gesperrt) $("#beleg-titel").textContent = "Ausgabe ansehen";
   $("#notiz-hinweis").textContent = ohneBeleg ? "(Pflicht: warum gibt es keinen Beleg?)" : "(optional)";
 
   zeigeErkennung(a, neu);
@@ -456,15 +460,18 @@ function renderFahrten() {
     ? (f.fehler ? `<span class="chip q-offen" title="${esc(f.fehler)}">km fehlen</span>` : d.kartendienst ? `<span class="chip">wird berechnet …</span>` : `<span class="chip q-offen">km eintragen</span>`)
     : `<span class="chip q-${f.quelle}">${{ auto: "automatisch", korrigiert: "korrigiert", hand: "von Hand" }[f.quelle]}</span>`;
   $("#fahrten-body").innerHTML = liste.map(f => `<tr data-id="${f.id}">
-      <td>${fmtDate(f.datum)}</td>
+      <td>${fmtDate(f.datum)}${f.gesperrt ? schlossChip(f.datum.slice(0, 4)) : ""}</td>
       <td>${esc(f.anlass)}${f.rechnung_id ? `<small>${esc(f.kunde)}${f.rechnung_text ? " · " + esc(f.rechnung_text) : ""}${f.rechnung_storniert ? " · <b>storniert</b>" : ""}</small>` : ""}</td>
       <td>${esc(f.ziel_name || f.ziel.split(", ").slice(-1)[0].replace(/^\d{4,5}\s+/, "") || f.ziel)}<small>${esc(f.ziel)}</small></td>
       <td class="num">${f.km_einfach == null ? "–" : (f.hin_zurueck ? `2 × ${km(f.km_einfach)} = ${km(f.km_gesamt)}` : km(f.km_gesamt))}</td>
       <td class="num">${privat && f.betrag != null ? euro2(f.betrag) : "–"}</td>
       <td>${quelle(f)}</td>
-      <td class="btns"><button type="button" class="small secondary" data-act="bearbeiten" title="Kilometer oder Ziel ändern">✎</button><button type="button" class="icon del" data-act="loeschen" title="${f.rechnung_id && f.quelle !== "hand" ? "Fahrt entfernen – für diese Rechnung wird dann keine Fahrt mehr angelegt" : "Fahrt löschen"}">✕</button></td>
+      <td class="btns">${f.gesperrt ? `<button type="button" class="small secondary" data-act="bearbeiten" title="Ansehen">Ansehen</button>`
+        : `<button type="button" class="small secondary" data-act="bearbeiten" title="Kilometer oder Ziel ändern">✎</button><button type="button" class="icon del" data-act="loeschen" title="${f.rechnung_id && f.quelle !== "hand" ? "Fahrt entfernen – für diese Rechnung wird dann keine Fahrt mehr angelegt" : "Fahrt löschen"}">✕</button>`}</td>
     </tr>`).join("")
     || `<tr><td colspan="7" class="hint">Noch keine Fahrten ${fahrt.jahr}. Sie entstehen automatisch mit jeder Rechnung – für ältere Rechnungen „Fahrten nachberechnen“.</td></tr>`;
+  gesperrtZeile($("#fahrten-body").closest("table"), fahrt.jahr);
+  $("#fahrten-nachberechnen").disabled = istZu(fahrt.jahr);
   $("#fahrten-ohne").textContent = d.ohne_fahrt.length
     ? `Ohne Fahrt: ${d.ohne_fahrt.map(r => `Rechnung ${r.nummer} (${r.kunde})`).join(", ")} – „Fahrt erfassen“ ist bei ${d.ohne_fahrt.length === 1 ? "dieser Rechnung" : "diesen Rechnungen"} ausgeschaltet.` : "";
 }
@@ -500,7 +507,7 @@ async function oeffneFahrt(f) {
   if (!state.rechnungen.length) { try { state.rechnungen = await api("rechnungen"); } catch (_) { /* egal */ } }
   form.elements.rechnung_id.innerHTML = `<option value="">– keine –</option>` + state.rechnungen.filter(r => !r.storno_von).slice(0, 80)
     .map(r => `<option value="${r.id}">${esc(r.nummer)} – ${esc(r.kunde.name)}</option>`).join("");
-  $("#fahrt-titel").textContent = f ? "Fahrt bearbeiten" : "Fahrt ergänzen";
+  $("#fahrt-titel").textContent = f ? (f.gesperrt ? "Fahrt ansehen" : "Fahrt bearbeiten") : "Fahrt ergänzen";
   const w = f || { datum: today(), hin_zurueck: true };
   form.elements.datum.value = w.datum || "";
   form.elements.anlass.value = w.anlass || "";
@@ -512,6 +519,7 @@ async function oeffneFahrt(f) {
   $("#fahrt-dialog-hinweis").textContent = f && f.quelle === "auto"
     ? "Automatisch berechnet. Änderst du die Kilometer (z. B. Umweg), bleibt dein Wert auch beim erneuten Speichern der Rechnung erhalten."
     : fahrt.daten && !fahrt.daten.kartendienst ? "Kilometer bitte eintragen – die automatische Berechnung ist ausgeschaltet." : "";
+  lesemodus($("#fahrt-dialog"), f && f.gesperrt ? Number(f.datum.slice(0, 4)) : null);
   $("#fahrt-dialog").showModal();
 }
 $("#fahrt-abbrechen").addEventListener("click", () => $("#fahrt-dialog").close());
@@ -550,7 +558,7 @@ async function ladeAnlagen() {
     const kaufjahr = (a.anschaffung_am || "").slice(0, 4);
     const anteil = kaufjahr === anl.jahr && a.nutzungsdauer > 1 ? `<small>${13 - Number(a.anschaffung_am.slice(5, 7))} von 12 Monaten</small>` : "";
     return `<tr data-id="${a.id}">
-      <td><b>${esc(a.bezeichnung)}</b><small>${a.ausgabe_id ? `aus Ausgabe ${esc(a.ausgabe_lieferant || "")}${a.ausgabe_mit_beleg ? " · 📎" : ""}` : a.restwert_start != null ? "aus Vorjahren übernommen" : "von Hand erfasst"}${a.abgang_am ? ` · Abgang ${fmtDate(a.abgang_am)}` : ""}</small></td>
+      <td><b>${esc(a.bezeichnung)}</b>${a.gesperrt ? ` <span class="lock" title="Ein abgeschlossenes Jahr liegt ab dem Kauf – Kauf und Abschreibung stehen fest">🔒</span>` : ""}<small>${a.ausgabe_id ? `aus Ausgabe ${esc(a.ausgabe_lieferant || "")}${a.ausgabe_mit_beleg ? " · 📎" : ""}` : a.restwert_start != null ? "aus Vorjahren übernommen" : "von Hand erfasst"}${a.abgang_am ? ` · Abgang ${fmtDate(a.abgang_am)}` : ""}</small></td>
       <td>${a.anschaffung_am ? fmtDate(a.anschaffung_am) : `vor ${a.start_jahr}`}</td>
       <td class="num">${a.kosten != null ? euro2(a.kosten) : `<small>Restwert 1.1.${String(a.start_jahr).slice(2)}</small>${euro2(a.restwert_start)}`}</td>
       <td>${a.restwert_start != null ? `noch ${a.rest_nutzungsdauer} J. ab ${a.start_jahr}` : a.nutzungsdauer === 1 ? "1 Jahr" : `${a.nutzungsdauer} Jahre`}</td>
@@ -560,6 +568,7 @@ async function ladeAnlagen() {
     </tr>`;
   }).join("") || `<tr><td colspan="7" class="hint">Keine Anschaffungen über 800 € in ${anl.jahr}.</td></tr>`;
   const summe = anl.liste.reduce((s, a) => s + a.afa, 0);
+  gesperrtZeile($("#anlagen-body").closest("table"), anl.jahr);
   $("#anlagen-summe").innerHTML = anl.liste.length ? `Abschreibung ${anl.jahr} gesamt: <b>${euro2(summe)}</b>` : "";
 }
 $("#anlagen-jahr").addEventListener("change", e => { anl.jahr = e.target.value; ladeAnlagen(); });
@@ -602,7 +611,20 @@ function oeffneAnlage(a) {
   $("#anlage-loeschen").classList.toggle("hidden", !a || !!a.ausgabe_id);
   $("#anlage-plan").textContent = a && a.plan && a.plan.length
     ? "Plan: " + a.plan.map(([j, b]) => `${j}: ${euro2(b)}`).join(" · ") : "";
-  $("#anlage-dialog").showModal();
+  // Abgeschlossenes Jahr ab dem Kauf: Kauf und Abschreibung fest; Verkauf/Verschrottung später geht noch
+  const box = $("#anlage-dialog");
+  if (a && a.gesperrt) {
+    const start = a.start_jahr || Number((a.anschaffung_am || "0").slice(0, 4));
+    const jahr = Math.max(...[...abs.zu].filter(j => j >= start), start);
+    const abgang = a.abgang_am ? Number(a.abgang_am.slice(0, 4)) : null;
+    const zuAbgang = abgang ? Math.max(...[...abs.zu].filter(j => j >= abgang), abgang) : jahr;
+    lesemodus(box, a.abgang_gesperrt ? zuAbgang : jahr, a.abgang_gesperrt ? {} : {
+      felder: ["anschaffung_am", "kosten", "nutzungsdauer", "start_jahr", "restwert_start", "rest_nutzungsdauer"], knoepfe: false,
+      text: `${jahr} ist abgeschlossen – Kauf und Abschreibung stehen fest. Einen Verkauf oder die Verschrottung kannst du noch eintragen.` });
+    $("#anlage-modus").classList.add("hidden");
+    $("#anlage-loeschen").classList.add("hidden");
+  } else lesemodus(box, null);
+  box.showModal();
 }
 $("#anlage-abbrechen").addEventListener("click", () => $("#anlage-dialog").close());
 $("#anlage-form").addEventListener("submit", async e => {
@@ -767,8 +789,13 @@ async function ladeEuer() {
   $("#euer-pruefliste").innerHTML = d.pruefliste.map(p => `<li class="${p.stufe}">${{ ok: "✓", warn: "⚠", info: "ℹ" }[p.stufe]} ${esc(p.text)}`
     + (p.aktion ? ` – <a href="#" data-pruef="${p.aktion}">${p.aktion === "bezahlt_am" ? "nachtragen" : "ansehen"}</a>` : "") + "</li>").join("");
   $("#euer-export-jahr").textContent = ue.jahr;
+  if (d.abschluss) {
+    if (d.abschluss.status === "zu") abs.zu.add(Number(ue.jahr)); else abs.zu.delete(Number(ue.jahr));
+  }
+  renderAbschlussBand(d.abschluss);
+  $("#einnahme-neu").disabled = istZu(ue.jahr);
   $("#einnahmen-body").innerHTML = d.sonstige.map(x => `<tr data-id="${x.id}"><td>${fmtDate(x.datum)}</td><td>${esc(x.beschreibung)}</td>
-      <td class="num">${euro2(x.betrag)}</td><td class="btns"><button type="button" class="icon del" title="Löschen">✕</button></td></tr>`).join("")
+      <td class="num">${euro2(x.betrag)}</td><td class="btns">${istZu(ue.jahr) ? "" : `<button type="button" class="icon del" title="Löschen">✕</button>`}</td></tr>`).join("")
     || `<tr><td class="hint" colspan="4">Keine in ${ue.jahr}.</td></tr>`;
 }
 $("#euer-jahr").addEventListener("change", e => { ue.jahr = e.target.value; ladeEuer(); });
@@ -835,6 +862,14 @@ async function renderStartFinanzen() {
     + (neu || grenze ? `<ul class="hinweise">`
       + (grenze ? `<li class="${grenze.stufe}">${grenze.stufe === "rot" ? "⚠ " : ""}${esc(grenze.text)} – <a href="#" data-goto-tab="finanzen">Übersicht</a></li>` : "")
       + (neu ? `<li class="gelb">${esc(neu.text)} – <a href="#" data-pruef="ausgaben">jetzt prüfen</a></li>` : "") + `</ul>` : "");
+  try {   // seit 1.8: dezenter Hinweis, wenn ein Jahr abgeschlossen werden kann (sperrt nichts, lässt sich ausblenden)
+    const h = (await api("abschluss")).hinweis;
+    if (!h) return;
+    let ul = $("#start-finanzen-inhalt ul.hinweise");
+    if (!ul) { ul = document.createElement("ul"); ul.className = "hinweise"; $("#start-finanzen-inhalt").append(ul); }
+    ul.insertAdjacentHTML("beforeend", `<li class="ja-hinweis">🔒 <b>${h} kann abgeschlossen werden</b> – <a href="#" data-abschluss="hinweis" data-jahr="${h}">jetzt prüfen</a>
+      <a href="#" class="ausblenden" data-abschluss="hinweis-aus" data-jahr="${h}">ausblenden</a></li>`);
+  } catch (_) { /* nur ohne Hinweis */ }
 }
 
 // ---------- Paperless: Einstellungen und Abholen ----------
@@ -1218,3 +1253,359 @@ $("#papierkorb-angebot-zu").addEventListener("click", () => {
   papierkorb.angebot.clear();
   zeigePapierkorbAngebot();
 });
+
+
+// ======================= Jahresabschluss (seit 1.8) =======================
+// Ein Jahr wird nie von selbst gesperrt – nur über „Jahr abschließen“. Die Sperre selbst sitzt im Server.
+
+const abs = { zu: new Set(), jahr: null, schritt: 1, daten: null, zurueck: null };
+
+async function ladeAbschlussZu() {
+  try { abs.zu = new Set(await api("abschluss/zu")); } catch (_) { /* ohne Kennzeichnung weiter */ }
+  return abs.zu;
+}
+const istZu = j => abs.zu.has(Number(j));
+
+function gesperrtZeile(vor, jahr) {
+  const da = vor.previousElementSibling?.classList.contains("gesperrt-zeile") ? vor.previousElementSibling : null;
+  if (!istZu(jahr)) { da?.remove(); return; }
+  const z = da || document.createElement("div");
+  z.className = "gesperrt-zeile";
+  z.innerHTML = `<span>🔒 <b>${jahr} ist abgeschlossen</b> – Einträge lassen sich ansehen, aber nicht ändern.</span>
+    <a href="#" data-abschluss-oeffnen="${jahr}">${jahr} wieder öffnen</a>`;
+  if (!da) vor.before(z);
+}
+const schlossChip = j => ` <span class="lock" title="${j} ist abgeschlossen">🔒 ${j}</span>`;
+
+/* Editor nur zum Ansehen: Felder gestrichelt, Speichern/Löschen weg, Hinweis mit „wieder öffnen“.
+   felder: nur diese sperren (sonst alle); jahr = null hebt den Lesemodus auf. */
+function lesemodus(box, jahr, { felder = null, knoepfe = true, text = null } = {}) {
+  box.querySelector(".gesperrt-zeile.lesen")?.remove();
+  box.querySelectorAll(".nur-lesen").forEach(x => x.classList.remove("nur-lesen"));
+  box.querySelectorAll("[data-ja-aus]").forEach(x => { x.hidden = false; delete x.dataset.jaAus; });
+  box.querySelectorAll("[data-ja-readonly]").forEach(x => { x.readOnly = false; x.tabIndex = 0; delete x.dataset.jaReadonly; });
+  if (!jahr) return;
+  const ziele = felder ? felder.map(n => box.querySelector(`[name="${n}"]`)).filter(Boolean) : [...box.querySelectorAll("input, select, textarea")];
+  for (const f of ziele) {
+    f.classList.add("nur-lesen");
+    if ("readOnly" in f && f.tagName !== "SELECT") { f.readOnly = true; f.dataset.jaReadonly = "1"; }
+  }
+  if (!felder) box.querySelector("form")?.classList.add("nur-lesen");
+  if (knoepfe) {
+    box.querySelectorAll("button[type=submit], .ja-weg").forEach(b => { if (!b.hidden) { b.hidden = true; b.dataset.jaAus = "1"; } });
+  }
+  const ziel = box.querySelector(".actions") || box.querySelector("form") || box;
+  ziel.insertAdjacentHTML("beforebegin", `<div class="gesperrt-zeile lesen"><span>🔒 ${text || `${jahr} ist abgeschlossen – nur ansehen.`}</span>
+    <a href="#" data-abschluss-oeffnen="${jahr}">${jahr} wieder öffnen</a></div>`);
+}
+
+// ---------- EÜR: Band oben ----------
+function renderAbschlussBand(st) {
+  const b = $("#abschluss-band");
+  if (!st) { b.classList.add("hidden"); return; }
+  const j = st.jahr, a = st.aktuell;
+  b.classList.remove("hidden");
+  b.classList.toggle("zu", st.status === "zu");
+  b.classList.toggle("abweichung", !!st.abweichung);
+  $("#euer-pruefliste-karte").classList.toggle("hidden", st.status === "zu");
+  if (st.status === "zu") {
+    const summe = a.pruefsumme;
+    b.innerHTML = `<div><b>🔒 ${j} abgeschlossen</b> am ${fmtDate(a.abgeschlossen_am.slice(0, 10))} · Gewinn ${euro2(a.gewinn)}
+        <p class="hint">Fassung ${a.fassung} · Prüfsumme ${summe.slice(0, 4)}…${summe.slice(-4)}${st.abweichung ? " · <b>⚠ Die EÜR weicht heute vom Abschluss ab</b> (z. B. durch eine geänderte Berechnung in einer neuen Version) – bitte prüfen" : ""}</p></div>
+      <div class="knoepfe"><button type="button" class="secondary" data-abschluss="paket">⇩ Paket</button>
+        <button type="button" class="secondary" data-abschluss="blatt">Abschlussblatt</button>
+        <a href="#" data-abschluss-oeffnen="${j}">${j} wieder öffnen</a></div>`;
+  } else if (st.status === "offen") {
+    const wieder = st.fassungen.length ? ` Zuletzt wieder geöffnet am ${fmtDate(st.fassungen.at(-1).geoeffnet_am.slice(0, 10))}: „${esc(st.fassungen.at(-1).grund)}“.` : "";
+    b.innerHTML = `<div><b>${j} ist noch offen</b><p class="hint">Wenn alles drin ist, kannst du das Jahr abschließen. Bis dahin lässt sich alles ändern – ein Jahr wird nie von selbst gesperrt.${wieder}</p></div>
+      <div class="knoepfe"><button type="button" data-abschluss="start">🔒 ${j} abschließen …</button></div>`;
+  } else {
+    b.innerHTML = `<div><b>${j} läuft noch</b><p class="hint">Abschließen geht ab dem ${fmtDate(st.abschliessbar_ab)} – nach den 10 Tagen um den Jahreswechsel.</p></div>`;
+  }
+  b.dataset.jahr = j;
+}
+
+// ---------- Assistent ----------
+function schrittAnzeigen(n) {
+  abs.schritt = n;
+  $$("#abschluss-schritte li").forEach(li => {
+    const s = Number(li.dataset.schritt);
+    li.classList.toggle("an", s === n);
+    li.classList.toggle("fertig", s < n);
+    li.querySelector("b").textContent = s < n ? "✓" : s;
+  });
+}
+
+async function abschlussStarten(jahr) {
+  abs.jahr = Number(jahr);
+  $("#abschluss-titel").textContent = `${jahr} abschließen`;
+  zurueckKnopf(null);
+  await abschlussSchritt1();
+  if (!$("#abschluss-dialog").open) $("#abschluss-dialog").showModal();
+}
+
+async function abschlussLaden() {
+  abs.daten = await api(`abschluss/${abs.jahr}/pruefung`);
+  return abs.daten;
+}
+
+async function abschlussSchritt1() {
+  let p;
+  try { p = await abschlussLaden(); } catch (e) { return toast(e.message, true); }
+  schrittAnzeigen(1);
+  const zeichen = { rot: "✕", gelb: "?", ok: "✓", info: "ℹ" };
+  const aktion = x => {
+    if (x.aktion) return `<a href="#" data-abschluss-ansehen="${x.aktion}">${x.aktion === "bezahlt_am" ? "nachtragen" : "ansehen"}</a>`;
+    if (x.art === "offen") return `<div class="wahl" data-rechnung="${x.id}"><button type="button" class="small secondary an" data-wahl="offen">noch offen</button>
+      <button type="button" class="small secondary" data-wahl="bezahlt">bezahlt am …</button></div>`;
+    if (x.art === "zehn_tage") return `<div class="wahl" data-ausgabe="${x.id}">${x.jahre.map(j =>
+      `<button type="button" class="small secondary${j === x.gewaehlt ? " an" : ""}" data-jahr="${j}">${j}</button>`).join("")}</div>`;
+    if (x.art === "einstellungen") return `<a href="#" data-abschluss-ansehen="einstellungen">ändern</a>`;
+    return "<span></span>";
+  };
+  $("#abschluss-inhalt").innerHTML = `<ul class="ja-liste">${p.punkte.map(x => `<li class="${x.stufe}"><span class="z">${zeichen[x.stufe]}</span>
+      <div>${esc(x.text)}${x.klein ? `<small>${esc(x.klein)}</small>` : ""}</div>${aktion(x)}</li>`).join("")}</ul>
+    <p class="hint">${p.offen ? `Noch ${p.offen} rot markierte${p.offen === 1 ? "r Punkt" : " Punkte"}: „ansehen“ öffnet die Stelle, unten rechts geht es zurück zum Abschluss.`
+      : "Alles erledigt. Die gelben Punkte bitte kurz ansehen – ein Klick ändert die Antwort sofort."}</p>`;
+  $("#abschluss-aktionen").innerHTML = `<button type="button" class="secondary" data-abschluss="schliessen">Später</button>
+    <button type="button" data-abschluss="weiter2"${p.offen ? " disabled" : ""}>Weiter →</button>`;
+}
+
+function abschlussSchritt2() {
+  const p = abs.daten, z = p.zahlen, v = p.vorjahr, j = abs.jahr;
+  schrittAnzeigen(2);
+  const pz = (a, b) => (b ? `${a >= b ? "+" : "−"} ${Math.abs(Math.round((a - b) / Math.abs(b) * 100))} %` : "");
+  const g = p.grenzen[0];
+  $("#abschluss-inhalt").innerHTML = `<div class="ja-kacheln"><div><b>${z.anzahl_rechnungen}</b>Zahlungseingänge</div><div><b>${z.ausgaben_anzahl}</b>Ausgaben</div>
+      <div><b>${z.fahrten_anzahl}</b>Fahrten</div><div><b>${z.anlagen_anzahl}</b>Anschaffung${z.anlagen_anzahl === 1 ? "" : "en"}</div></div>
+    <table class="ja-zahlen"><thead><tr><th></th><th>${j}</th><th>${j - 1}</th><th>Änderung</th></tr></thead><tbody>
+      <tr><td>Einnahmen</td><td>${euro2(z.einnahmen)}</td><td>${euro2(v.einnahmen)}</td><td class="pl">${pz(z.einnahmen, v.einnahmen)}</td></tr>
+      <tr><td>Ausgaben</td><td>${euro2(z.ausgaben)}</td><td>${euro2(v.ausgaben)}</td><td class="pl">${pz(z.ausgaben, v.ausgaben)}</td></tr>
+      ${z.afa || v.afa ? `<tr><td>&nbsp;&nbsp;davon Abschreibungen</td><td>${euro2(z.afa)}</td><td>${euro2(v.afa)}</td><td class="pl"></td></tr>` : ""}
+      ${z.fahrtkosten || v.fahrtkosten ? `<tr><td>&nbsp;&nbsp;davon Fahrten (${z.km.toLocaleString("de-DE")} km)</td><td>${euro2(z.fahrtkosten)}</td><td>${euro2(v.fahrtkosten)}</td><td class="pl"></td></tr>` : ""}
+      <tr class="gewinn"><td>${z.gewinn >= 0 ? "Gewinn" : "Verlust"}</td><td>${euro2(z.gewinn)}</td><td>${euro2(v.gewinn)}</td>
+        <td class="pl">${z.gewinn >= v.gewinn ? "+" : "−"} ${euro2(Math.abs(z.gewinn - v.gewinn))}</td></tr></tbody></table>
+    ${g ? `<ul class="ja-liste"><li class="${g.stufe === "ok" ? "ok" : "gelb"}"><span class="z">${g.stufe === "ok" ? "✓" : "!"}</span><div>${esc(g.text)}</div><span></span></li></ul>` : ""}
+    <p class="hint">Sieht etwas komisch aus? „Später“, den Eintrag korrigieren und neu starten – noch ist nichts gesperrt.</p>`;
+  $("#abschluss-aktionen").innerHTML = `<button type="button" class="secondary" data-abschluss="zurueck1">← Zurück</button>
+    <button type="button" data-abschluss="weiter3">Stimmt so →</button>`;
+}
+
+function abschlussSchritt3() {
+  const j = abs.jahr;
+  schrittAnzeigen(3);
+  $("#abschluss-inhalt").innerHTML = `<p>Die App legt ein Paket an und sperrt ${j} gegen Änderungen.</p>
+    <div class="paket"><b>📦 Jahresabschluss_${j}_Fassung_${(abs.daten.status.fassungen.at(-1)?.fassung || 0) + 1}.zip</b><ul>
+      <li>Abschlussblatt (PDF) mit allen Zahlen und Prüfsumme</li>
+      <li>EÜR, Rechnungen, Einnahmen, Ausgaben, Fahrten, Anlagenverzeichnis (Tabellen)</li>
+      <li>alle Rechnungen und Belege von ${j} im Original</li></ul></div>
+    <ul class="ja-liste">
+      <li><span class="z">✓</span><div>Ansehen, herunterladen und Rechnungen erneut schicken geht weiter</div><span></span></li>
+      <li><span class="z">✓</span><div>Offene Rechnungen von ${j} kannst du später als bezahlt markieren – das ändert ${j} nicht</div><span></span></li>
+      <li><span class="z">🔒</span><div>Ändern, löschen und neue Einträge mit Datum ${j} gehen erst nach „${j} wieder öffnen“</div><span></span></li></ul>
+    <label class="ja-bestaetigen"><input type="checkbox" id="abschluss-geprueft"> Ich habe die Zahlen geprüft.</label>`;
+  $("#abschluss-aktionen").innerHTML = `<button type="button" class="secondary" data-abschluss="zurueck2">← Zurück</button>
+    <button type="button" data-abschluss="abschliessen" disabled>🔒 ${j} abschließen</button>`;
+  $("#abschluss-geprueft").addEventListener("change", e => { $("[data-abschluss=abschliessen]").disabled = !e.target.checked; });
+}
+
+async function abschlussAusfuehren(btn) {
+  btn.disabled = true;
+  btn.textContent = "Paket wird erstellt …";
+  try {
+    await api(`abschluss/${abs.jahr}`, { method: "POST", body: { bestaetigt: true } });
+  } catch (e) {
+    btn.disabled = false;
+    btn.textContent = `🔒 ${abs.jahr} abschließen`;
+    return toast(e.message, true);
+  }
+  $("#abschluss-dialog").close();
+  await ladeAbschlussZu();
+  toast(`🔒 ${abs.jahr} abgeschlossen – Paket und Abschlussblatt liegen unter EÜR & Export.`);
+  ue.jahr = String(abs.jahr);
+  ladeEuer();
+  renderStartFinanzen();
+}
+
+function zurueckKnopf(jahr) {
+  $(".ja-zurueck")?.remove();
+  abs.zurueck = jahr;
+  if (jahr) document.body.insertAdjacentHTML("beforeend",
+    `<button type="button" class="ja-zurueck" data-abschluss="zurueck-assistent">← Zurück zum Abschluss ${jahr}</button>`);
+}
+
+function jahrWaehlen(sel, jahr) {
+  const s = $(sel);
+  if (s && [...s.options].some(o => o.value === String(jahr)) && s.value !== String(jahr)) {
+    s.value = String(jahr);
+    s.dispatchEvent(new Event("change"));
+  }
+}
+
+$("#abschluss-dialog").addEventListener("click", async e => {
+  const w = e.target.closest(".wahl button");
+  if (w) {
+    const box = w.closest(".wahl");
+    try {
+      if (box.dataset.ausgabe) {
+        await api(`ausgaben/${box.dataset.ausgabe}/euer-jahr`, { method: "PUT", body: { jahr: Number(w.dataset.jahr) } });
+        toast(`Zählt jetzt zu ${w.dataset.jahr}`);
+        return abschlussSchritt1();
+      }
+      if (w.dataset.wahl === "offen") { box.querySelectorAll("button").forEach(b => b.classList.toggle("an", b === w)); box.querySelector("input")?.remove(); return; }
+      if (w.dataset.wahl === "bezahlt" && !box.querySelector("input")) {
+        box.insertAdjacentHTML("beforeend", `<input type="date" aria-label="Bezahlt am" max="${today()}"><button type="button" class="small" data-wahl="speichern">✓</button>`);
+        box.querySelectorAll("button").forEach(b => b.classList.toggle("an", b === w));
+        return box.querySelector("input").focus();
+      }
+      if (w.dataset.wahl === "speichern") {
+        const datum = box.querySelector("input").value;
+        if (!datum) return toast("Bitte das Datum des Zahlungseingangs eintragen.", true);
+        await api(`rechnungen/${box.dataset.rechnung}/bezahlt`, { method: "PATCH", body: { bezahlt: true } });
+        await api(`rechnungen/${box.dataset.rechnung}/bezahlt_am`, { method: "PUT", body: { bezahlt_am: datum } });
+        toast("Als bezahlt eingetragen");
+        state.rechnungen = [];
+        return abschlussSchritt1();
+      }
+    } catch (err) { return toast(err.message, true); }
+  }
+  const ansehen = e.target.closest("[data-abschluss-ansehen]");
+  if (ansehen) {
+    e.preventDefault();
+    const ziel = ansehen.dataset.abschlussAnsehen;
+    $("#abschluss-dialog").close();
+    zurueckKnopf(abs.jahr);
+    if (ziel === "bezahlt_am") return oeffneBezahltAm();
+    if (ziel === "einstellungen") {
+      $("#einstellungen-btn").click();
+      setTimeout(() => { $("#jahre-einstellungen").open = true; $("#jahre-einstellungen").scrollIntoView({ block: "center" }); }, 500);
+      return;
+    }
+    showTab(ziel);
+    setTimeout(() => jahrWaehlen(`#${ziel}-jahr`, abs.jahr), 200);
+  }
+});
+
+document.addEventListener("click", e => {
+  const b = e.target.closest("[data-abschluss]");
+  const auf = e.target.closest("[data-abschluss-oeffnen]");
+  if (auf) { e.preventDefault(); return wiederOeffnen(Number(auf.dataset.abschlussOeffnen)); }
+  if (!b) return;
+  e.preventDefault();
+  const jahr = Number($("#abschluss-band").dataset.jahr);
+  switch (b.dataset.abschluss) {
+    case "start": return abschlussStarten(jahr);
+    case "schliessen": return $("#abschluss-dialog").close();
+    case "weiter2": return abschlussSchritt2();
+    case "zurueck1": return abschlussSchritt1();
+    case "weiter3": return abschlussSchritt3();
+    case "zurueck2": return abschlussSchritt2();
+    case "abschliessen": return abschlussAusfuehren(b);
+    case "paket": return ladeHerunter(`api/abschluss/${jahr}/paket`);
+    case "blatt": return zeigePdf(`api/abschluss/${jahr}/blatt`);
+    case "zurueck-assistent": {
+      const j = abs.zurueck;
+      zurueckKnopf(null);
+      document.querySelectorAll("dialog[open]").forEach(d => d.close());
+      showTab("euer");
+      ue.jahr = String(j);
+      ladeEuer();
+      return abschlussStarten(j);
+    }
+    case "hinweis": {
+      showTab("euer");
+      ue.jahr = b.dataset.jahr;
+      ladeEuer();
+      return abschlussStarten(Number(b.dataset.jahr));
+    }
+    case "hinweis-aus":
+      api("abschluss/hinweis-aus", { method: "POST", body: { jahr: Number(b.dataset.jahr) } }).catch(() => {});
+      b.closest("li")?.remove();
+      return toast("Hinweis ausgeblendet – unter Finanzen → EÜR & Export bleibt der Knopf.");
+  }
+});
+
+// ---------- Wieder öffnen ----------
+async function wiederOeffnen(jahr) {
+  let u;
+  try { u = await api("abschluss"); } catch (e) { return toast(e.message, true); }
+  const st = u.jahre.find(x => x.jahr === jahr);
+  const d = $("#oeffnen-dialog");
+  d.dataset.jahr = jahr;
+  $("#oeffnen-titel").textContent = `${jahr} wieder öffnen`;
+  $("#oeffnen-text").textContent = `Danach lässt sich ${jahr} wieder ändern. Das Paket von Fassung ${st?.aktuell?.fassung || 1} bleibt erhalten; `
+    + "beim nächsten Abschluss zeigt das Abschlussblatt, warum geöffnet wurde und was sich geändert hat.";
+  $("#oeffnen-vorschlaege").innerHTML = u.vorschlaege.map(t => `<button type="button" class="secondary">${esc(t)}</button>`).join("")
+    + u.gruende.map(t => `<button type="button" class="secondary eigen" title="selbst eingegeben">${esc(t)}</button>`).join("");
+  $("#oeffnen-grund").value = "";
+  $("#oeffnen-ok").textContent = `${jahr} wieder öffnen`;
+  grundPruefen();
+  document.querySelectorAll("dialog[open]").forEach(x => x.close());
+  d.showModal();
+  $("#oeffnen-grund").focus();
+}
+const grundTeile = () => $("#oeffnen-grund").value.split(" · ").map(s => s.trim()).filter(Boolean);
+function grundPruefen() {
+  $("#oeffnen-ok").disabled = !$("#oeffnen-grund").value.trim();
+  const teile = grundTeile();
+  $$("#oeffnen-vorschlaege button").forEach(b => b.classList.toggle("an", teile.includes(b.textContent)));
+}
+$("#oeffnen-vorschlaege").addEventListener("click", e => {
+  const b = e.target.closest("button");
+  if (!b) return;
+  const teile = grundTeile();
+  const i = teile.indexOf(b.textContent);
+  if (i >= 0) teile.splice(i, 1); else teile.push(b.textContent);
+  $("#oeffnen-grund").value = teile.join(" · ");
+  grundPruefen();
+  $("#oeffnen-grund").focus();
+});
+$("#oeffnen-grund").addEventListener("input", grundPruefen);
+$("#oeffnen-abbrechen").addEventListener("click", () => $("#oeffnen-dialog").close());
+$("#oeffnen-ok").addEventListener("click", async () => {
+  const jahr = Number($("#oeffnen-dialog").dataset.jahr);
+  try { await api(`abschluss/${jahr}/oeffnen`, { method: "POST", body: { grund: $("#oeffnen-grund").value } }); }
+  catch (e) { return toast(e.message, true); }
+  $("#oeffnen-dialog").close();
+  await ladeAbschlussZu();
+  toast(`${jahr} ist wieder offen – ändern und danach erneut abschließen.`);
+  const aktiv = document.querySelector("section.tab.active")?.id?.replace("tab-", "");
+  if (aktiv === "euer") ladeEuer();
+  else if (aktiv === "ausgaben") ladeAusgaben();
+  else if (aktiv === "fahrten") ladeFahrten();
+  else if (aktiv === "anschaffungen") ladeAnlagen();
+  else if (aktiv === "liste") loadListe();
+});
+
+// ---------- Einstellungen: Kleinunternehmer und Fahrzeug je Jahr ----------
+async function ladeJahreEinstellungen() {
+  let u;
+  try { u = await api("abschluss"); } catch (_) { return; }
+  const aktuell = new Date().getFullYear();
+  const jahre = u.jahre.filter(x => x.jahr < aktuell).reverse();
+  $("#jahre-einstellungen").hidden = !jahre.length;
+  const fz = v => v === "betrieb" ? "Betriebsfahrzeug" : "Privatfahrzeug";
+  $("#jahre-tabelle").innerHTML = `<table class="jahre"><thead><tr><th>Jahr</th><th>Kleinunternehmer</th><th>Fahrzeug</th><th></th></tr></thead><tbody>${jahre.map(x =>
+    x.status === "zu"
+      ? `<tr><td>${x.jahr}</td><td>${x.kleinunternehmer ? "✓ ja" : "nein"}</td><td>${fz(x.fahrzeug)}</td><td><span class="lock">🔒 abgeschlossen</span></td></tr>`
+      : `<tr data-jahr="${x.jahr}"><td>${x.jahr}</td><td><label class="inline" style="margin:0"><input type="checkbox" data-k="kleinunternehmer"${x.kleinunternehmer ? " checked" : ""}> ja</label></td>
+         <td><select data-k="fahrzeug"><option value="privat"${x.fahrzeug !== "betrieb" ? " selected" : ""}>Privatfahrzeug</option>
+           <option value="betrieb"${x.fahrzeug === "betrieb" ? " selected" : ""}>Betriebsfahrzeug</option></select></td><td><span class="hint">offen</span></td></tr>`).join("")}</tbody></table>`;
+}
+$("#jahre-tabelle").addEventListener("change", async e => {
+  const tr = e.target.closest("tr[data-jahr]");
+  if (!tr) return;
+  const body = { kleinunternehmer: tr.querySelector("[data-k=kleinunternehmer]").checked, fahrzeug: tr.querySelector("[data-k=fahrzeug]").value };
+  try {
+    await api(`abschluss/${tr.dataset.jahr}/einstellungen`, { method: "PUT", body });
+    toast(`${tr.dataset.jahr}: ${body.kleinunternehmer ? "Kleinunternehmer" : "umsatzsteuerpflichtig"} · ${body.fahrzeug === "betrieb" ? "Betriebsfahrzeug" : "Privatfahrzeug"} gespeichert`);
+  } catch (err) { toast(err.message, true); ladeJahreEinstellungen(); }
+});
+$("#einstellungen-btn").addEventListener("click", () => ladeJahreEinstellungen());
+
+// Gesperrter Editor: Enter in einem Feld schickt nichts ab
+document.addEventListener("submit", e => {
+  if (e.target.classList.contains("nur-lesen")) { e.preventDefault(); e.stopImmediatePropagation(); }
+}, true);
+
+ladeAbschlussZu();

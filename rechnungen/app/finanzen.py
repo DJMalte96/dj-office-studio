@@ -7,6 +7,7 @@ Status „neu“, bis sie in der App geprüft und übernommen wurden. Die Tabell
 import json
 import os
 import re
+import sqlite3
 from datetime import date, datetime, timezone
 
 from flask import Blueprint, Response, abort, jsonify, request
@@ -62,11 +63,15 @@ def _beleg_pfad(a):
     return None
 
 
+# Jahr einer Ausgabe in der EÜR: Bezahlt-Datum, außer sie ist nach der 10-Tage-Regel einem anderen Jahr zugeordnet (seit 1.8)
+AUS_JAHR = "COALESCE(euer_jahr, substr(COALESCE(bezahlt_am, belegdatum), 1, 4))"
+
+
 def _zeile(r):
     d = dict(r)
     d["erkannt"] = json.loads(d.pop("erkannt_json") or "{}")
     d["kategorie_name"] = KATEGORIEN.get(d["kategorie"], (d["kategorie"],))[0]
-    d["jahr"] = (d.get("bezahlt_am") or d.get("belegdatum") or "")[:4]
+    d["jahr"] = d.get("euer_jahr") or (d.get("bezahlt_am") or d.get("belegdatum") or "")[:4]
     return d
 
 
@@ -74,9 +79,9 @@ def liste(jahr=None):
     """Alle neuen (ungeprüften) Ausgaben + die übernommenen des Jahres (nach Bezahlt-Datum)."""
     with db.connect() as con:
         if jahr:
-            rows = con.execute("SELECT * FROM ausgaben WHERE (status = 'neu' OR COALESCE(bezahlt_am, belegdatum) LIKE ?)"
+            rows = con.execute(f"SELECT * FROM ausgaben WHERE (status = 'neu' OR {AUS_JAHR} = ?)"
                                " AND status != 'papierkorb'"
-                               " ORDER BY status = 'ok', COALESCE(bezahlt_am, belegdatum) DESC, id DESC", (f"{jahr}%",))
+                               " ORDER BY status = 'ok', COALESCE(bezahlt_am, belegdatum) DESC, id DESC", (str(jahr),))
         else:
             rows = con.execute("SELECT * FROM ausgaben WHERE status != 'papierkorb' ORDER BY status = 'ok', COALESCE(bezahlt_am, belegdatum) DESC, id DESC")
         return [_zeile(r) for r in rows]
@@ -276,7 +281,15 @@ def kategorien():
 @bp.get("/api/ausgaben")
 def ausgaben_liste():
     jahr = request.args.get("jahr")
-    return jsonify(liste(jahr if jahr and jahr.isdigit() else None))
+    return jsonify(_mit_sperre(liste(jahr if jahr and jahr.isdigit() else None)))
+
+
+def _mit_sperre(ausgaben, zu=None):
+    """„gesperrt“: übernommene Ausgabe eines abgeschlossenen Jahres – nur ansehen."""
+    zu = db.abgeschlossene_jahre() if zu is None else zu
+    for a in ausgaben:
+        a["gesperrt"] = a["status"] == "ok" and a["jahr"].isdigit() and int(a["jahr"]) in zu
+    return ausgaben
 
 
 @bp.get("/api/ausgaben/lieferanten")
@@ -349,7 +362,7 @@ def ausgabe_anlegen():
 @bp.get("/api/ausgaben/<int:aid>")
 def ausgabe_holen(aid):
     a = holen(aid) or abort(404)
-    return jsonify(a | {"doppelt_verdacht": _doppelt_verdacht(a)})
+    return jsonify(_mit_sperre([a])[0] | {"doppelt_verdacht": _doppelt_verdacht(a)})
 
 
 def _doppelt_verdacht(a):
@@ -629,6 +642,20 @@ def _einstellungen():
     return absender()
 
 
+def einstellungen_im_jahr(jahr, a=None):
+    """Einstellungen mit Kleinunternehmer und Fahrzeug, wie sie in diesem Jahr galten (seit 1.8 je Jahr festgehalten;
+    fehlt ein Jahr – z. B. das laufende –, gelten die aktuellen)."""
+    a = dict(a or _einstellungen())
+    try:
+        with db.connect() as con:
+            r = con.execute("SELECT kleinunternehmer, fahrzeug FROM jahr_einstellungen WHERE jahr = ?", (int(jahr),)).fetchone()
+    except (TypeError, ValueError):
+        r = None
+    if r:
+        a.update(kleinunternehmer=bool(r["kleinunternehmer"]), fahrzeug=r["fahrzeug"])
+    return a
+
+
 def _ssl():
     from main import _ssl_kontext
     return _ssl_kontext()
@@ -731,7 +758,8 @@ def offene_berechnen(ids=None):
         return 0
     with _berechnung:
         with db.connect() as con:
-            sql = "SELECT id, start, ziel FROM fahrten WHERE km_einfach IS NULL"
+            sql = ("SELECT id, start, ziel FROM fahrten WHERE km_einfach IS NULL AND CAST(substr(datum, 1, 4) AS INTEGER)"
+                   " NOT IN (SELECT jahr FROM jahresabschluss WHERE geoeffnet_am IS NULL)")
             rows = [dict(r) for r in con.execute(sql + (f" AND id IN ({','.join('?' * len(ids))})" if ids else ""), ids or ())]
         fertig = 0
         for f in rows:
@@ -741,8 +769,13 @@ def offene_berechnen(ids=None):
                 km, fehler = None, str(e)
             except Exception as e:   # Unerwartetes darf den Hintergrund-Thread nicht lautlos beenden („wird berechnet …“ für immer)
                 km, fehler = None, f"Berechnung fehlgeschlagen ({type(e).__name__})"
-            with db.connect() as con:
-                con.execute("UPDATE fahrten SET km_einfach = ?, fehler = ? WHERE id = ?", (km, fehler, f["id"]))
+            try:
+                with db.connect() as con:
+                    con.execute("UPDATE fahrten SET km_einfach = ?, fehler = ? WHERE id = ?", (km, fehler, f["id"]))
+            except sqlite3.IntegrityError as e:   # Jahr wurde inzwischen abgeschlossen
+                if not db.ist_gesperrt_fehler(e):
+                    raise
+                continue
             fertig += km is not None
         return fertig
 
@@ -753,7 +786,8 @@ def fahrten_api_liste():
     a = _einstellungen()
     liste_ = fahrten_liste(jahr if jahr and jahr.isdigit() else None)
     # Offene Fahrten ohne laufende Berechnung (Kartendienst später eingeschaltet, App neu gestartet …) → jetzt anstoßen
-    offen = [f["id"] for f in liste_ if f["km_einfach"] is None and not f["fehler"]]
+    zu_jahre = db.abgeschlossene_jahre()
+    offen = [f["id"] for f in liste_ if f["km_einfach"] is None and not f["fehler"] and int(f["datum"][:4]) not in zu_jahre]
     if offen and a.get("kartendienst") and not _berechnung.locked():
         _im_hintergrund(offene_berechnen, offen)
         liste_ = fahrten_liste(jahr if jahr and jahr.isdigit() else None)
@@ -764,7 +798,11 @@ def fahrten_api_liste():
             ohne = [{"id": r["id"], "nummer": r["nummer"], "kunde": json.loads(r["kunde_json"]).get("name", "")}
                     for r in con.execute("SELECT id, nummer, kunde_json FROM rechnungen WHERE datum LIKE ? AND storno_von IS NULL"
                                          " AND fahrt_erfassen = 0 ORDER BY nummer", (f"{jahr}%",)) if r["id"] not in mit]
-    return jsonify({"fahrten": liste_, "ohne_fahrt": ohne, "fahrzeug": a.get("fahrzeug"), "km_satz": a.get("km_satz"),
+    zu = db.abgeschlossene_jahre()
+    for f in liste_:
+        f["gesperrt"] = int(f["datum"][:4]) in zu
+    fz = einstellungen_im_jahr(jahr, a).get("fahrzeug") if jahr and jahr.isdigit() else a.get("fahrzeug")
+    return jsonify({"fahrten": liste_, "ohne_fahrt": ohne, "fahrzeug": fz, "km_satz": a.get("km_satz"),
                     "start": startadresse(a), "kartendienst": bool(a.get("kartendienst"))})
 
 
@@ -1003,7 +1041,19 @@ def _anlage_pruefen(a):
 @bp.get("/api/anlagen")
 def anlagen_api():
     jahr = request.args.get("jahr")
-    return jsonify(anlagen_liste(jahr if jahr and jahr.isdigit() else None))
+    return jsonify(anlagen_sperre(anlagen_liste(jahr if jahr and jahr.isdigit() else None)))
+
+
+def anlagen_sperre(anlagen, zu=None):
+    """„gesperrt“: Kauf und Abschreibung nicht mehr änderbar (ein abgeschlossenes Jahr liegt ab dem Kauf);
+    „abgang_gesperrt“: auch Verkauf/Verschrottung nicht (abgeschlossenes Jahr ab dem Abgang)."""
+    zu = db.abgeschlossene_jahre() if zu is None else zu
+    for a in anlagen:
+        start = a.get("start_jahr") or int((a.get("anschaffung_am") or "0")[:4] or 0)
+        a["gesperrt"] = any(j >= start for j in zu) if start else False
+        abgang = int(a["abgang_am"][:4]) if a.get("abgang_am") else None
+        a["abgang_gesperrt"] = bool(abgang) and any(j >= abgang for j in zu)
+    return anlagen
 
 
 @bp.post("/api/anlagen")
@@ -1058,7 +1108,7 @@ def anlage_zur_ausgabe(aid):
                 con.execute("DELETE FROM anlagen WHERE id = ?", (vorhanden["id"],))
                 con.execute("UPDATE ausgaben SET anlage_id = NULL WHERE id = ?", (aid,))
             return
-        a_ein = _einstellungen()
+        a_ein = einstellungen_im_jahr((a["bezahlt_am"] or a["belegdatum"] or "0")[:4])
         kosten = a["betrag"] or 0
         if not a_ein.get("kleinunternehmer") and a.get("ust_satz"):
             kosten = round(kosten / (1 + a["ust_satz"] / 100), 2)    # Umsatzsteuerpflichtige schreiben netto ab
@@ -1167,7 +1217,7 @@ def _r2(v):
 def euer(jahr, a=None):
     """EÜR eines Jahres: Einnahmen nach Zahlungseingang, Ausgaben nach Bezahlt-Datum, Fahrten, Abschreibung.
     Kleinunternehmer rechnen brutto; Umsatzsteuerpflichtige netto mit Umsatzsteuer/Vorsteuer als eigenen Zeilen."""
-    a = a or _einstellungen()
+    a = einstellungen_im_jahr(jahr, a)
     jahr = str(jahr)
     ku = bool(a.get("kleinunternehmer"))
     monate = {m: {"einnahmen": 0.0, "ausgaben": 0.0} for m in range(1, 13)}
@@ -1215,7 +1265,7 @@ def euer(jahr, a=None):
     vorsteuer = 0.0
     with db.connect() as con:
         ausgaben = [dict(x) for x in con.execute(
-            "SELECT * FROM ausgaben WHERE status = 'ok' AND COALESCE(bezahlt_am, belegdatum) LIKE ?", (f"{jahr}%",))]
+            f"SELECT * FROM ausgaben WHERE status = 'ok' AND {AUS_JAHR} = ?", (str(jahr),))]
     for x in ausgaben:
         if x["kategorie"] == "anschaffung":
             continue                          # über die Abschreibung
@@ -1223,7 +1273,9 @@ def euer(jahr, a=None):
         netto = brutto / (1 + x["ust_satz"] / 100) if x.get("ust_satz") and not ku and x["kategorie"] != "ust" else brutto
         kategorien[x["kategorie"]] = kategorien.get(x["kategorie"], 0) + netto
         vorsteuer += brutto - netto
-        monate[int((x["bezahlt_am"] or x["belegdatum"])[5:7])]["ausgaben"] += brutto
+        tag = x["bezahlt_am"] or x["belegdatum"]
+        monat = int(tag[5:7]) if tag[:4] == jahr else (12 if tag[:4] > jahr else 1)   # 10-Tage-Regel: anderes Jahr
+        monate[monat]["ausgaben"] += brutto
 
     privat = a.get("fahrzeug", "privat") != "betrieb"
     fahrten = fahrten_liste(jahr)
@@ -1269,9 +1321,9 @@ def pruefliste(jahr, a, rechnungen=None):
     with db.connect() as con:
         neu = con.execute("SELECT COUNT(*) FROM ausgaben WHERE status = 'neu'").fetchone()[0]
         ohne_beleg = con.execute("SELECT COUNT(*) FROM ausgaben WHERE status = 'ok' AND beleg_datei IS NULL"
-                                 " AND COALESCE(bezahlt_am, belegdatum) LIKE ?", (f"{jahr}%",)).fetchone()[0]
+                                 f" AND {AUS_JAHR} = ?", (str(jahr),)).fetchone()[0]
         tank = con.execute("SELECT COUNT(*) FROM ausgaben WHERE status = 'ok' AND kategorie = 'fahrzeug'"
-                           " AND COALESCE(bezahlt_am, belegdatum) LIKE ?", (f"{jahr}%",)).fetchone()[0]
+                           f" AND {AUS_JAHR} = ?", (str(jahr),)).fetchone()[0]
         km_fehlen = con.execute("SELECT COUNT(*) FROM fahrten WHERE km_einfach IS NULL AND datum LIKE ?", (f"{jahr}%",)).fetchone()[0]
     ohne_datum = [r for r in rechnungen if r["bezahlt"] and not r.get("bezahlt_am") and not r.get("storno_von")
                   and r["datum"][:4] in (jahr, str(int(jahr) - 1))]
@@ -1299,7 +1351,7 @@ def jahre(heute=None):
     aktuell = (heute or date.today()).year
     with db.connect() as con:
         werte = [r[0] for r in con.execute(
-            "SELECT COALESCE(bezahlt_am, belegdatum) FROM ausgaben WHERE status != 'papierkorb'"
+            f"SELECT {AUS_JAHR} FROM ausgaben WHERE status != 'papierkorb'"
             " UNION SELECT datum FROM rechnungen UNION SELECT bezahlt_am FROM rechnungen"
             " UNION SELECT datum FROM fahrten UNION SELECT datum FROM einnahmen_sonstige")]
     for a in anlagen_liste():               # ohne Anlagen aus dem Papierkorb
@@ -1319,7 +1371,8 @@ def euer_api():
     jahr = request.args.get("jahr") or str(date.today().year)
     if not jahr.isdigit():
         abort(400)
-    return jsonify(euer(jahr))
+    import abschluss   # zur Laufzeit (abschluss bindet dieses Modul ein)
+    return jsonify(euer(jahr) | {"abschluss": abschluss.status(jahr)})
 
 
 @bp.get("/api/finanzen/ohne-bezahltdatum")
@@ -1333,7 +1386,8 @@ def bezahlt_am_aus_rechnungsdatum():
     """Alle bezahlten Rechnungen ohne Bezahlt-Datum bekommen ihr Rechnungsdatum (z. B. nach einem Import)."""
     with db.connect() as con:
         n = con.execute("UPDATE rechnungen SET bezahlt_am = datum WHERE bezahlt = 1 AND bezahlt_am IS NULL"
-                        " AND storno_von IS NULL").rowcount
+                        " AND storno_von IS NULL AND CAST(substr(datum, 1, 4) AS INTEGER)"
+                        " NOT IN (SELECT jahr FROM jahresabschluss WHERE geoeffnet_am IS NULL)").rowcount
     return jsonify({"anzahl": n})
 
 
@@ -1351,8 +1405,10 @@ def bezahlt_am_setzen(inv_id):
 @bp.get("/api/einnahmen")
 def einnahmen_liste():
     jahr = request.args.get("jahr") or str(date.today().year)
+    zu = db.abgeschlossene_jahre()
     with db.connect() as con:
-        return jsonify([dict(x) for x in con.execute("SELECT * FROM einnahmen_sonstige WHERE datum LIKE ? ORDER BY datum DESC", (f"{jahr}%",))])
+        return jsonify([dict(x) | {"gesperrt": int(x["datum"][:4]) in zu}
+                        for x in con.execute("SELECT * FROM einnahmen_sonstige WHERE datum LIKE ? ORDER BY datum DESC", (f"{jahr}%",))])
 
 
 @bp.post("/api/einnahmen")
@@ -1402,6 +1458,7 @@ def _b(v):
 
 def export_finanzen(zf, jahr, a):
     """EÜR, Einnahmen, Ausgaben, Fahrten, Anlagenverzeichnis als CSV und alle Ausgaben-Belege in die Export-ZIP."""
+    a = einstellungen_im_jahr(jahr, a)
     e = euer(jahr, a)
     zeilen = [["Bereich", "Position", "Zuordnung Anlage EÜR", "Betrag (EUR)"]]
     zeilen += [["Betriebseinnahmen", z["name"], "", _b(z["betrag"])] for z in e["einnahmen_zeilen"]]
@@ -1428,8 +1485,8 @@ def export_finanzen(zf, jahr, a):
             "Privatanteil %", "Betrieblich (EUR)", "Beleg-Datei", "Notiz"]]
     benutzt = set()
     with db.connect() as con:
-        liste_ = [_zeile(x) for x in con.execute("SELECT * FROM ausgaben WHERE status = 'ok' AND COALESCE(bezahlt_am, belegdatum) LIKE ?"
-                                                 " ORDER BY COALESCE(bezahlt_am, belegdatum), id", (f"{jahr}%",))]
+        liste_ = [_zeile(x) for x in con.execute(f"SELECT * FROM ausgaben WHERE status = 'ok' AND {AUS_JAHR} = ?"
+                                                 " ORDER BY COALESCE(bezahlt_am, belegdatum), id", (str(jahr),))]
     for x in liste_:
         datei = ""
         if x.get("beleg_datei"):

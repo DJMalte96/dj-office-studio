@@ -2,6 +2,20 @@
 
 Alle Änderungen an DJ Office Studio. Neueste Version oben.
 
+## 1.8.0 – 2026-11-23
+
+### Neu
+- **Jahr abschließen** (Finanzen → EÜR & Export): ein fertiges Jahr in drei Schritten prüfen, kontrollieren und abschließen – ab dem 11. Januar des Folgejahres. Ein Jahr wird nie von selbst gesperrt. Die Startseite erinnert dezent daran (ausblendbar).
+  - **Prüfen**: Rot markierte Punkte müssen erledigt sein; „ansehen“ führt hin und unten rechts wieder zurück. Gelb: noch offene Rechnungen (auch gleich mit Datum als bezahlt eintragen) und regelmäßige Zahlungen in den 10 Tagen um Silvester (10-Tage-Regel, einem Jahr zuordnen).
+  - **Kontrollieren**: Einnahmen, Ausgaben und Gewinn im Vergleich zum Vorjahr, dazu die Kleinunternehmer-Grenze.
+  - **Abschließen**: Paket mit Abschlussblatt (PDF), EÜR, allen Tabellen, Rechnungen und Belegen sowie SHA-256-Prüfsummen. Paket und Blatt liegen unter EÜR & Export und sind in der Datensicherung enthalten.
+- **Gesperrtes Jahr**: Einträge tragen ein 🔒 und öffnen sich nur zum Ansehen. Die Sperre sitzt in der Datenbank und gilt auf allen Wegen – Oberfläche, Import, Hintergrundaufgaben. Erneut verschicken, herunterladen, exportieren, eine offene Rechnung später bezahlen und ein Gerät später verkaufen gehen weiter.
+- **Wieder öffnen** mit Grund – Vorschläge zum Antippen, eigene Gründe merkt sich die App. Das alte Paket bleibt; das Abschlussblatt der nächsten Fassung zeigt Grund und Änderung beim Gewinn.
+- **Kleinunternehmer und Fahrzeug je Jahr**: Die Einstellungen gelten fürs laufende Jahr, frühere Jahre behalten ihre Werte (⚙ Einstellungen → Steuer → Frühere Jahre).
+
+### Behoben
+- Eine Änderung von Kleinunternehmer oder Fahrzeug in den Einstellungen änderte rückwirkend die EÜR aller früheren Jahre. Beim Update werden die vergangenen Jahre mit den heutigen Einstellungen festgehalten.
+
 ## 1.7.3 – 2026-11-23
 
 ### Sicherheit

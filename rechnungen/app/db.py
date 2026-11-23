@@ -168,7 +168,105 @@ CREATE TABLE IF NOT EXISTS angebote (
     rechnung_id INTEGER REFERENCES rechnungen(id) ON DELETE SET NULL,
     erstellt TEXT DEFAULT CURRENT_TIMESTAMP
 );
+-- seit 1.8: Jahresabschluss. Eine Zeile je Fassung; das Jahr ist zu, solange die neueste Fassung nicht wieder geöffnet ist.
+CREATE TABLE IF NOT EXISTS jahresabschluss (
+    jahr INTEGER NOT NULL,
+    fassung INTEGER NOT NULL,
+    abgeschlossen_am TEXT NOT NULL,
+    gewinn REAL NOT NULL,
+    euer_json TEXT NOT NULL,                     -- EÜR zum Zeitpunkt des Abschlusses
+    pruefsumme TEXT NOT NULL,                    -- SHA-256 über die Dateien des Pakets
+    datei TEXT NOT NULL,                         -- Paket, relativ zum Datenordner
+    version TEXT DEFAULT '',                     -- App-Version beim Abschluss
+    geoeffnet_am TEXT,                           -- wieder geöffnet (NULL = gilt noch)
+    grund TEXT,
+    PRIMARY KEY (jahr, fassung)
+);
+-- seit 1.8: Kleinunternehmer und Fahrzeug je Jahr (fehlt ein Jahr: aktuelle Einstellungen)
+CREATE TABLE IF NOT EXISTS jahr_einstellungen (
+    jahr INTEGER PRIMARY KEY,
+    kleinunternehmer INTEGER NOT NULL,
+    fahrzeug TEXT NOT NULL
+);
 """
+
+# ---------- Sperre abgeschlossener Jahre (seit 1.8) ----------
+# Die Datenbank selbst weist jede Änderung ab, die die EÜR eines abgeschlossenen Jahres verändern würde – egal über
+# welchen Weg (Oberfläche, Hintergrundaufgabe, Import). Spalten ohne Einfluss auf Beträge (Notiz, Belegdatei …) bleiben frei.
+GESPERRT = "DJOS_GESPERRT"
+_ZU = "EXISTS (SELECT 1 FROM jahresabschluss WHERE geoeffnet_am IS NULL AND jahr = {})"
+_ZU_AB = "EXISTS (SELECT 1 FROM jahresabschluss WHERE geoeffnet_am IS NULL AND jahr >= {})"
+_J = "CAST(substr({}, 1, 4) AS INTEGER)"
+
+
+def _ausgabe_zu(x):
+    jahr = f"CAST(COALESCE({x}.euer_jahr, substr(COALESCE({x}.bezahlt_am, {x}.belegdatum), 1, 4)) AS INTEGER)"
+    return f"({x}.status = 'ok' AND {_ZU.format(jahr)})"
+
+
+def _rechnung_zu(x):
+    jahr = (f"CASE WHEN {x}.storno_von IS NOT NULL THEN {_J.format(x + '.datum')}"
+            f" WHEN {x}.bezahlt = 1 THEN {_J.format(x + '.bezahlt_am')} END")
+    return _ZU.format(jahr)
+
+
+def _anlage_plan_zu(x):
+    return _ZU_AB.format(f"COALESCE({x}.start_jahr, {_J.format(x + '.anschaffung_am')})")
+
+
+def _geaendert(spalten):
+    return "(" + " OR ".join(f"OLD.{s} IS NOT NEW.{s}" for s in spalten) + ")"
+
+
+def _sperr_trigger():
+    """(name, tabelle, ereignis, bedingung) – Bedingung wahr → Änderung abweisen."""
+    aus = ("status", "belegdatum", "bezahlt_am", "betrag", "kategorie", "privatanteil", "ust_satz", "euer_jahr")
+    rech = ("datum", "positionen_json", "gesamt", "bezahlt", "bezahlt_am", "kleinunternehmer", "ust_satz", "storno_von")
+    fahrt = ("datum", "km_einfach", "hin_zurueck", "km_satz")
+    plan = ("kosten", "nutzungsdauer", "anschaffung_am", "restwert_start", "start_jahr", "rest_nutzungsdauer")
+    abgang = ("abgang_am", "abgang_erloes")
+    ein = ("datum", "betrag", "ust_satz")
+    abg = lambda x: _ZU_AB.format(_J.format(x + ".abgang_am"))
+    return [
+        ("ausgaben_neu", "ausgaben", "INSERT", _ausgabe_zu("NEW")),
+        ("ausgaben_aendern", "ausgaben", "UPDATE", f"{_geaendert(aus)} AND ({_ausgabe_zu('OLD')} OR {_ausgabe_zu('NEW')})"),
+        ("ausgaben_loeschen", "ausgaben", "DELETE", _ausgabe_zu("OLD")),
+        ("rechnungen_neu", "rechnungen", "INSERT", _rechnung_zu("NEW")),
+        ("rechnungen_aendern", "rechnungen", "UPDATE", f"{_geaendert(rech)} AND ({_rechnung_zu('OLD')} OR {_rechnung_zu('NEW')})"),
+        ("rechnungen_loeschen", "rechnungen", "DELETE", _rechnung_zu("OLD")),
+        ("fahrten_neu", "fahrten", "INSERT", _ZU.format(_J.format("NEW.datum"))),
+        ("fahrten_aendern", "fahrten", "UPDATE",
+         f"{_geaendert(fahrt)} AND ({_ZU.format(_J.format('OLD.datum'))} OR {_ZU.format(_J.format('NEW.datum'))})"),
+        ("fahrten_loeschen", "fahrten", "DELETE", _ZU.format(_J.format("OLD.datum"))),
+        ("anlagen_neu", "anlagen", "INSERT", f"({_anlage_plan_zu('NEW')} OR {abg('NEW')})"),
+        ("anlagen_plan", "anlagen", "UPDATE", f"{_geaendert(plan)} AND ({_anlage_plan_zu('OLD')} OR {_anlage_plan_zu('NEW')})"),
+        ("anlagen_abgang", "anlagen", "UPDATE", f"{_geaendert(abgang)} AND ({abg('OLD')} OR {abg('NEW')})"),
+        ("anlagen_loeschen", "anlagen", "DELETE", f"({_anlage_plan_zu('OLD')} OR {abg('OLD')})"),
+        ("einnahmen_neu", "einnahmen_sonstige", "INSERT", _ZU.format(_J.format("NEW.datum"))),
+        ("einnahmen_aendern", "einnahmen_sonstige", "UPDATE",
+         f"{_geaendert(ein)} AND ({_ZU.format(_J.format('OLD.datum'))} OR {_ZU.format(_J.format('NEW.datum'))})"),
+        ("einnahmen_loeschen", "einnahmen_sonstige", "DELETE", _ZU.format(_J.format("OLD.datum"))),
+        ("jahre_neu", "jahr_einstellungen", "INSERT", _ZU.format("NEW.jahr")),
+        ("jahre_aendern", "jahr_einstellungen", "UPDATE", f"({_ZU.format('OLD.jahr')} OR {_ZU.format('NEW.jahr')})"),
+        ("jahre_loeschen", "jahr_einstellungen", "DELETE", _ZU.format("OLD.jahr")),
+    ]
+
+
+def _trigger_anlegen(con):
+    """Bei jedem Start neu – so passen die Trigger auch nach dem Einspielen einer älteren Sicherung."""
+    for name, tabelle, ereignis, bedingung in _sperr_trigger():
+        con.execute(f"DROP TRIGGER IF EXISTS sperre_{name}")
+        con.execute(f"CREATE TRIGGER sperre_{name} BEFORE {ereignis} ON {tabelle} WHEN {bedingung}"
+                    f" BEGIN SELECT RAISE(ABORT, '{GESPERRT}'); END")
+
+
+def ist_gesperrt_fehler(e):
+    return isinstance(e, sqlite3.IntegrityError) and GESPERRT in str(e)
+
+
+def abgeschlossene_jahre():
+    with connect() as con:
+        return {r[0] for r in con.execute("SELECT DISTINCT jahr FROM jahresabschluss WHERE geoeffnet_am IS NULL")}
 
 DEFAULT_ZAHLUNGSBEDINGUNGEN = [
     ("Überweisung 8 Tage", "Bitte den Betrag innerhalb der nächsten 8 Tage auf das unten genannte Konto überweisen."),
@@ -260,6 +358,10 @@ def init():
         for tabelle in ("rechnungen", "mahnungen"):
             if "absender_json" not in {r["name"] for r in con.execute(f"PRAGMA table_info({tabelle})")}:
                 con.execute(f"ALTER TABLE {tabelle} ADD COLUMN absender_json TEXT")
+        # seit 1.8: Jahr der EÜR abweichend vom Bezahlt-Datum (10-Tage-Regel für regelmäßige Zahlungen um Silvester)
+        if "euer_jahr" not in {r["name"] for r in con.execute("PRAGMA table_info(ausgaben)")}:
+            con.execute("ALTER TABLE ausgaben ADD COLUMN euer_jahr TEXT")
+        _trigger_anlegen(con)
         for (titel, text), anlass in LEGACY_TEXTBAUSTEINE.items():
             con.execute("UPDATE textbausteine SET titel = ?, text = ?, preis = NULL, grundpreis = NULL,"
                         " grundstunden = NULL, stundensatz = NULL WHERE titel = ? AND text = ?",

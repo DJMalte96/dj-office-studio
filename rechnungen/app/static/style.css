@@ -723,3 +723,68 @@ label .datum-feld > input.datum { margin-top: 0; }
 .absender-liste { max-height: 40vh; overflow: auto; margin: 12px 0; }
 .absender-liste label.inline { display: flex; align-items: flex-start; gap: 8px; margin: 8px 0; }
 .absender-liste span { overflow-wrap: anywhere; }
+
+/* ---------- Jahresabschluss (seit 1.8) ---------- */
+.ja-band { display: flex; gap: 14px; align-items: center; justify-content: space-between; flex-wrap: wrap; padding: 14px 18px;
+  border-radius: 14px; margin-bottom: 20px; background: var(--card); border: 1px solid var(--border); box-shadow: var(--shadow); }
+.ja-band.zu { background: var(--primary-soft); border-color: transparent; }
+.ja-band.abweichung { background: var(--gelb-soft); }
+.ja-band b { font-size: 16px; }
+.ja-band .hint { margin: 2px 0 0; }
+.ja-band .knoepfe { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.ja-band a, dialog.ja a, .gesperrt-zeile a { color: var(--text); font-weight: 650; }
+dialog.ja { width: min(780px, calc(100vw - 24px)); }
+dialog button[disabled] { opacity: .4; cursor: not-allowed; }
+.schritte { display: flex; gap: 6px; margin: 4px 0 18px; padding: 0; list-style: none; }
+.schritte li { flex: 1; padding: 8px 10px; border-radius: 10px; background: var(--input-bg); font-size: 13px; color: var(--muted); font-weight: 600; }
+.schritte li b { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: var(--border);
+  color: var(--text); margin-right: 6px; font-size: 12px; }
+.schritte li.an { background: var(--chip-bg); color: var(--chip-fg); }
+.schritte li.an b, .schritte li.fertig b { background: var(--neon); color: #0b0b0b; }
+ul.ja-liste { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+ul.ja-liste li { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 10px 14px;
+  border-radius: 10px; font-size: 14px; background: var(--input-bg); border-left: 3px solid var(--border); }
+ul.ja-liste li.rot { background: var(--danger-soft); border-left-color: var(--danger); }
+ul.ja-liste li.gelb { background: var(--gelb-soft); border-left-color: var(--gelb); }
+ul.ja-liste li.ok { background: var(--primary-soft); border-left-color: var(--neon); }
+ul.ja-liste li .z { font-weight: 800; text-align: center; }
+ul.ja-liste li small { display: block; color: var(--muted); font-size: 12.5px; margin-top: 2px; }
+.wahl { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; align-items: center; }
+.wahl input[type=date] { width: auto; padding: 4px 8px; }
+.wahl button.an, .chips button.an { background: var(--chip-bg); color: var(--chip-fg); border-color: var(--chip-bg); }
+.ja-zahlen { width: 100%; border-collapse: collapse; font-size: 14px; margin: 6px 0 14px; }
+.ja-zahlen th, .ja-zahlen td { padding: 8px 10px; border-bottom: 1px solid var(--border); text-align: right; font-variant-numeric: tabular-nums; }
+.ja-zahlen th:first-child, .ja-zahlen td:first-child { text-align: left; }
+.ja-zahlen th { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+.ja-zahlen tr.gewinn td { font-weight: 800; font-size: 16px; border-top: 2px solid var(--text); border-bottom: none; }
+.ja-zahlen .pl { color: var(--muted); font-weight: 500; font-size: 13px; }
+.ja-kacheln { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-bottom: 14px; }
+.ja-kacheln div { background: var(--input-bg); border-radius: 10px; padding: 10px 12px; font-size: 13px; color: var(--muted); }
+.ja-kacheln b { display: block; font-size: 20px; color: var(--text); }
+.paket { border: 1px dashed var(--border); border-radius: 12px; padding: 12px 16px; margin: 8px 0 14px; font-size: 14px; }
+.paket ul { margin: 6px 0 0; padding-left: 18px; }
+.ja-bestaetigen { display: flex; gap: 10px; align-items: center; font-size: 14px; margin: 12px 0 4px; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 12px; }
+.chips button { border-radius: 999px; padding: 6px 12px; font-size: 13px; }
+.chips .eigen { border-style: dashed; }
+.lock { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12px; font-weight: 700; background: var(--input-bg);
+  border: 1px solid var(--border); white-space: nowrap; margin-left: 6px; }
+.nur-lesen input:not([type=checkbox]), .nur-lesen select, .nur-lesen textarea, input.nur-lesen, select.nur-lesen {
+  pointer-events: none; background: transparent !important; border-style: dashed !important; box-shadow: none; }
+.nur-lesen input[type=checkbox] { pointer-events: none; }
+.gesperrt-zeile { display: flex; gap: 10px; align-items: center; justify-content: space-between; flex-wrap: wrap; padding: 10px 14px;
+  border-radius: 10px; background: var(--input-bg); font-size: 14px; margin: 8px 0; }
+li.ja-hinweis .ausblenden { float: right; font-weight: 500; color: var(--muted); }
+.ja-zurueck { position: fixed; right: 18px; bottom: 18px; z-index: 40; box-shadow: var(--shadow-lg); }
+details.jahre-einstellungen { margin: 10px 0 4px; }
+details.jahre-einstellungen summary { cursor: pointer; font-weight: 600; font-size: 14px; }
+table.jahre { width: 100%; border-collapse: collapse; font-size: 14px; margin-top: 6px; }
+table.jahre th, table.jahre td { padding: 7px 8px; border-bottom: 1px solid var(--border); text-align: left; }
+table.jahre th { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+table.jahre select { width: auto; }
+@media (max-width: 640px) {
+  .ja-kacheln { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  ul.ja-liste li { grid-template-columns: 22px minmax(0, 1fr); }
+  ul.ja-liste li > :last-child:not(.z):not(div:nth-child(2)) { grid-column: 2; justify-self: start; }
+  .schritte li { font-size: 12px; padding: 6px; }
+}

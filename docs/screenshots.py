@@ -20,9 +20,12 @@ tmp = tempfile.mkdtemp()
 os.environ.update(DATA_DIR=tmp, OPTIONS_PATH=os.path.join(tmp, "options.json"))
 sys.path.insert(0, str(ROOT / "rechnungen" / "app"))
 
+import abschluss  # noqa: E402
 import db  # noqa: E402
 import finanzen  # noqa: E402
 import main  # noqa: E402
+
+abschluss.abschliessbar_ab = lambda j: date(int(j) + 1, 1, 1)   # Vorjahr auch in den ersten Januartagen abschließbar (nur für die Bilder)
 
 finanzen.HINTERGRUND = False   # keine Streckenberechnung im Hintergrund (kein Internet nötig)
 # Belege-Ordner /share/belege (Standard in Home Assistant) nachstellen – leer, damit die Bilder den Normalfall zeigen
@@ -123,6 +126,19 @@ for monat, tag, kunde, anlass, preis in FRUEHER:
                    bezahlt=True)
     c.put(f"/api/rechnungen/{inv}/bezahlt_am", json={"bezahlt_am": (datum + timedelta(days=6)).isoformat()})
     nr += 1
+# Vorjahr: ein paar Auftritte und Ausgaben (für den Jahresabschluss)
+v = heute.year - 1
+for i, (monat, tag, kunde, anlass, preis) in enumerate([(3, 8, "verein", "Vereinsfeier", 650), (6, 21, "anna", "Hochzeit", 1150),
+                                                        (9, 6, "carla", "Geburtstagsfeier", 600), (12, 12, "firma", "Weihnachtsfeier", 700)]):
+    datum = date(v, monat, tag)
+    inv = rechnung(f"02{i}", kunde, datum.isoformat(), [pos(f"DJ – Tätigkeit {anlass} – 19:00 Uhr bis 1:00 Uhr", datum.isoformat(), preis)],
+                   bezahlt=True)
+    c.put(f"/api/rechnungen/{inv}/bezahlt_am", json={"bezahlt_am": (datum + timedelta(days=5)).isoformat()})
+for datum, lieferant, betrag, kategorie, text in [(f"{v}-04-10", "Kabelshop Probe", 54.90, "technik", "Kabeltrommel"),
+                                                  (f"{v}-08-02", "Versicherung Muster", 186.40, "versicherung", "Betriebshaftpflicht"),
+                                                  (f"{v}-12-30", "Mobilfunk Beispiel", 29.99, "telefon", "Handyvertrag Januar")]:
+    c.post("/api/ausgaben", json={"belegdatum": datum, "lieferant": lieferant, "betrag": betrag, "kategorie": kategorie,
+                                  "beschreibung": text, "notiz": "Beleg in Papierform"})
 with db.connect() as con:                                                       # km wie vom Kartendienst berechnet
     for i, (fid,) in enumerate(con.execute("SELECT id FROM fahrten ORDER BY datum DESC").fetchall()):
         con.execute("UPDATE fahrten SET km_einfach = ? WHERE id = ?", ([24.6, 12.3, 38.1, 7.9, 52.4, 18.0, 31.2, 9.6][i % 8], fid))
@@ -251,6 +267,35 @@ with sync_playwright() as p:
     page.evaluate("document.activeElement && document.activeElement.blur()")
     page.locator("#absender-dialog").screenshot(path=str(ZIEL / "absender.png"))
     page.click("#absender-abbrechen")
+
+    # Jahresabschluss des Vorjahres: Assistent (Schritt 1), danach abgeschlossen und „wieder öffnen“
+    oeffne(page, "Finanzen", "euer")
+    page.select_option("#euer-jahr", str(v))
+    page.wait_for_timeout(900)
+    page.click("#abschluss-band [data-abschluss=start]")
+    page.wait_for_selector("#abschluss-dialog[open]")
+    page.wait_for_timeout(600)
+    page.evaluate("document.activeElement && document.activeElement.blur()")
+    page.locator("#abschluss-dialog").screenshot(path=str(ZIEL / "jahresabschluss.png"))
+    page.click("[data-abschluss=schliessen]")
+    for a in c.get("/api/ausgaben").get_json():           # wartenden Beleg übernehmen, dann abschließen
+        if a["status"] == "neu":
+            c.put(f"/api/ausgaben/{a['id']}", json={"uebernehmen": True})
+    r = c.post(f"/api/abschluss/{v}", json={"bestaetigt": True})
+    assert r.status_code == 201, r.get_json()
+    page.reload()
+    page.wait_for_timeout(1000)
+    oeffne(page, "Finanzen", "euer")
+    page.select_option("#euer-jahr", str(v))
+    page.wait_for_timeout(1000)
+    page.screenshot(path=str(ZIEL / "jahr-abgeschlossen.png"), clip={"x": 0, "y": 0, "width": 1240, "height": 560})
+    page.click("#abschluss-band [data-abschluss-oeffnen]")
+    page.wait_for_selector("#oeffnen-dialog[open]")
+    page.locator("#oeffnen-vorschlaege button", has_text="Beleg nachgereicht").click()
+    page.evaluate("document.activeElement && document.activeElement.blur()")
+    page.wait_for_timeout(300)
+    page.locator("#oeffnen-dialog").screenshot(path=str(ZIEL / "jahr-oeffnen.png"))
+    page.click("#oeffnen-abbrechen")
 
     # Rechnungseditor mit Bestandskunde und zwei Positionen
     ctx2 = browser.new_context(viewport={"width": 1240, "height": 1180}, device_scale_factor=2, locale="de-DE")

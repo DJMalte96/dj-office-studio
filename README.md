@@ -37,6 +37,7 @@ DJ Office Studio ist eine App zum Schreiben von DJ-Rechnungen und -Angeboten –
   - **Kleinunternehmer-Grenzen**: Die Übersicht zeigt, wie viel Umsatz im Jahr schon zusammengekommen ist – gemessen an den 25.000 € (entscheidet, ob man im nächsten Jahr noch Kleinunternehmer ist) und den 100.000 € (darüber sofort umsatzsteuerpflichtig), dazu den Vorjahresumsatz. Wird es knapp – auch mit offenen Rechnungen –, warnen Übersicht, Startseite und Prüfliste.
   - **E-Rechnungen empfangen**: XRechnung und ZUGFeRD/Factur-X aus XML, PDF oder Mail lesen – mit Lesefassung, Original und Warnungen (eigene Rechnung, Gutschrift, Fremdwährung, doppelt).
   - **EÜR & Export**: Einnahmen-Überschuss-Rechnung nach Zahlungseingang und -ausgang mit Vorschlag für die Zeilen der Anlage EÜR, Prüfliste vor dem Export (ungeprüfte Belege, fehlende Bezahlt-Daten, fehlende Kilometer …) und ein ZIP für den Steuerberater mit allen Tabellen, Rechnungen und Belegen. Sonstige Einnahmen ohne Rechnung (z. B. Verkauf eines alten Geräts) lassen sich ergänzen.
+  - **Jahr abschließen**: Ein fertiges Jahr in drei Schritten prüfen, kontrollieren und abschließen. Die App legt ein Paket mit Abschlussblatt und Prüfsumme ab und sperrt das Jahr gegen Änderungen – ansehen, herunterladen und erneut verschicken geht weiter. Ein Jahr wird nie von selbst gesperrt; wieder öffnen geht mit Begründung. Kleinunternehmer und Fahrzeug gelten je Jahr.
 - **Stammdaten** für Kunden, Rechnungsposten und Zahlungsbedingungen.
 - Helles und dunkles Design (folgt der Geräteeinstellung, umschaltbar oben rechts), nutzbar am Computer, Tablet und Handy.
 
@@ -133,6 +134,26 @@ Die Erkennung läuft vollständig auf dem eigenen Gerät und ohne Netzwerk. Sie 
 **EÜR & Export:** Die EÜR des Jahres mit allen Einnahmen- und Ausgabenposten und dem Gewinn. Die Prüfliste daneben zeigt, was vor dem Export noch fehlt – z. B. ungeprüfte Belege oder bezahlte Rechnungen ohne Bezahlt-Datum (alte Importe; unter **nachtragen** mit einem Klick das Rechnungsdatum übernehmen oder einzeln eintragen). **Export herunterladen** erzeugt das ZIP für den Steuerberater. Die Zuordnung zu den Zeilen der Anlage EÜR ist ein Vorschlag – bitte mit dem Steuerberater abgleichen.
 
 ![Screenshot: EÜR & Export](docs/bilder/euer.png)
+
+**Jahr abschließen:** Ist ein Jahr fertig, schließt man es unter **EÜR & Export** ab – ab dem 11. Januar des Folgejahres, nach den 10 Tagen um den Jahreswechsel. **Ein Jahr wird nie von selbst gesperrt**: Bis man es abschließt, lässt sich alles ändern. Die Startseite erinnert dezent daran (ausblendbar). **Jahr abschließen …** führt in drei Schritten durch:
+
+1. **Prüfen** – rot markierte Punkte müssen erledigt sein (ungeprüfte Belege, Fahrten ohne Kilometer, Tankbelege beim Privatauto …); **ansehen** öffnet die Stelle, unten rechts geht es zurück. Gelb markierte bestätigt man mit einem Klick: noch offene Rechnungen (oder mit Datum als bezahlt eintragen) und regelmäßige Zahlungen in den 10 Tagen um Silvester (**10-Tage-Regel**, z. B. Handyvertrag oder Versicherung: zu welchem Jahr gehört sie?).
+2. **Kontrollieren** – Einnahmen, Ausgaben und Gewinn im Vergleich zum Vorjahr, dazu die Kleinunternehmer-Grenze.
+3. **Abschließen** – die App legt ein Paket an (`Jahresabschluss_2025_Fassung_1.zip`): Abschlussblatt als PDF, EÜR und alle Tabellen, alle Rechnungen und Belege im Original, eine Liste mit Prüfsummen (SHA-256). Ändert sich eine Datei, stimmt die Prüfsumme nicht mehr.
+
+![Screenshot: Jahr abschließen – Prüfen](docs/bilder/jahresabschluss.png)
+
+Danach ist das Jahr **gesperrt**: Einträge tragen ein 🔒 und lassen sich **ansehen**, aber nicht ändern, löschen oder mit Datum im Jahr neu anlegen. Die Sperre gilt auf allen Wegen – auch für Hintergrundaufgaben wie die Kilometerberechnung. Weiter geht: Rechnungen erneut verschicken, herunterladen, exportieren, eine offene Rechnung des Jahres später als bezahlt markieren (zählt dann im Zahlungsjahr), ein Gerät aus dem Jahr später verkaufen. Paket und Abschlussblatt liegen unter EÜR & Export und sind in der Datensicherung enthalten.
+
+![Screenshot: Jahr abgeschlossen](docs/bilder/jahr-abgeschlossen.png)
+
+**Wieder öffnen** geht jederzeit, mit einem kurzen Grund – Vorschläge zum Antippen (z. B. „Beleg nachgereicht“, „Korrektur vom Steuerberater“), eigene Gründe merkt sich die App. Das alte Paket bleibt. Beim nächsten Abschluss entsteht Fassung 2; das Abschlussblatt zeigt alle Fassungen, den Grund und die Änderung beim Gewinn.
+
+![Screenshot: Jahr wieder öffnen](docs/bilder/jahr-oeffnen.png)
+
+**Kleinunternehmer und Fahrzeug je Jahr:** Die Einstellungen unter ⚙ gelten für das laufende Jahr. Frühere Jahre behalten ihre Werte – wer z. B. ab Januar umsatzsteuerpflichtig wird, ändert damit nicht die EÜR des Vorjahres. Unter ⚙ Einstellungen → Steuer → **Frühere Jahre** lassen sich offene Jahre gezielt anpassen.
+
+Die App ersetzt keinen Steuerberater und übermittelt nichts an ELSTER. Das Paket mit Prüfsumme macht Änderungen sichtbar, ist aber keine zertifizierte, revisionssichere Archivierung.
 
 ## Einstellungen
 
@@ -237,6 +258,7 @@ Alternativ im Terminal: `xattr -dr com.apple.quarantine "/Applications/DJ Office
 |---|---|
 | Kunden, Rechnungsposten, Zahlungsbedingungen, Rechnungen, Angebote, Einstellungen | SQLite-Datenbank `rechnungen.db` im App-Datenordner (`/data`) |
 | Ausgaben-Belege (Originale) | Ordner `belege/` im App-Datenordner, sortiert nach Jahr |
+| Jahresabschlüsse (Pakete) | Ordner `abschluesse/` im App-Datenordner, auch in der Sicherung enthalten |
 | PDF-Kopien | Ordner aus den Einstellungen, standardmäßig `/share/rechnungen` (z. B. per Samba erreichbar) |
 
 Alles ist in den normalen Home-Assistant-Backups enthalten. Die Startseite zeigt in der Karte **Datensicherung**, wann zuletzt eine Sicherung heruntergeladen wurde, und färbt sich rot, sobald die eingestellte Zeit (⚙ Einstellungen → Datensicherung & Export, Standard 30 Tage, 0 = keine Erinnerung) überschritten ist – mit **Jetzt sichern** direkt daneben. Zusätzlich gibt es unter **⚙ Einstellungen → Datensicherung & Export** eine Sicherung zum Herunterladen und Einspielen – mit Datenbank und allen Belegen (vor dem Einspielen sichert die App den bisherigen Stand automatisch unter `sicherungen/`).
@@ -317,6 +339,7 @@ rechnungen/
     importer.py          Auslesen alter Rechnungs- und Angebots-PDFs (pypdf)
     mail.py              E-Mail-Versand per SMTP, Textvorlagen
     finanzen.py          Finanzen: Ausgaben, Fahrten, Anschaffungen/Abschreibung, EÜR, Export
+    abschluss.py         Jahresabschluss: prüfen, Paket mit Prüfsumme, wieder öffnen; Kleinunternehmer/Fahrzeug je Jahr
     belege.py            Auslesen von Belegen (PDF, Fotos, Kauf-Mails .eml/.msg/.mbox)
     texterkennung.py     Texterkennung für Fotos und Scans (lokal, im eigenen Prozess)
     pdflesen.py          Lesen fremder PDFs im eigenen Prozess
@@ -336,7 +359,7 @@ desktop/
 docs/
   screenshots.py         Erzeugt die README-Screenshots (docs/bilder/) mit Beispieldaten
 tests/                   Automatische Tests (pytest): API, PDFs, Pflichtangaben, Umsatzsteuer, QR-Code, Festschreiben/Storno,
-                         Mahnungen, E-Mail-Versand, Sicherung, Import, Belege, Fahrten, Abschreibung, EÜR …
+                         Mahnungen, E-Mail-Versand, Sicherung, Import, Belege, Fahrten, Abschreibung, EÜR, Jahresabschluss …
 ```
 
 ### Neue Version veröffentlichen

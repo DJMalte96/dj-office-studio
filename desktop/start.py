@@ -165,6 +165,7 @@ def main():
     db.init()
     automatische_sicherung(db)
     webapp.absender_festhalten()        # erst nach der Tageskopie
+    webapp.abschluss.jahre_festhalten()  # seit 1.8: Kleinunternehmer/Fahrzeug je Jahr
     port = freier_port()
     server = create_server(webapp.app, host="127.0.0.1", port=port, threads=8)
     webapp.finanzen.ordner_waechter_starten()   # Belege-Ordner regelmäßig einlesen

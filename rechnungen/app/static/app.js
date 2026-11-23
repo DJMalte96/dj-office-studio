@@ -1118,12 +1118,13 @@ function renderListe() {
     <tr data-id="${r.id}"${auswahl.has(r.id) ? ' class="markiert"' : ""}>
       <td class="auswahl-spalte"><input type="checkbox" class="auswahl"${auswahl.has(r.id) ? " checked" : ""} title="Markieren (Herunterladen / Paperless)"></td>
       <td>${esc(r.nummer)}${schloss(r)}${stornoChip(r)}${versandChip(r)}${r.paperless_am
-        ? plChip(r) : ""}</td>
+        ? plChip(r) : ""}${r.gesperrt ? ` <span class="lock" title="Einnahme in einem abgeschlossenen Jahr">🔒 ${(r.storno_von ? r.datum : r.bezahlt_am || "").slice(0, 4)}</span>` : ""}</td>
       <td>${fmtDate(r.datum)}</td>
       <td>${esc(r.kunde.name)}<br><small>${esc(r.kunde.ort)}</small></td>
       <td class="num">${fmtEuro(r.gesamt)}</td>
       <td>${r.storno_von || r.storniert_durch ? `<span class="frist neutral">${r.storno_von ? "Storno" : "storniert"}</span>`
-        : `<input type="checkbox" class="bezahlt" checked title="Haken entfernen = zurück zu den offenen Rechnungen">`}</td>
+        : `<input type="checkbox" class="bezahlt" checked${r.gesperrt ? ` disabled title="Bezahlt in einem abgeschlossenen Jahr – zum Ändern das Jahr wieder öffnen"`
+          : ` title="Haken entfernen = zurück zu den offenen Rechnungen"`}>`}</td>
       <td class="btns">${aktionen("pdf", "senden", ...(r.storno_von ? [] : ["kopie"]), ...(!r.festgeschrieben ? ["edit", "del"]
         : r.storno_von || r.storniert_durch ? [] : ["storno"]))}</td>
     </tr>`).join("") ||

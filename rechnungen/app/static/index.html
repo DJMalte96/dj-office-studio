@@ -357,6 +357,11 @@
             <label>Steuernummer<input name="steuernummer" placeholder="12/345/67890"></label>
             <label class="inline"><input type="checkbox" name="kleinunternehmer">
               Kleinunternehmer (§ 19 UStG) – keine Umsatzsteuer, Hinweis auf die Steuerbefreiung drucken</label>
+            <details class="jahre-einstellungen" id="jahre-einstellungen">
+              <summary>Frühere Jahre: Kleinunternehmer und Fahrzeug je Jahr</summary>
+              <p class="hint">Die Einstellungen hier oben gelten fürs laufende Jahr. Frühere Jahre behalten ihre Werte – so ändert sich eine vergangene EÜR nicht nachträglich. Abgeschlossene Jahre stehen fest.</p>
+              <div id="jahre-tabelle"></div>
+            </details>
             <div id="ust-felder" class="ust-felder">
               <p class="hint">Ohne Kleinunternehmerregelung weist die App die Umsatzsteuer aus: Die Preise der Positionen sind <b>Nettopreise</b>, auf Rechnung und Angebot stehen Nettobetrag, Umsatzsteuer und Gesamtbetrag.</p>
               <div class="row">
@@ -657,7 +662,7 @@
             </div>
             <label id="beleg-notiz-label">Notiz <span class="opt" id="notiz-hinweis">(optional)</span><input name="notiz"></label>
             <div class="actions">
-              <button type="button" class="secondary danger-text" id="beleg-verwerfen">Verwerfen</button>
+              <button type="button" class="secondary danger-text ja-weg" id="beleg-verwerfen">Verwerfen</button>
               <button type="submit" id="beleg-speichern">✓ Übernehmen</button>
             </div>
           </form>
@@ -742,6 +747,7 @@
         <div><h2>EÜR &amp; Export</h2><p class="hint">Einnahmen-Überschuss-Rechnung – Grundlage für die Anlage EÜR und den Steuerberater.</p></div>
         <select id="euer-jahr" aria-label="Jahr"></select>
       </div>
+      <div id="abschluss-band" class="ja-band hidden" aria-live="polite"></div>
       <div class="zwei">
         <div class="card">
           <h2 id="euer-titel">EÜR</h2>
@@ -749,7 +755,7 @@
           <p class="hint">Die Zuordnung zur Anlage EÜR ist ein Vorschlag – die genauen Zeilen bitte mit dem Steuerberater bzw. im ELSTER-Formular des Jahres abgleichen.</p>
         </div>
         <div>
-          <div class="card">
+          <div class="card" id="euer-pruefliste-karte">
             <h2>Prüfliste vor dem Export</h2>
             <ul class="pruefliste" id="euer-pruefliste"></ul>
           </div>
@@ -890,6 +896,25 @@
       <b>Ohne Haken</b> = noch nicht verschickt: bekommt den neuen Absender.</p>
     <div class="actions"><button type="button" class="secondary" id="absender-abbrechen">Abbrechen</button>
       <button type="button" id="absender-speichern">Speichern</button></div>
+  </dialog>
+  <!-- ================= Jahresabschluss (seit 1.8) ================= -->
+  <dialog id="abschluss-dialog" class="dialog ja" aria-labelledby="abschluss-titel">
+    <h2 id="abschluss-titel">Jahr abschließen</h2>
+    <ol class="schritte" id="abschluss-schritte">
+      <li data-schritt="1"><b>1</b>Prüfen</li><li data-schritt="2"><b>2</b>Kontrollieren</li><li data-schritt="3"><b>3</b>Abschließen</li>
+    </ol>
+    <div id="abschluss-inhalt"></div>
+    <div class="actions" id="abschluss-aktionen"></div>
+  </dialog>
+  <dialog id="oeffnen-dialog" class="dialog ja" aria-labelledby="oeffnen-titel">
+    <h2 id="oeffnen-titel">Jahr wieder öffnen</h2>
+    <p id="oeffnen-text"></p>
+    <label for="oeffnen-grund">Warum?</label>
+    <div class="chips" id="oeffnen-vorschlaege"></div>
+    <input id="oeffnen-grund" placeholder="Vorschlag antippen oder selbst schreiben" autocomplete="off" maxlength="300">
+    <p class="hint">Tippen übernimmt den Vorschlag, mehrere werden mit „ · “ verbunden. Eigene Gründe (gestrichelt) merkt sich die App.</p>
+    <div class="actions"><button type="button" class="secondary" id="oeffnen-abbrechen">Abbrechen</button>
+      <button type="button" id="oeffnen-ok" disabled>Wieder öffnen</button></div>
   </dialog>
   <dialog id="qr-dialog" class="dialog qr-dialog">
     <h2 id="qr-titel">Rechnung bezahlen</h2>
