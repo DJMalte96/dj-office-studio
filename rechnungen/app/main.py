@@ -34,6 +34,40 @@ app = Flask(__name__, static_folder=None)
 app.register_blueprint(finanzen.bp)   # Finanzen: Ausgaben, Belege (seit 1.1)
 
 
+# ---------- Schutz vor fremden Webseiten und anderen Programmen ----------
+# Die App hat keine eigene Anmeldung. Darum:
+#  - Desktop: nur Anfragen an 127.0.0.1/localhost. Eine fremde Domain, die auf 127.0.0.1 zeigt (DNS-Rebinding),
+#    darf so nichts lesen.
+#  - Home Assistant: nur der Ingress-Eingang (172.30.32.2) – andere Add-ons im internen Netz kommen nicht durch.
+#  - Alles, was etwas ändert, braucht den Kopf „X-DJOS“. Den darf eine fremde Webseite nicht ohne Rückfrage beim
+#    Server setzen (CORS-Vorabanfrage, die die App nie erlaubt) – Formulare und Uploads von fremden Seiten scheitern.
+SCHUTZ_KOPF = "X-DJOS"
+DESKTOP_HOSTS = ("127.0.0.1", "localhost")
+HA_EINGANG = ("172.30.32.2", "127.0.0.1", "::1")
+LESEND = ("GET", "HEAD", "OPTIONS")
+
+
+def _hostname(host):
+    host = (host or "").strip().lower()
+    if host.startswith("["):
+        return host[1:].split("]")[0]
+    return host.rsplit(":", 1)[0] if host.count(":") == 1 else host
+
+
+@app.before_request
+def _schutz():
+    if DESKTOP and _hostname(request.host) not in DESKTOP_HOSTS:
+        return jsonify({"error": "Zugriff nur über 127.0.0.1"}), 403
+    if os.environ.get("SUPERVISOR_TOKEN") and not DESKTOP and request.remote_addr not in HA_EINGANG:
+        app.logger.warning("Anfrage von %s abgewiesen (nur über Home Assistant erlaubt)", request.remote_addr)
+        return jsonify({"error": "Zugriff nur über Home Assistant"}), 403
+    if request.method in LESEND:
+        return None
+    if request.headers.get(SCHUTZ_KOPF) != "1" or request.headers.get("Sec-Fetch-Site") in ("cross-site", "same-site"):
+        return jsonify({"error": "Anfrage abgewiesen: Sie kam nicht aus DJ Office Studio. Bitte die Seite neu laden."}), 403
+    return None
+
+
 def _daten():
     """JSON aus der Anfrage – fehlt es oder ist es ungültig, ein leeres dict (→ verständliche Fehlermeldung statt 500)."""
     d = request.get_json(silent=True)
@@ -260,11 +294,20 @@ def settings_put():
         for r in entwuerfe:
             if r["id"] in ids:
                 db.festschreiben(r["id"], bisher)
+    hinweise = []
+    if (alt.get("smtp_passwort") and "smtp_passwort" not in werte
+            and _smtp_anders((alt.get("smtp_server"), alt.get("smtp_benutzer")),
+                             (werte.get("smtp_server", alt.get("smtp_server")), werte.get("smtp_benutzer", alt.get("smtp_benutzer"))))):
+        werte["smtp_passwort"] = ""
+        hinweise.append("Postausgangsserver oder Benutzer geändert: Das gespeicherte E-Mail-Passwort wurde entfernt – bitte neu eingeben.")
+    if (alt.get("paperless_token") and "paperless_token" not in werte and "paperless_url" in werte
+            and finanzen.paperless.adresse(werte["paperless_url"]) != finanzen.paperless.adresse(alt.get("paperless_url"))):
+        werte["paperless_token"] = ""
+        hinweise.append("Paperless-Adresse geändert: Bitte unter „Verbindung prüfen“ neu anmelden.")
     db.save_settings(werte)
     absender_festhalten()
     a = absender()
     # Hinweise zu Ordnern (kein Fehler – der Ordner kann z. B. erst später angelegt werden)
-    hinweise = []
     ordner = (a.get("belege_ordner") or "").strip()
     if ordner and "*" not in ordner and not os.path.isdir(ordner) and not os.path.isdir(os.path.dirname(os.path.abspath(ordner))):
         hinweise.append(f"Belege-Ordner {ordner} wurde nicht gefunden.")
@@ -276,6 +319,11 @@ def settings_put():
             hinweise.append(f"{n} offene festgeschriebene Rechnung{'' if n == 1 else 'en'} zeig{'t' if n == 1 else 'en'} weiter das bisherige Konto. "
                             "Neue Mahnungen und der QR-Code am Bildschirm nehmen das neue.")
     return jsonify({"einstellungen": _ohne_geheimnisse(a), "hinweise": hinweise})
+
+
+def _smtp_anders(alt, neu):
+    """(Server, Benutzer) verglichen ohne Groß-/Kleinschreibung und Leerzeichen."""
+    return [str(x or "").strip().lower() for x in alt] != [str(x or "").strip().lower() for x in neu]
 
 
 def _normal(wert):
@@ -741,13 +789,21 @@ def backup_restore():
         inhalt = datei.read()
         belege_tmp = os.path.join(tmp, "belege")
         if inhalt[:2] == b"PK":   # ZIP
+            rest = [SICHERUNG_FAKTOR * len(inhalt) + SICHERUNG_ZUSCHLAG]   # entpackt höchstens so viel (Zip-Bombe)
             try:
                 with zipfile.ZipFile(io.BytesIO(inhalt)) as zf:
+                    if len(zf.infolist()) > SICHERUNG_MAX_DATEIEN:
+                        raise _ZuGross
                     with zf.open("rechnungen.db") as src, open(pfad, "wb") as dst:
-                        shutil.copyfileobj(src, dst)
-                    _belege_entpacken(zf, belege_tmp)
+                        _begrenzt_kopieren(src, dst, rest)
+                    _belege_entpacken(zf, belege_tmp, rest)
             except (KeyError, zipfile.BadZipFile):
                 return _fehler("Die ZIP-Datei enthält keine Sicherung von DJ Office Studio.")
+            except _ZuGross:
+                return _fehler("Diese Sicherung ist entpackt ungewöhnlich groß – aus Sicherheitsgründen nicht eingespielt.", 413)
+            frei = shutil.disk_usage(db.DATA_DIR).free
+            if frei < _ordner_groesse(tmp) + SICHERUNG_PLATZRESERVE:
+                return _fehler("Nicht genug freier Speicherplatz, um diese Sicherung einzuspielen.", 507)
         else:
             with open(pfad, "wb") as f:
                 f.write(inhalt)
@@ -768,7 +824,33 @@ def backup_restore():
     return jsonify({"anzahl": anzahl, "belege": belege, "vorher_gesichert": vorher})
 
 
-def _belege_entpacken(zf, ziel):
+SICHERUNG_FAKTOR = 20                     # Belege sind meist PDFs/Fotos (kaum packbar) – Faktor 20 lässt viel Luft
+SICHERUNG_ZUSCHLAG = 64 * 1024 * 1024
+SICHERUNG_MAX_DATEIEN = 50_000
+SICHERUNG_PLATZRESERVE = 200 * 1024 * 1024
+
+
+class _ZuGross(Exception):
+    pass
+
+
+def _begrenzt_kopieren(src, dst, rest):
+    """Wie shutil.copyfileobj, aber höchstens rest[0] Bytes (über alle Dateien einer Sicherung zusammen)."""
+    while True:
+        block = src.read(1024 * 1024)
+        if not block:
+            return
+        rest[0] -= len(block)
+        if rest[0] < 0:
+            raise _ZuGross
+        dst.write(block)
+
+
+def _ordner_groesse(pfad):
+    return sum(os.path.getsize(os.path.join(w, n)) for w, _, dateien in os.walk(pfad) for n in dateien)
+
+
+def _belege_entpacken(zf, ziel, rest):
     """Nur Dateien unter belege/ aus der Sicherung, ohne Pfad-Tricks (.., absolute Pfade)."""
     for info in zf.infolist():
         name = info.filename
@@ -780,7 +862,7 @@ def _belege_entpacken(zf, ziel):
         pfad = os.path.join(ziel, *teile)
         os.makedirs(os.path.dirname(pfad), exist_ok=True)
         with zf.open(info) as src, open(pfad, "wb") as dst:
-            shutil.copyfileobj(src, dst)
+            _begrenzt_kopieren(src, dst, rest)
 
 
 def _belege_uebernehmen(quelle):
@@ -938,10 +1020,15 @@ def mail_test():
     """Testmail an die eigene Adresse – mit den Werten aus dem Formular (noch nicht gespeichert)."""
     d = _daten()
     cfg = absender()
+    gespeichert = (cfg.get("smtp_server"), cfg.get("smtp_benutzer"))
     for k in ("absender_email", "smtp_server", "smtp_port", "smtp_sicherheit", "smtp_benutzer", "smtp_passwort",
               "mail_antwort_an", "name"):
         if d.get(k) not in (None, ""):
             cfg[k] = d[k]
+    # Das gespeicherte Passwort geht nie an einen anderen Server oder Benutzer
+    if (cfg.get("smtp_passwort") and not d.get("smtp_passwort")
+            and _smtp_anders(gespeichert, (cfg.get("smtp_server"), cfg.get("smtp_benutzer")))):
+        return _fehler("Server oder Benutzer geändert: Bitte das Passwort neu eingeben.", 502)
     try:
         an = mail.adressen(cfg.get("absender_email"))
         cfg["smtp_port"] = int(cfg.get("smtp_port") or 587)

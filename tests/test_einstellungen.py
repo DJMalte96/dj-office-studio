@@ -21,6 +21,7 @@ def test_uebernahme_aus_home_assistant(app_modul, tmp_path):
         con.execute("DELETE FROM einstellungen")
     (tmp_path / "options.json").write_text(json.dumps({"name": "Aus HA", "iban": "DE99", "startnummer": 12}))
     c = app_modul.app.test_client()
+    c.environ_base["HTTP_X_DJOS"] = "1"
     e = c.get("/api/einstellungen").get_json()
     assert (e["name"], e["iban"], e["startnummer"]) == ("Aus HA", "DE99", 12)
     (tmp_path / "options.json").write_text("{}")   # spätere Änderungen in HA wirken nicht mehr
@@ -37,6 +38,7 @@ class _Antwort(io.BytesIO):
 
 def test_update_pruefung(app_modul, monkeypatch):
     c = app_modul.app.test_client()
+    c.environ_base["HTTP_X_DJOS"] = "1"
     assert c.get("/api/update").get_json() == {"aktiv": False}   # Home Assistant: keine Prüfung
 
     monkeypatch.setattr(app_modul, "DESKTOP", True)

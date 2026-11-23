@@ -15,7 +15,7 @@ SOLL = {"bon_quer.jpg": (42.46, "2026-03-14"), "bon_kopfueber.jpg": (42.46, "202
 
 
 def anfrage(url, daten=None, typ=None):
-    req = urllib.request.Request(url, data=daten, headers={"Content-Type": typ} if typ else {})
+    req = urllib.request.Request(url, data=daten, headers={"X-DJOS": "1"} | ({"Content-Type": typ} if typ else {}))
     with urllib.request.urlopen(req, timeout=30) as r:
         return json.loads(r.read())
 

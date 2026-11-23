@@ -2,6 +2,15 @@
 
 Alle Änderungen an DJ Office Studio. Neueste Version oben.
 
+## 1.7.3 – 2026-11-23
+
+### Sicherheit
+- **Fremde Webseiten können die App nicht mehr fernsteuern**: Bisher konnte eine präparierte Webseite, die man öffnete, während die Desktop-App lief, eine Sicherung einspielen (und damit z. B. die IBAN ändern) oder Belege unterschieben. Über einen umgeleiteten Domainnamen konnte sie sogar alle Daten auslesen. Jetzt nimmt die App Änderungen nur noch von ihrer eigenen Oberfläche an, und die Desktop-App antwortet nur noch unter 127.0.0.1 bzw. localhost.
+- **Home Assistant**: Die App nimmt nur noch Anfragen über den Home-Assistant-Eingang an, nicht mehr von anderen Add-ons im internen Netz.
+- **Mail-Passwort und Paperless-Token gehen nur noch an den gespeicherten Server**: Beim Mail-Test oder bei „Verbindung prüfen“ mit einem neuen Server bzw. einer neuen Adresse muss man Passwort bzw. Anmeldung neu eingeben. Wird der Postausgangsserver, der Benutzer oder die Paperless-Adresse geändert und gespeichert, verwirft die App das alte Passwort bzw. den alten Token und sagt das dazu.
+- **Sicherungen einspielen**: Eine Sicherung darf entpackt nicht mehr beliebig groß werden (Zip-Bombe), und vorher prüft die App den freien Speicherplatz.
+- **Paperless**: Leitet Paperless auf einen anderen Rechner um, geht der Token nicht mit. Antworten und Seitenzahl sind begrenzt.
+
 ## 1.7.2 – 2026-11-22
 
 ### Behoben

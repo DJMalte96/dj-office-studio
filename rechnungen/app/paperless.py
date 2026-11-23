@@ -24,6 +24,32 @@ KANDIDATEN = (
 BEKANNTE_ADDONS = ("ca5234a0_paperless-ngx", "db21ed7f_paperless_ngx")
 
 
+MAX_ANTWORT = 50 * 1024 * 1024      # Listen (JSON)
+MAX_DATEI = 150 * 1024 * 1024       # ein heruntergeladenes Dokument
+MAX_SEITEN = 2000                   # je 100 Einträge – mehr hat kein Paperless eines DJs
+
+
+class _Umleitung(urllib.request.HTTPRedirectHandler):
+    """Leitet Paperless auf einen anderen Rechner um, geht der Token nicht mit (urllib gäbe ihn sonst weiter)."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        neu = super().redirect_request(req, fp, code, msg, headers, newurl)
+        if neu is not None and urllib.parse.urlsplit(newurl).hostname != urllib.parse.urlsplit(req.full_url).hostname:
+            neu.remove_header("Authorization")
+        return neu
+
+
+def _oeffnen(req, timeout, ssl_kontext=None):
+    return urllib.request.build_opener(urllib.request.HTTPSHandler(context=ssl_kontext), _Umleitung).open(req, timeout=timeout)
+
+
+def _lesen(r, grenze):
+    daten = r.read(grenze + 1)
+    if len(daten) > grenze:
+        raise PaperlessFehler(f"Antwort von Paperless ist zu groß (über {grenze // 2**20} MB)")
+    return daten
+
+
 class PaperlessFehler(Exception):
     pass
 
@@ -44,8 +70,8 @@ def _anfrage(url, token, pfad, roh=False, timeout=30, ssl_kontext=None):
         kopf["Authorization"] = f"Token {token}"
     req = urllib.request.Request(ziel, headers=kopf)
     try:
-        with urllib.request.urlopen(req, timeout=timeout, context=ssl_kontext) as r:
-            daten = r.read()
+        with _oeffnen(req, timeout, ssl_kontext) as r:
+            daten = _lesen(r, MAX_DATEI if roh else MAX_ANTWORT)
             if roh:
                 name = r.headers.get_filename() or ""
                 return daten, name, r.headers.get_content_type()
@@ -68,8 +94,11 @@ def _anfrage(url, token, pfad, roh=False, timeout=30, ssl_kontext=None):
 
 def _alle(url, token, pfad, ssl_kontext=None):
     """Alle Seiten einer Liste abrufen (Paperless liefert „results“ und „next“)."""
-    ergebnis, naechste = [], pfad
+    ergebnis, naechste, seiten = [], pfad, 0
     while naechste:
+        seiten += 1
+        if seiten > MAX_SEITEN:
+            raise PaperlessFehler("Paperless liefert ungewöhnlich viele Seiten – abgebrochen")
         d = _anfrage(url, token, naechste, ssl_kontext=ssl_kontext)
         if not isinstance(d, dict) or "results" not in d:
             raise PaperlessFehler("Unter dieser Adresse antwortet kein Paperless")
@@ -157,8 +186,8 @@ def token_holen(url, benutzer, passwort, ssl_kontext=None):
                                  data=urllib.parse.urlencode({"username": benutzer, "password": passwort}).encode(),
                                  headers={"Accept": "application/json", "Content-Type": "application/x-www-form-urlencoded"})
     try:
-        with urllib.request.urlopen(req, timeout=15, context=ssl_kontext) as r:
-            token = json.loads(r.read()).get("token")
+        with _oeffnen(req, 15, ssl_kontext) as r:
+            token = json.loads(_lesen(r, 1024 * 1024)).get("token")
     except urllib.error.HTTPError as e:
         if e.code == 400:
             raise PaperlessFehler("Benutzername oder Passwort stimmt nicht") from e

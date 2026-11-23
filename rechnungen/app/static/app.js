@@ -18,9 +18,12 @@ const state = {
 
 // ---------- Hilfsfunktionen ----------
 
+// Kennzeichnet Anfragen der App selbst – ohne diesen Kopf lehnt der Server alles ab, was etwas ändert
+const SCHUTZ = { "X-DJOS": "1" };
+
 async function api(path, opts = {}) {
   const res = await fetch("api/" + path, {
-    headers: opts.body ? { "Content-Type": "application/json" } : {},
+    headers: opts.body ? { "Content-Type": "application/json", ...SCHUTZ } : SCHUTZ,
     ...opts,
     body: opts.body ? JSON.stringify(opts.body) : undefined,
   });
@@ -362,7 +365,7 @@ $("#sicherung-datei").addEventListener("change", async e => {
   const fd = new FormData();
   fd.append("datei", datei);
   try {
-    const res = await fetch("api/backup", { method: "POST", body: fd });
+    const res = await fetch("api/backup", { method: "POST", headers: SCHUTZ, body: fd });
     const daten = await res.json();
     if (!res.ok) throw new Error(daten.error || `Fehler ${res.status}`);
     const n = daten.anzahl;
@@ -1739,7 +1742,7 @@ async function analyseImport(files) {
   $("#import-status").textContent = `${files.length} Datei(en) werden gelesen …`;
   $("#import-ergebnis").innerHTML = "";
   try {
-    const res = await fetch("api/import/analyse", { method: "POST", body: fd });
+    const res = await fetch("api/import/analyse", { method: "POST", headers: SCHUTZ, body: fd });
     if (!res.ok) throw new Error(`Fehler ${res.status}`);
     imp.daten = await res.json();
     const nR = imp.daten.rechnungen.length, nA = imp.daten.angebote.length;

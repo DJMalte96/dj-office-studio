@@ -13,7 +13,7 @@ basis = sys.argv[1].rstrip("/")
 grenze = uuid.uuid4().hex
 daten = (f'--{grenze}\r\nContent-Disposition: form-data; name="dateien"; filename="rechnung.xml"\r\n'
          f"Content-Type: application/xml\r\n\r\n").encode() + ubl(nummer="RAUCH-1") + f"\r\n--{grenze}--\r\n".encode()
-anfrage = urllib.request.Request(f"{basis}/api/ausgaben/belege", daten, {"Content-Type": f"multipart/form-data; boundary={grenze}"})
+anfrage = urllib.request.Request(f"{basis}/api/ausgaben/belege", daten, {"Content-Type": f"multipart/form-data; boundary={grenze}", "X-DJOS": "1"})
 antwort = json.load(urllib.request.urlopen(anfrage, timeout=60))
 assert len(antwort["neu"]) == 1, antwort
 a = antwort["neu"][0]

@@ -20,7 +20,7 @@ def hochladen(name, daten):
     roh = (f'--{grenze}\r\nContent-Disposition: form-data; name="dateien"; filename="{name}"\r\n'
            "Content-Type: application/pdf\r\n\r\n").encode() + daten + f"\r\n--{grenze}--\r\n".encode()
     anfrage = urllib.request.Request(f"{basis}/api/ausgaben/belege", roh,
-                                     {"Content-Type": f"multipart/form-data; boundary={grenze}"})
+                                     {"Content-Type": f"multipart/form-data; boundary={grenze}", "X-DJOS": "1"})
     return json.load(urllib.request.urlopen(anfrage, timeout=120))["neu"][0]
 
 

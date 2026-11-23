@@ -43,6 +43,7 @@ db.save_settings({
     "smtp_sicherheit": "starttls", "smtp_passwort": "nur-ein-beispiel",
 })
 c = main.app.test_client()
+c.environ_base["HTTP_X_DJOS"] = "1"
 heute = date.today()
 db.save_settings({"_letzte_sicherung": f"{heute - timedelta(days=12)}T19:42:00"})   # Startseite: Sicherung vor 12 Tagen
 d = lambda n: (heute + timedelta(days=n)).isoformat()   # noqa: E731

@@ -110,6 +110,8 @@ Die Erkennung läuft vollständig auf dem eigenen Gerät und ohne Netzwerk. Sie 
 
 ![Screenshot: E-Rechnung prüfen](docs/bilder/e-rechnung.png)
 
+**Schutz vor fremden Webseiten:** Die App hat keine eigene Anmeldung. Änderungen nimmt sie deshalb nur von ihrer eigenen Oberfläche an. Die Desktop-App antwortet nur unter 127.0.0.1 bzw. localhost, das Add-on nur über Home Assistant. Mail-Passwort und Paperless-Token gehen nur an den gespeicherten Server; wer Server oder Adresse ändert, gibt sie neu ein.
+
 **Schutz vor präparierten Dateien:** Fremde PDFs und Outlook-Mails liest die App (HEIC-Fotos mit eigenen, höheren Grenzen) in einem eigenen Prozess mit Grenzen für Arbeitsspeicher (400 MB) und Zeit (20 Sekunden), ohne Netz. Wird eine Grenze erreicht, steht am Beleg „PDF aus Sicherheitsgründen nicht ausgewertet“ – das Original bleibt gespeichert, die Werte trägt man von Hand ein. Von PDFs über 100 Seiten werden die ersten 90 und die letzten 10 gelesen.
 
 **Papierkorb:** **Verwerfen** (ungeprüfter Beleg) und **Löschen** (übernommene Ausgabe) legen den Eintrag samt Beleg in den Papierkorb (Finanzen → Ausgaben → **Papierkorb**). Was dort liegt, zählt nicht in EÜR, Übersicht, Abschreibung und Export.

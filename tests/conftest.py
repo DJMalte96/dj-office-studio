@@ -30,7 +30,9 @@ def app_modul(tmp_path, monkeypatch):
 
 @pytest.fixture
 def client(app_modul):
-    return app_modul.app.test_client()
+    c = app_modul.app.test_client()
+    c.environ_base["HTTP_X_DJOS"] = "1"   # wie die Oberfläche: ohne diesen Kopf lehnt die App Änderungen ab
+    return c
 
 
 KUNDE = {"name": "Anna Muster", "strasse": "Lindenweg 12", "plz": "12345", "ort": "Musterstadt"}

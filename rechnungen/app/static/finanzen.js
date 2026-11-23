@@ -137,7 +137,7 @@ function inPakete(dateien) {
 async function paketHochladen(paket) {
   const fd = new FormData();
   paket.forEach(f => fd.append("dateien", f));
-  const res = await fetch("api/ausgaben/belege", { method: "POST", body: fd });
+  const res = await fetch("api/ausgaben/belege", { method: "POST", headers: SCHUTZ, body: fd });
   let d = null;
   try { d = await res.json(); } catch { /* z. B. HTML-Fehlerseite */ }
   if (!res.ok || !d) throw new Error((d && d.error) || `Fehler ${res.status}`);
@@ -841,7 +841,7 @@ async function renderStartFinanzen() {
 
 function plTagAuswahl(tags, gewaehlt, name) {
   const sel = $("#einstellungen").elements.paperless_tag;
-  const opt = (id, text) => `<option value="${id}"${String(id) === String(gewaehlt) ? " selected" : ""}>${esc(text)}</option>`;
+  const opt = (id, text) => `<option value="${esc(String(id))}"${String(id) === String(gewaehlt) ? " selected" : ""}>${esc(text)}</option>`;
   if (tags) {
     sel.innerHTML = opt(0, "– Tag wählen –") + tags.map(t => opt(t.id, t.name + (t.anzahl != null ? ` (${t.anzahl} Dokument${t.anzahl === 1 ? "" : "e"})` : ""))).join("");
   } else {   // noch nicht verbunden: nur den gespeicherten Tag anzeigen

@@ -104,8 +104,8 @@ jobs:
           curl -sf http://127.0.0.1:8765/api/absender | grep '"desktop":true'
           curl -sf http://127.0.0.1:8765/api/absender | grep '"fenster":true'   # App-Fenster (pywebview) ist im Paket lauffähig
           if [ "$RUNNER_OS" = "Windows" ]; then grep "Programmdateien freigegeben" "$DJOS_BASIS/Daten/protokoll.txt"; fi
-          curl -sf -X PUT -H "Content-Type: application/json" -d '{"name":"Test","iban":"DE00"}' http://127.0.0.1:8765/api/einstellungen > /dev/null
-          curl -sf -X POST -H "Content-Type: application/json" \
+          curl -sf -X PUT -H "X-DJOS: 1" -H "Content-Type: application/json" -d '{"name":"Test","iban":"DE00"}' http://127.0.0.1:8765/api/einstellungen > /dev/null
+          curl -sf -X POST -H "X-DJOS: 1" -H "Content-Type: application/json" \
             -d '{"nummer":"001","datum":"2026-01-01","kunde":{"name":"Test","strasse":"Testweg 1","plz":"12345","ort":"Teststadt"},"zahlungsbedingung":"8 Tage","positionen":[{"beschreibung":"DJ","lieferdatum":"2026-01-01","preis":100}]}' \
             http://127.0.0.1:8765/api/rechnungen
           # erst in eine Datei laden: „curl | head“ bricht curl je nach Timing mit Schreibfehler (Exit 23) ab
@@ -114,7 +114,7 @@ jobs:
           ls "$DJOS_BASIS/PDFs"
           # Echte Streckenberechnung über OpenStreetMap mit dem SSL der gebauten App (öffentliche Adressen).
           # Bei einer Störung des öffentlichen Dienstes nur Warnung, kein Abbruch.
-          curl -sf -X PUT -H "Content-Type: application/json" -d '{"kartendienst":true,"startadresse":"Rathausmarkt 1, 20095 Hamburg"}' http://127.0.0.1:8765/api/einstellungen > /dev/null
+          curl -sf -X PUT -H "X-DJOS: 1" -H "Content-Type: application/json" -d '{"kartendienst":true,"startadresse":"Rathausmarkt 1, 20095 Hamburg"}' http://127.0.0.1:8765/api/einstellungen > /dev/null
           STRECKE=$(curl -s -G --max-time 60 --data-urlencode "strasse=Marienplatz 1" --data-urlencode "plz=80331" --data "ort=M%C3%BCnchen" http://127.0.0.1:8765/api/fahrten/vorschau || true)
           echo "Strecke Hamburg → München: $STRECKE"
           if echo "$STRECKE" | grep -q '"km_einfach"'; then echo "Kartendienst ok"; else echo "::warning::Kartendienst nicht erreichbar: $STRECKE"; fi

@@ -1483,6 +1483,13 @@ def _pl_zugang(d=None):
     return url, token
 
 
+def _pl_token_fuer(url, token, d):
+    """Der gespeicherte Token geht nur an die gespeicherte Adresse – an jede andere nur ein frisch eingegebener."""
+    if (d.get("token") or "").strip():
+        return token
+    return token if url == paperless.adresse(_einstellungen().get("paperless_url")) else ""
+
+
 def _pl_https(url):
     return _ssl() if url.lower().startswith("https") else None
 
@@ -1586,6 +1593,7 @@ def paperless_verbinden():
             continue
         try:
             neu = paperless.token_holen(url, benutzer, passwort, _pl_https(url)) if benutzer and passwort else None
+            token = _pl_token_fuer(url, token, d)
             if not (neu or token):
                 return jsonify({"url": url, "gefunden": gefunden, "tags": None,
                                 "hinweis": f"{gefunden or 'Paperless erreichbar'} – jetzt mit Benutzername und Passwort anmelden."})
