@@ -2,6 +2,16 @@
 
 Alle Änderungen an DJ Office Studio. Neueste Version oben.
 
+## 1.8.1 – 2026-11-23
+
+### Behoben
+- **10-Tage-Regel**: Wurde eine Zahlung dem anderen Jahr zugeordnet und danach ihr Datum geändert, zählte sie weiter zum falschen Jahr. Jetzt zählt sie nach einer Datumsänderung wieder nach dem Datum.
+- **Jahr abschließen von zwei Geräten gleichzeitig**: Ein zweiter, abgewiesener Versuch konnte die Paketdatei überschreiben, sodass die Prüfsumme nicht mehr passte. Jetzt läuft immer nur ein Abschluss; die Paketdatei kommt erst nach Erfolg an ihren Platz.
+- **Abschluss sperrt zuerst**: Erst wird das Jahr gesperrt, dann gerechnet und gepackt. Eine Änderung in diesen Sekunden auf einem anderen Gerät wird abgewiesen, statt zu fehlen. Geht beim Packen etwas schief, wird die Sperre wieder aufgehoben.
+
+### Verbessert
+- **Weniger Arbeitsspeicher**: Jahresabschluss, Export und Datensicherung werden über eine Datei erstellt und gesendet, statt komplett im Arbeitsspeicher. Bei 200 MB Belegen braucht der Abschluss rund 90 statt 700 MB – wichtig z. B. auf einem Raspberry Pi mit Home Assistant.
+
 ## 1.8.0 – 2026-11-23
 
 ### Neu

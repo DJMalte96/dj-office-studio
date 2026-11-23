@@ -357,3 +357,85 @@ def test_zweimal_oeffnen_behaelt_den_ersten_grund(client, jahr):
     client.post(f"/api/abschluss/{Y}/oeffnen", json={"grund": "Zweiter Grund"})
     f = client.get(f"/api/abschluss/{Y}/pruefung").get_json()["status"]["fassungen"]
     assert [x["grund"] for x in f] == ["Erster Grund", "Zweiter Grund"]
+
+
+# ---------- 1.8.1 ----------
+
+def test_zehn_tage_zuordnung_faellt_bei_neuem_datum_weg(client, jahr):
+    client.put(f"/api/ausgaben/{jahr['tel']}/euer-jahr", json={"jahr": HEUTE_JAHR})
+    vorher = _euer(client)["ausgaben"]
+    r = client.put(f"/api/ausgaben/{jahr['tel']}", json={"belegdatum": f"{Y}-06-15", "bezahlt_am": f"{Y}-06-15"}).get_json()
+    assert r["jahr"] == str(Y) and r["euer_jahr"] is None
+    assert round(_euer(client)["ausgaben"] - vorher, 2) == 29.99
+    # andere Änderungen (Notiz) lassen die Zuordnung stehen
+    client.put(f"/api/ausgaben/{jahr['tel']}", json={"belegdatum": f"{Y}-12-30", "bezahlt_am": f"{Y}-12-30"})
+    client.put(f"/api/ausgaben/{jahr['tel']}/euer-jahr", json={"jahr": HEUTE_JAHR})
+    assert client.put(f"/api/ausgaben/{jahr['tel']}", json={"notiz": "Lastschrift Januar"}).get_json()["euer_jahr"] == str(HEUTE_JAHR)
+
+
+def test_gleichzeitig_abschliessen(client, jahr, app_modul, tmp_path):
+    import threading
+    import abschluss
+    langsam = app_modul.export_zip
+
+    def export_zip(*a, **k):            # Abschluss dauert: die anderen Klicks kommen währenddessen
+        import time
+        time.sleep(0.3)
+        return langsam(*a, **k)
+    app_modul.export_zip = export_zip
+    try:
+        codes = []
+
+        def los():
+            c = app_modul.app.test_client()
+            codes.append(c.post(f"/api/abschluss/{Y}", json={"bestaetigt": True}, headers={"X-DJOS": "1"}).status_code)
+        ts = [threading.Thread(target=los) for _ in range(4)]
+        [t.start() for t in ts]
+        [t.join() for t in ts]
+    finally:
+        app_modul.export_zip = langsam
+    assert sorted(codes) == [201, 409, 409, 409]
+    st = abschluss.status(Y)
+    assert [f["fassung"] for f in st["fassungen"]] == [1]
+    paket = (tmp_path / "abschluesse" / f"Jahresabschluss_{Y}_Fassung_1.zip").read_bytes()
+    assert st["aktuell"]["pruefsumme"] in zipfile.ZipFile(io.BytesIO(paket)).read("Pruefsummen.txt").decode()
+    assert not list((tmp_path / "abschluesse").glob("*.teil"))
+
+
+def test_erst_sperren_dann_packen(client, jahr, app_modul):
+    """Was während des Packens geändert wird, weist die Datenbank ab – das Paket zeigt den gesperrten Stand."""
+    langsam, versuche = app_modul.export_zip, []
+
+    def export_zip(*a, **k):
+        versuche.append(app_modul.app.test_client().put(f"/api/ausgaben/{jahr['aus']}", json={"betrag": 999},
+                                                         headers={"X-DJOS": "1"}).status_code)
+        return langsam(*a, **k)
+    app_modul.export_zip = export_zip
+    try:
+        st = _abschliessen(client)
+    finally:
+        app_modul.export_zip = langsam
+    assert versuche == [409]
+    paket = zipfile.ZipFile(io.BytesIO(client.get(f"/api/abschluss/{Y}/paket").data))
+    assert json.loads(paket.read("abschluss.json"))["euer"]["gewinn"] == st["aktuell"]["gewinn"] == _euer(client)["gewinn"]
+
+
+def test_fehler_beim_packen_hebt_sperre_auf(client, jahr, monkeypatch, tmp_path):
+    import abschluss
+
+    def kaputt(*a, **k):
+        raise OSError("Platte voll")
+    monkeypatch.setattr(abschluss, "abschlussblatt", kaputt)
+    assert client.post(f"/api/abschluss/{Y}", json={"bestaetigt": True}).status_code == 500
+    assert abschluss.status(Y)["status"] == "offen" and abschluss.fassungen(Y) == []
+    assert not list((tmp_path / "abschluesse").glob("*"))
+    assert client.put(f"/api/ausgaben/{jahr['aus']}", json={"betrag": 120}).status_code == 200
+
+
+def test_grosse_downloads_kommen_aus_einer_datei(client, jahr):
+    """Export, Sicherung und Paket werden gestreamt (nicht als ein Block im Arbeitsspeicher gehalten)."""
+    _abschliessen(client)
+    for pfad in (f"/api/export?jahr={Y}", "/api/backup", f"/api/abschluss/{Y}/paket"):
+        r = client.get(pfad)
+        assert r.status_code == 200 and r.is_streamed, pfad
+        assert zipfile.ZipFile(io.BytesIO(r.data)).testzip() is None

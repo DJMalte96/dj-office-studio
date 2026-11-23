@@ -9,10 +9,12 @@ import io
 import json
 import os
 import re
+import tempfile
+import threading
 import zipfile
 from datetime import date, datetime
 
-from flask import Blueprint, Response, abort, jsonify, request
+from flask import Blueprint, Response, abort, jsonify, request, send_file
 
 import db
 import finanzen
@@ -187,17 +189,26 @@ def _paket_name(jahr, fassung):
     return f"Jahresabschluss_{jahr}_Fassung_{fassung}.zip"
 
 
-def _pruefsumme(dateien):
-    """SHA-256 über alle Dateien (Name + Inhalt, sortiert) → (Gesamtsumme, Liste je Datei)."""
-    zeilen = [f"{hashlib.sha256(inhalt).hexdigest()}  {name}" for name, inhalt in sorted(dateien.items())]
-    text = "\n".join(zeilen) + "\n"
+def _pruefsumme(summen):
+    """{Dateiname: SHA-256} → (Gesamtsumme über die sortierte Liste, Liste als Text)."""
+    text = "".join(f"{h}  {name}\n" for name, h in sorted(summen.items()))
     return hashlib.sha256(text.encode()).hexdigest(), text
 
 
+_sperre = threading.Lock()     # immer nur ein Abschluss bzw. Wiederöffnen zur selben Zeit (zwei Geräte, Doppelklick)
+
+
 def abschliessen(jahr, heute=None):
-    jahr = int(jahr)
-    heute = heute or date.today()
-    st = status(jahr, heute)
+    if not _sperre.acquire(blocking=False):
+        raise ValueError("Gerade wird schon ein Jahr abgeschlossen – bitte einen Moment warten und dann neu laden.")
+    try:
+        return _abschliessen(int(jahr), heute or date.today())
+    finally:
+        _sperre.release()
+
+
+def _abschliessen(jahr, heute):
+    st = status(jahr, heute, abweichung=False)
     if st["status"] == "zu":
         raise ValueError(f"{jahr} ist schon abgeschlossen.")
     if st["status"] == "laeuft":
@@ -207,43 +218,69 @@ def abschliessen(jahr, heute=None):
         raise ValueError("Erst die rot markierten Punkte erledigen: " + "; ".join(x["text"] for x in p["punkte"] if x["stufe"] == "rot"))
     a = finanzen._einstellungen()
     w = finanzen.einstellungen_im_jahr(jahr, a)
-    with db.connect() as con:   # Werte des Jahres festhalten, solange es noch offen ist
-        con.execute("INSERT OR IGNORE INTO jahr_einstellungen (jahr, kleinunternehmer, fahrzeug) VALUES (?, ?, ?)",
-                    (jahr, int(bool(w.get("kleinunternehmer"))), w.get("fahrzeug") or "privat"))
-    e = finanzen.euer(jahr)
     main = _app()
-    with zipfile.ZipFile(io.BytesIO(main.export_zip(str(jahr), a))) as zf:
-        dateien = {n: zf.read(n) for n in zf.namelist()}
     vorher = fassungen(jahr)
     fassung = (vorher[-1]["fassung"] if vorher else 0) + 1
     jetzt = datetime.now().isoformat(timespec="seconds")
-    daten = {"app": "DJ Office Studio", "version": main.APP_VERSION, "jahr": jahr, "fassung": fassung, "abgeschlossen_am": jetzt,
-             "kleinunternehmer": bool(w.get("kleinunternehmer")), "fahrzeug": w.get("fahrzeug") or "privat",
-             "euer": {k: e[k] for k in ("einnahmen", "ausgaben", "gewinn", "einnahmen_zeilen", "ausgaben_zeilen", "afa", "fahrtkosten",
-                                        "anzahl_rechnungen")}}
-    dateien["abschluss.json"] = json.dumps(daten, ensure_ascii=False, indent=2).encode()
-    summe, liste = _pruefsumme(dateien)
-    verlauf = vorher + [{"fassung": fassung, "abgeschlossen_am": jetzt, "gewinn": e["gewinn"], "geoeffnet_am": None, "grund": None}]
-    dateien["Abschlussblatt.pdf"] = abschlussblatt(jahr, e, w, verlauf, summe, main.absender())
-    dateien["Pruefsummen.txt"] = (f"SHA-256 je Datei. Gesamt-Prüfsumme (SHA-256 dieser Liste ohne diese Kopfzeilen): {summe}\n"
-                                  "Das Abschlussblatt und diese Liste selbst sind nicht enthalten.\n\n" + liste).encode()
-    buf = io.BytesIO()
-    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
-        for name in sorted(dateien):
-            zf.writestr(name, dateien[name])
-    rel = os.path.join(ORDNER, _paket_name(jahr, fassung))
-    os.makedirs(os.path.join(db.DATA_DIR, ORDNER), exist_ok=True)
-    with open(os.path.join(db.DATA_DIR, rel), "wb") as f:
-        f.write(buf.getvalue())
+    # Erst sperren, dann rechnen und packen: Was in diesen Sekunden auf einem anderen Gerät geändert würde, weist die
+    # Datenbank ab – das Paket zeigt also genau den gesperrten Stand.
     with db.connect() as con:
+        con.execute("INSERT OR IGNORE INTO jahr_einstellungen (jahr, kleinunternehmer, fahrzeug) VALUES (?, ?, ?)",
+                    (jahr, int(bool(w.get("kleinunternehmer"))), w.get("fahrzeug") or "privat"))
         con.execute("INSERT INTO jahresabschluss (jahr, fassung, abgeschlossen_am, gewinn, euer_json, pruefsumme, datei, version)"
-                    " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                    (jahr, fassung, jetzt, e["gewinn"], json.dumps(daten["euer"], ensure_ascii=False), summe, rel, main.APP_VERSION))
+                    " VALUES (?, ?, ?, 0, '{}', '', '', ?)", (jahr, fassung, jetzt, main.APP_VERSION))
+    rel = os.path.join(ORDNER, _paket_name(jahr, fassung))
+    ziel = os.path.join(db.DATA_DIR, rel)
+    teil = ziel + ".teil"
+    try:
+        e = finanzen.euer(jahr)
+        daten = {"app": "DJ Office Studio", "version": main.APP_VERSION, "jahr": jahr, "fassung": fassung, "abgeschlossen_am": jetzt,
+                 "kleinunternehmer": bool(w.get("kleinunternehmer")), "fahrzeug": w.get("fahrzeug") or "privat",
+                 "euer": {k: e[k] for k in ("einnahmen", "ausgaben", "gewinn", "einnahmen_zeilen", "ausgaben_zeilen", "afa", "fahrtkosten",
+                                            "anzahl_rechnungen")}}
+        os.makedirs(os.path.dirname(ziel), exist_ok=True)
+        summen = {}
+        # Stück für Stück: Belege werden nie ganz in den Arbeitsspeicher geladen
+        with tempfile.TemporaryFile() as export:
+            main.export_zip(str(jahr), a, ziel=export)
+            export.seek(0)
+            with zipfile.ZipFile(export) as quelle, zipfile.ZipFile(teil, "w", zipfile.ZIP_DEFLATED, allowZip64=True) as paket:
+                for info in quelle.infolist():
+                    if info.is_dir() or info.filename in summen:
+                        continue
+                    h = hashlib.sha256()
+                    with quelle.open(info) as src, paket.open(info.filename, "w", force_zip64=True) as dst:
+                        while block := src.read(1024 * 1024):
+                            h.update(block)
+                            dst.write(block)
+                    summen[info.filename] = h.hexdigest()
+                inhalt = json.dumps(daten, ensure_ascii=False, indent=2).encode()
+                summen["abschluss.json"] = hashlib.sha256(inhalt).hexdigest()
+                paket.writestr("abschluss.json", inhalt)
+                summe, liste = _pruefsumme(summen)
+                verlauf = vorher + [{"fassung": fassung, "abgeschlossen_am": jetzt, "gewinn": e["gewinn"], "geoeffnet_am": None, "grund": None}]
+                paket.writestr("Abschlussblatt.pdf", abschlussblatt(jahr, e, w, verlauf, summe, main.absender()))
+                paket.writestr("Pruefsummen.txt", f"SHA-256 je Datei. Gesamt-Prüfsumme (SHA-256 dieser Liste ohne diese Kopfzeilen): {summe}\n"
+                                                  "Das Abschlussblatt und diese Liste selbst sind nicht enthalten.\n\n" + liste)
+        os.replace(teil, ziel)      # erst jetzt an seinen Platz – ein abgebrochener Versuch überschreibt nichts
+        with db.connect() as con:
+            con.execute("UPDATE jahresabschluss SET gewinn = ?, euer_json = ?, pruefsumme = ?, datei = ? WHERE jahr = ? AND fassung = ?",
+                        (e["gewinn"], json.dumps(daten["euer"], ensure_ascii=False), summe, rel, jahr, fassung))
+    except BaseException:
+        with db.connect() as con:   # schiefgegangen: Sperre wieder aufheben
+            con.execute("DELETE FROM jahresabschluss WHERE jahr = ? AND fassung = ?", (jahr, fassung))
+        if os.path.exists(teil):
+            os.remove(teil)
+        raise
     return status(jahr, heute)
 
 
 def oeffnen(jahr, grund):
-    jahr = int(jahr)
+    with _sperre:
+        return _oeffnen(int(jahr), grund)
+
+
+def _oeffnen(jahr, grund):
     grund = " ".join((grund or "").split())[:300]
     if not grund:
         raise ValueError("Bitte einen Grund angeben.")
@@ -406,9 +443,7 @@ def hinweis_aus():
 @bp.get("/api/abschluss/<int:jahr>/paket")
 def paket(jahr):
     pfad, fassung = _datei(jahr, request.args.get("fassung", type=int))
-    with open(pfad, "rb") as f:
-        return Response(f.read(), mimetype="application/zip",
-                        headers={"Content-Disposition": f'attachment; filename="{_paket_name(jahr, fassung)}"'})
+    return send_file(pfad, mimetype="application/zip", as_attachment=True, download_name=_paket_name(jahr, fassung))
 
 
 @bp.get("/api/abschluss/<int:jahr>/blatt")

@@ -1,5 +1,6 @@
 """Finanzen – EÜR: Zufluss/Abfluss, Stornos, Privatanteil, Fahrten, Abschreibung, Prüfliste, Umsatzsteuer."""
 import io
+import re
 
 from conftest import KUNDE
 
@@ -126,7 +127,7 @@ def test_export_enthaelt_finanzen_und_belege(client):
     ausgabe(client, "2026-03-12", 2380, "anschaffung", beschreibung="Aktivboxen (Paar)")
     client.post("/api/fahrten", json={"datum": "2026-10-31", "ziel": "Feldweg 3, 12350 Lindenau", "km_einfach": 31})
     r = client.get("/api/export?jahr=2026")
-    assert 'filename="Export_2026.zip"' in r.headers["Content-Disposition"]
+    assert re.search(r'filename="?Export_2026\.zip"?(;|$)', r.headers["Content-Disposition"])
     zf = zipfile.ZipFile(io.BytesIO(r.data))
     namen = set(zf.namelist())
     assert {"Rechnungen_2026.csv", "EUeR_2026.csv", "Einnahmen_2026.csv", "Ausgaben_2026.csv", "Fahrten_2026.csv",

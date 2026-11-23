@@ -422,6 +422,10 @@ def ausgabe_aendern(aid):
         w["status"] = "ok"
         if not gesamt.get("bezahlt_am"):
             w["bezahlt_am"] = gesamt.get("belegdatum")
+    # Datum geändert: eine Zuordnung nach der 10-Tage-Regel passt dann nicht mehr – wieder nach dem Datum zählen
+    neu_tag, alt_tag = ({**alt, **w}.get("bezahlt_am") or {**alt, **w}.get("belegdatum")), (alt.get("bezahlt_am") or alt.get("belegdatum"))
+    if alt.get("euer_jahr") and neu_tag != alt_tag:
+        w["euer_jahr"] = None
     if w:
         with db.connect() as con:
             # Status auch hier prüfen: kann seit dem Lesen oben in einem anderen Fenster gelöscht worden sein

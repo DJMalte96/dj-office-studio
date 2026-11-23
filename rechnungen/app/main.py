@@ -16,7 +16,7 @@ import urllib.request
 import zipfile
 from datetime import date, datetime, timedelta
 
-from flask import Flask, Response, abort, jsonify, request, send_from_directory
+from flask import Flask, Response, abort, jsonify, request, send_file, send_from_directory
 
 import sqlite3
 
@@ -804,8 +804,8 @@ def backup_download():
         pfad = os.path.join(tmp, "rechnungen.db")
         db.sichern(pfad)
         db.geheimnisse_entfernen(pfad)   # Mail-Passwort nicht in die herunterladbare Datei
-        buf = io.BytesIO()
-        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        buf = tempfile.TemporaryFile()   # mit allen Belegen schnell einige 100 MB: über eine Datei, nicht im Arbeitsspeicher
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED, allowZip64=True) as zf:
             zf.write(pfad, "rechnungen.db")
             anzahl_belege = 0
             for ordner in ("belege", abschluss.ORDNER):   # seit 1.8 auch die Pakete der Jahresabschlüsse
@@ -820,8 +820,8 @@ def backup_download():
                                                  "belege": anzahl_belege}))
     db.save_settings({"_letzte_sicherung": datetime.now().isoformat(timespec="seconds")})   # für die Erinnerung
     name = f"DJ-Office-Studio-Sicherung_{date.today():%Y-%m-%d}.zip"
-    return Response(buf.getvalue(), mimetype="application/zip",
-                    headers={"Content-Disposition": f'attachment; filename="{name}"'})
+    buf.seek(0)
+    return send_file(buf, mimetype="application/zip", as_attachment=True, download_name=name)
 
 
 @app.post("/api/backup")
@@ -935,12 +935,14 @@ def export_year():
     jahr = request.args.get("jahr") or str(date.today().year)
     if not jahr.isdigit():
         abort(400)
-    return Response(export_zip(jahr), mimetype="application/zip",
-                    headers={"Content-Disposition": f'attachment; filename="Export_{jahr}.zip"'})
+    datei = tempfile.TemporaryFile()   # Belege können groß sein: über eine Datei, nicht im Arbeitsspeicher
+    export_zip(jahr, ziel=datei)
+    datei.seek(0)
+    return send_file(datei, mimetype="application/zip", as_attachment=True, download_name=f"Export_{jahr}.zip")
 
 
-def export_zip(jahr, a=None):
-    """Inhalt des Exports als ZIP-Bytes (auch Grundlage des Jahresabschluss-Pakets)."""
+def export_zip(jahr, a=None, ziel=None):
+    """Export als ZIP – in die Datei „ziel“ (auch Grundlage des Jahresabschluss-Pakets) bzw. ohne Ziel als Bytes."""
     rechnungen = sorted((r for r in db.list_invoices() if r["datum"].startswith(jahr)),
                         key=lambda r: (r["datum"], r["nummer"]))
     a = a or absender()
@@ -948,8 +950,8 @@ def export_zip(jahr, a=None):
     w = csv.writer(csv_buf, delimiter=";")
     w.writerow(["Rechnungsnummer", "Rechnungsdatum", "Leistungsdatum", "Kunde", "Ort", "Netto (EUR)", "USt-Satz",
                 "USt (EUR)", "Betrag (EUR)", "Status", "Bezahlt am", "Bezug", "Datei"])
-    buf = io.BytesIO()
-    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+    buf = ziel or io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED, allowZip64=True) as zf:
         for r in rechnungen:
             status = ("Storno" if r["storno_von"] else "storniert" if r["storniert_durch"]
                       else "bezahlt" if r["bezahlt"] else "offen")
@@ -971,7 +973,7 @@ def export_zip(jahr, a=None):
         # BOM, damit Excel die Umlaute richtig erkennt
         zf.writestr(f"Rechnungen_{jahr}.csv", "\ufeff" + csv_buf.getvalue())
         finanzen.export_finanzen(zf, jahr, a)   # seit 1.1: EÜR, Einnahmen, Ausgaben, Fahrten, Anlagen, Belege
-    return buf.getvalue()
+    return None if ziel else buf.getvalue()
 
 
 # ---------- E-Mail-Versand ----------
