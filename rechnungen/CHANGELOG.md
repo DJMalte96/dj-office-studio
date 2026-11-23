@@ -2,6 +2,16 @@
 
 Alle Änderungen an DJ Office Studio. Neueste Version oben.
 
+## 1.10.0 – 2026-11-23
+
+### Neu
+- **Neue Startseite**: oben „Heute wichtig“ mit allem, was ansteht (überfällige Rechnungen, fällige Abos, ungeprüfte Belege, ablaufende Angebote, fällige Sicherung) und die Schnellknöpfe Neue Rechnung, Neues Angebot, Beleg hochladen. Darunter „Demnächst“ mit den nächsten Terminen – bei viel Betrieb als Leiste der nächsten 14 Tage –, eine Pinnwand „Geld kommt rein / Geld geht raus / Angebote“ mit Knöpfen direkt am Eintrag (Zahlungserinnerung, QR-Code, ✓ Bezahlt, → Rechnung …), „Dein Jahr“ und eine Statuszeile (Sicherung, Kleinunternehmer-Grenze, Jahr abschließen).
+- In ruhigen Zeiten wirkt die Seite aufgeräumt statt leer: leere Spalten fallen weg, „Dein Jahr“ ist immer gefüllt.
+- Die acht Kacheln, „Umsatz“ und „Letzte Rechnungen“ sind weggefallen – alles ist weiter über das Menü erreichbar.
+
+### Behoben
+- Abos: Ein unmögliches Datum für eine Preisänderung (z. B. 30. Februar) wurde angenommen.
+
 ## 1.9.0 – 2026-11-23
 
 ### Neu

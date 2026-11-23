@@ -347,7 +347,7 @@ function sicherungHerunterladen() {
   toast("Sicherung wird heruntergeladen … Am besten an einem anderen Ort ablegen (Cloud, USB-Stick).");
   setTimeout(async () => {
     await ladeAbsender();
-    if ($("#tab-start").classList.contains("active")) renderSicherung();
+    if ($("#tab-start").classList.contains("active")) renderStart();
   }, 1500);
 }
 $("#sicherung-btn").addEventListener("click", sicherungHerunterladen);
@@ -1902,120 +1902,218 @@ $("#tab-start").addEventListener("click", e => {
 const tageSeit = iso => Math.max(0, Math.round((heuteUtc() - isoToUtc(iso.slice(0, 10))) / TAG_MS));
 const tageText = n => n === 0 ? "heute" : n === 1 ? "gestern" : `vor ${n} Tagen`;
 
-/* Startseite: Zeit seit der letzten heruntergeladenen Sicherung, Erinnerung wenn fällig */
-function renderSicherung() {
-  const s = state.absender?.sicherung;
-  if (!s) return;
+/* Startseite (seit 1.10): dunkler Kopf mit „Heute wichtig“, „Demnächst“, Pinnwand, „Dein Jahr“, Statuszeile.
+   Wirkt auch in ruhigen Zeiten nicht leer: leere Spalten fallen weg, „Dein Jahr“ ist immer gefüllt. */
+const TAG_KURZ = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
+const isoLokal = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+const euroGanz = v => Math.round(Number(v) || 0).toLocaleString("de-DE") + " €";
+const euroCent = v => (Number(v) || 0).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €";
+let startTag = null;          // in der 14-Tage-Leiste angeklickter Tag
+
+function sicherungStand() {
+  const s = state.absender?.sicherung || {};
   const intervall = Number(s.erinnerung_tage) || 0;
-  const hatDaten = state.rechnungen.length || state.angebote.length;
   const tage = s.letzte ? tageSeit(s.letzte) : null;
-  const stufe = tage === null ? (hatDaten && intervall ? "rot" : "neutral")
-    : !intervall ? "gruen" : tage >= intervall ? "rot" : tage >= intervall * 0.75 ? "gelb" : "gruen";
-  const faellig = stufe === "rot";
-  $("#start-sicherung-karte").classList.toggle("faellig", faellig);
-  const auto = s.automatisch
-    ? `Automatische Tageskopie auf diesem Computer: ${tageText(tageSeit(s.automatisch))} ✓ – sie hilft aber nicht, wenn der Computer kaputtgeht oder verloren geht.`
-    : state.absender.desktop ? "" : "Die Daten sind zusätzlich in den Backups von Home Assistant enthalten.";
-  $("#start-sicherung").innerHTML = `
-    <div class="sicherung-status">
-      <div class="stat-gross ${stufe}">${tage === null ? "noch nie" : tageText(tage)}<small>${tage === null
-        ? "wurde eine Sicherung heruntergeladen" : `letzte Sicherung am ${fmtDate(s.letzte.slice(0, 10))} um ${s.letzte.slice(11, 16)} Uhr`}</small></div>
-      <button type="button" class="${faellig ? "" : "secondary"}" id="start-sichern">⇩ Jetzt sichern</button>
-    </div>
-    ${intervall && tage !== null ? `<div class="sicherung-balken ${stufe}" title="Erinnerung nach ${intervall} Tagen"><span style="width:${Math.min(100, tage / intervall * 100)}%"></span></div>` : ""}
-    <p class="hint">${faellig ? `<b>Zeit für eine neue Sicherung!</b> ` : intervall && tage !== null
-      ? `Nächste Erinnerung in ${intervall - tage} ${intervall - tage === 1 ? "Tag" : "Tagen"}. ` : ""}Die Sicherungsdatei am besten an einem anderen Ort ablegen – z. B. in der Cloud oder auf einem USB-Stick. ${auto}</p>`;
-  $("#start-sichern").addEventListener("click", sicherungHerunterladen);
+  const hatDaten = state.rechnungen.length || state.angebote.length;
+  const faellig = tage === null ? !!(hatDaten && intervall) : !!intervall && tage >= intervall;
+  let faelligAm = null;
+  if (s.letzte && intervall) { const d = new Date(s.letzte.slice(0, 10) + "T12:00"); d.setDate(d.getDate() + intervall); faelligAm = isoLokal(d); }
+  return { tage, faellig, faelligAm, letzte: s.letzte };
 }
 
 async function renderStart() {
-  if (typeof renderStartFinanzen === "function") renderStartFinanzen();   // finanzen.js
-  const jetzt = new Date();
-  const h = jetzt.getHours();
-  const vorname = (state.absender?.name || "").trim().split(/\s+/)[0];
-  const gruss = h < 11 ? "Guten Morgen" : h < 18 ? "Hallo" : "Guten Abend";
-  $("#start-gruss").textContent = vorname ? `${gruss}, ${vorname}!` : `${gruss}!`;
-  $("#start-datum").textContent = jetzt.toLocaleDateString("de-DE",
-    { weekday: "long", day: "numeric", month: "long", year: "numeric" });
-
+  const box = $("#start");
+  let eu, faellig, abos, abschluss;
   try {
-    [state.rechnungen, state.angebote] = await Promise.all([api("rechnungen"), api("angebote"), ladeAbsender()]);
+    [state.rechnungen, state.angebote, , eu, faellig, abos, abschluss] = await Promise.all([api("rechnungen"), api("angebote"), ladeAbsender(),
+      api(`finanzen/euer?jahr=${new Date().getFullYear()}`).catch(() => null), api("abos/faellig").catch(() => []),
+      api("abos").catch(() => ({ abos: [] })), api("abschluss").catch(() => ({}))]);
   } catch (e) { return toast("Laden fehlgeschlagen: " + e.message, true); }
-  const alle = state.rechnungen;
-  renderSicherung();
-
-  // Offene Angebote (Kurzfassung)
-  const offeneAng = offeneAngebote();
-  const gueltigeAng = offeneAng.filter(a => a.rest === null || a.rest >= 0);
-  $("#start-angebote").innerHTML = offeneAng.length ? `
-    <div class="stat-gross">${fmtEuro(gueltigeAng.reduce((s, a) => s + a.gesamt, 0))}<small>${gueltigeAng.length} noch gültige${
-      gueltigeAng.length === 1 ? "s Angebot" : " Angebote"}${offeneAng.length > gueltigeAng.length
-      ? ` · ${offeneAng.length - gueltigeAng.length} abgelaufen` : ""}</small></div>
-    <ul class="mini-liste">${offeneAng.slice(0, 4).map(a => `<li>
-      <div class="ml-text"><a href="#" class="start-alink" data-id="${a.id}">${esc(angebotName(a))}</a>
-        <small>${esc(a.kunde.name)} · angeboten am ${fmtDate(a.datum)}</small></div>
-      <span class="num">${fmtEuro(a.gesamt)}</span>${restBadge(a)}</li>`).join("")}</ul>
-    ${offeneAng.length > 4 ? `<p class="hint">+ ${offeneAng.length - 4} weitere</p>` : ""}`
-    : `<p class="hint">Keine offenen Angebote.</p>`;
-
-  // Offene Rechnungen (Kurzfassung)
-  const offen = alle.filter(istOffen).map(r => ({ ...r, ziel: zahlungsziel(r) }))
+  const jetzt = new Date(), jahr = jetzt.getFullYear(), heute = isoLokal(jetzt);
+  const offen = state.rechnungen.filter(istOffen).map(r => ({ ...r, ziel: zahlungsziel(r) }))
     .sort((a, b) => (a.ziel ? a.ziel.faellig : Infinity) - (b.ziel ? b.ziel.faellig : Infinity));
-  const summeOffen = offen.reduce((s, r) => s + r.gesamt, 0);
-  $("#start-offen").innerHTML = offen.length ? `
-    <div class="stat-gross">${fmtEuro(summeOffen)}<small>${offen.length} offene Rechnung${offen.length === 1 ? "" : "en"}</small></div>
-    <ul class="mini-liste">${offen.slice(0, 4).map(r => `<li>
-      <div class="ml-text"><a href="#" class="start-rlink" data-id="${r.id}">${esc(rechnungsName(r))}</a>
-        <small>${esc(r.kunde.name)}</small></div>
-      <span class="num">${fmtEuro(r.gesamt)}</span>${fristBadge(r.ziel)}</li>`).join("")}</ul>
-    ${offen.length > 4 ? `<p class="hint">+ ${offen.length - 4} weitere</p>` : ""}`
-    : `<p class="hint">Keine offenen Rechnungen – alles bezahlt.</p>`;
+  const angebote = offeneAngebote();
+  const pl = eu?.pruefliste || [];
+  const belegPunkt = pl.find(p => p.aktion === "ausgaben" && p.stufe === "warn" && /Beleg/.test(p.text));
+  const ohneDatum = pl.find(p => p.aktion === "bezahlt_am");
+  const sich = sicherungStand();
+  const ueber = offen.filter(r => r.ziel && r.ziel.rest < 0);
 
-  // Umsatz nach Rechnungsdatum
-  const jahr = String(jetzt.getFullYear());
-  const monat = `${jahr}-${String(jetzt.getMonth() + 1).padStart(2, "0")}`;
-  const vorjahr = String(jetzt.getFullYear() - 1);
-  const summeVon = praefix => alle.filter(r => r.datum.startsWith(praefix)).reduce((s, r) => s + r.gesamt, 0);
-  const anzahlVon = praefix => alle.filter(r => r.datum.startsWith(praefix)).length;
-  $("#start-umsatz").innerHTML = [
-    [`${MONATE[jetzt.getMonth()]} ${jahr}`, summeVon(monat), anzahlVon(monat)],
-    [`Jahr ${jahr}`, summeVon(jahr), anzahlVon(jahr)],
-    [`Jahr ${vorjahr}`, summeVon(vorjahr), anzahlVon(vorjahr)],
-  ].map(([titel, summe, n]) => `<div class="stat-zeile"><span>${titel}</span>
-      <strong>${fmtEuro(summe)}</strong><small>${n} Rechnung${n === 1 ? "" : "en"}</small></div>`).join("");
+  // ---------- Termine (für „Demnächst“ bzw. die 14-Tage-Leiste) ----------
+  const termine = {};
+  const dazu = (datum, art, kurz, lang) => { (termine[datum] ||= []).push({ art, kurz, lang }); };
+  for (const r of offen.filter(r => r.ziel)) {
+    const tag = new Date(r.ziel.faellig).toISOString().slice(0, 10);
+    dazu(tag < heute ? heute : tag, tag < heute ? "rot" : "ein", `${euroGanz(r.gesamt)} ${r.kunde.name.split(" ")[0]}`,
+      `Rechnung ${r.nummer} (${r.kunde.name}, ${euroCent(r.gesamt)}) ${tag < heute ? `seit ${fmtDate(tag)} überfällig` : "fällig"}`);
+  }
+  for (const a of abos.abos.filter(a => a.naechste)) dazu(a.naechste, "aus", `${euroGanz(a.betrag_aktuell)} ${a.lieferant.split(" ")[0]}`,
+    `Abo ${a.lieferant}: Abbuchung ${euroCent(a.betrag_aktuell)}`);
+  for (const a of angebote.filter(a => a.gueltig_bis && a.gueltig_bis >= heute)) dazu(a.gueltig_bis, "ang", `Angebot ${a.nummer}`,
+    `Angebot ${a.nummer} (${a.kunde.name}, ${euroCent(a.gesamt)}) läuft ab`);
+  if (sich.faelligAm && sich.faelligAm > heute) dazu(sich.faelligAm, "ang", "Sicherung", "Datensicherung fällig");
+  const tage = [...Array(15)].map((_, i) => { const d = new Date(jetzt); d.setDate(d.getDate() + i); return d; });
 
-  // Letzte Rechnungen
-  const letzte = [...alle].sort((a, b) => b.datum.localeCompare(a.datum) || b.nummer.localeCompare(a.nummer, "de", { numeric: true })).slice(0, 5);
-  $("#start-letzte").innerHTML = letzte.map(r => `<li>
-      <div class="ml-text"><a href="#" class="start-rlink" data-id="${r.id}">${esc(rechnungsName(r))}</a>
-        <small>${esc(r.kunde.name)} · ${fmtDate(r.datum)}</small></div>
-      <span class="num">${fmtEuro(r.gesamt)}</span>
-      ${r.storno_von ? `<span class="frist neutral">Storno</span>` : r.storniert_durch ? `<span class="frist neutral">storniert</span>`
-        : r.bezahlt ? `<span class="frist gruen">bezahlt</span>` : `<span class="frist neutral">offen</span>`}</li>`).join("")
-    || `<li class="leer">Noch keine Rechnungen.</li>`;
+  // ---------- Heute wichtig ----------
+  const wichtig = [];
+  if (state.absender && !state.absender.vollstaendig) wichtig.push(["rot", "⚙ Angaben für Rechnungen fehlen", `data-start="einstellungen"`]);
+  if (ueber.length) wichtig.push(["rot", `€ ${ueber.length} Rechnung${ueber.length === 1 ? "" : "en"} überfällig`, `data-start="zu-karte" data-ziel=".start-karte.rot"`]);
+  const heuteFaellig = offen.filter(r => r.ziel && r.ziel.rest === 0).length;
+  if (heuteFaellig) wichtig.push(["gelb", `€ ${heuteFaellig} heute fällig`, `data-start="zu-karte" data-ziel=".start-karte.gelb"`]);
+  if (faellig.length) wichtig.push(["gelb", `↻ ${faellig.length} Abo${faellig.length === 1 ? "" : "s"} fällig`, `data-start="ausgaben"`]);
+  if (belegPunkt) wichtig.push(["gelb", `⇪ ${esc(belegPunkt.text.replace(" noch nicht geprüft", " zu prüfen"))}`, `data-start="belege"`]);
+  if (ohneDatum) wichtig.push(["gelb", "📅 Bezahlt-Datum fehlt", `data-start="bezahlt-am"`]);
+  const baldAb = angebote.filter(a => a.rest !== null && a.rest >= 0 && a.rest <= 3).length;
+  if (baldAb) wichtig.push(["gelb", `✎ ${baldAb} Angebot${baldAb === 1 ? " läuft" : "e laufen"} bald ab`, `data-start="angebote"`]);
+  for (const g of (eu?.grenzen?.hinweise || []).filter(g => g.stufe === "rot")) wichtig.push(["rot", "! Kleinunternehmer-Grenze", `data-start="finanzen" title="${esc(g.text)}"`]);
+  if (sich.faellig) wichtig.push(["rot", "⇩ Sicherung fällig", `data-start="sichern"`]);
+  const erster = Object.entries(termine).filter(([t]) => t > heute).sort(([a], [b]) => a < b ? -1 : 1)[0];
 
-  // Hinweise, die die App selbst erkennt
-  const hinweise = [];
-  if (state.absender && !state.absender.vollstaendig) {
-    hinweise.push(["warn", `Für vollständige Rechnungen fehlt noch: ${esc(state.absender.fehlt.join(", "))} – bitte unter <a href="#" class="zu-einstellungen">⚙ Einstellungen</a> eintragen.`]);
+  // ---------- Demnächst: Tagesleiste nur, wenn genug los ist ----------
+  let zeit;
+  if (tage.filter(d => termine[isoLokal(d)]).length >= 4) {
+    zeit = `<section class="start-zeit"><div class="start-titel"><h3>Die nächsten 14 Tage</h3><small>Rechnungen fällig · Abbuchungen · Angebote laufen ab</small></div>
+      <div class="start-tage">${tage.map((d, i) => {
+        const t = isoLokal(d), liste = termine[t] || [], we = d.getDay() === 0 || d.getDay() === 6;
+        return `<button type="button" class="start-tag${i === 0 ? " heute" : we ? " we" : ""}${startTag === t ? " offen" : ""}" data-tag="${t}">
+          <span class="d">${i === 0 ? "heute" : TAG_KURZ[d.getDay()]}</span><span class="n">${d.getDate()}.</span>
+          ${liste.slice(0, 3).map(x => `<span class="start-punkt ${x.art}" title="${esc(x.lang)}">${esc(x.kurz)}</span>`).join("")}${liste.length > 3 ? `<span class="start-punkt">+${liste.length - 3}</span>` : ""}</button>`;
+      }).join("")}</div>
+      ${startTag && termine[startTag] ? `<div class="start-detail"><b>${new Date(startTag + "T12:00").toLocaleDateString("de-DE", { weekday: "long", day: "numeric", month: "long" })}</b>
+        <ul>${termine[startTag].map(x => `<li>${esc(x.lang)}</li>`).join("")}</ul></div>` : ""}</section>`;
+  } else {
+    const grenze = isoLokal(new Date(jetzt.getTime() + 60 * 864e5));
+    const kommend = Object.entries(termine).filter(([t]) => t > heute && t <= grenze).sort(([a], [b]) => a < b ? -1 : 1)
+      .flatMap(([t, l]) => l.map(x => ({ t, ...x }))).slice(0, 5);
+    const inTagen = t => { const n = Math.round((new Date(t + "T12:00") - new Date(heute + "T12:00")) / 864e5); return n === 1 ? "morgen" : `in ${n} Tagen`; };
+    zeit = `<section class="start-zeit"><div class="start-titel"><h3>Demnächst</h3><small>ab morgen · bis ${fmtDate(grenze)}</small></div>
+      ${kommend.length ? `<div class="start-agenda">${kommend.map(x => `<div class="start-ag ${x.art}"><span class="dat"><b>${TAG_KURZ[new Date(x.t + "T12:00").getDay()]} ${fmtDate(x.t).slice(0, 6)}</b><small>${inTagen(x.t)}</small></span>
+        <span>${esc(x.lang)}</span></div>`).join("")}</div>` : `<div class="start-ruhig">🎧 In den nächsten Wochen wird nichts fällig.</div>`}</section>`;
   }
-  for (const r of offen.filter(r => r.ziel && r.ziel.rest < 0)) {
-    hinweise.push(["rot", `<a href="#" class="start-rlink" data-id="${r.id}">${esc(rechnungsName(r))}</a> ist seit ${-r.ziel.rest} ${-r.ziel.rest === 1 ? "Tag" : "Tagen"} überfällig (${esc(r.kunde.name)}, ${fmtEuro(r.gesamt)})`
-      + (r.mahnungen.length ? ` – ${MAHN_KURZ[r.mahnungen.at(-1).stufe]} am ${fmtDate(r.mahnungen.at(-1).datum)}.` : ".")]);
+
+  // ---------- Pinnwand: nur Spalten mit Inhalt ----------
+  const schonFaellig = new Set(faellig.map(f => f.abo_id));     // steht schon als fällige Abbuchung da – nicht doppelt zeigen
+  const kommendeAbos = abos.abos.filter(a => a.naechste && !a.beendet && !schonFaellig.has(a.id))
+    .sort((a, b) => a.naechste < b.naechste ? -1 : 1).slice(0, 3);
+  const spalten = [], leer = [];
+  if (offen.length) spalten.push(`<div class="start-spalte"><h3>Geld kommt rein <small>${euroGanz(offen.reduce((s, r) => s + r.gesamt, 0))}</small></h3>
+    ${offen.slice(0, 5).map(r => {
+      const st = !r.ziel ? "" : r.ziel.rest < 0 ? "rot" : r.ziel.rest <= 3 ? "gelb" : "gruen";
+      const m = r.mahnungen || [];
+      return `<div class="start-karte ${st}" data-rechnung="${r.id}"><div class="z1"><span>${esc(r.kunde.name)}</span><span>${euroCent(r.gesamt)}</span></div>
+        <small>Rechnung ${esc(r.nummer)} · ${r.ziel ? (r.ziel.rest < 0 ? `<b>${-r.ziel.rest} ${-r.ziel.rest === 1 ? "Tag" : "Tage"} überfällig</b>` : r.ziel.rest === 0 ? "heute fällig" : `fällig in ${r.ziel.rest} ${r.ziel.rest === 1 ? "Tag" : "Tagen"}`) : "ohne Frist"}${m.length ? ` · ${MAHN_KURZ[m.at(-1).stufe]} ${fmtDate(m.at(-1).datum)}` : ""}</small>
+        <div class="k">${r.ziel && r.ziel.rest < 0 && m.length < 3 ? `<button type="button" class="small" data-start="mahnen">${NAECHSTE_MAHNUNG[m.length]}</button>` : ""}
+          ${OHNE_UEBERWEISUNG.test(r.zahlungsbedingung || "") ? "" : `<button type="button" class="small secondary" data-start="qr">QR</button>`}
+          <button type="button" class="small secondary" data-start="bezahlt">✓ Bezahlt</button></div></div>`;
+    }).join("")}${offen.length > 5 ? `<a href="#" class="mehr" data-start="liste">alle ${offen.length} →</a>` : ""}</div>`);
+  else leer.push("alle Rechnungen bezahlt");
+  if (faellig.length || belegPunkt || kommendeAbos.length) {
+    spalten.push(`<div class="start-spalte"><h3>Geld geht raus <small>${euroGanz(eu?.monate?.[jetzt.getMonth()]?.ausgaben)} im ${MONATE[jetzt.getMonth()]}</small></h3>
+      ${faellig.map(f => `<div class="start-karte gelb"><div class="z1"><span>${esc(f.lieferant)}</span><span>${euroCent(f.betrag)}</span></div>
+        <small>Abo · fällig ${fmtDate(f.datum)}${f.beleg ? " · Beleg schon da" : ""}</small>
+        <div class="k"><button type="button" class="small" data-start="ausgaben">Bestätigen</button></div></div>`).join("")}
+      ${belegPunkt ? `<div class="start-karte gelb"><div class="z1"><span>${esc(belegPunkt.text)}</span><span></span></div><small>hochgeladen oder aus dem Belege-Ordner</small>
+        <div class="k"><button type="button" class="small" data-start="belege">Prüfen</button></div></div>` : ""}
+      ${kommendeAbos.map(a => `<div class="start-karte"><div class="z1"><span>${esc(a.lieferant)}</span><span>${euroCent(a.betrag_aktuell)}</span></div>
+        <small>nächste Abbuchung ${fmtDate(a.naechste)} · ${esc(a.rhythmus_name)}</small></div>`).join("")}</div>`);
   }
-  for (const r of offen.filter(r => r.ziel && r.ziel.rest === 0)) {
-    hinweise.push(["gelb", `<a href="#" class="start-rlink" data-id="${r.id}">${esc(rechnungsName(r))}</a> ist heute fällig.`]);
-  }
-  const angHinweise = [];
-  for (const a of offeneAng.filter(a => a.rest !== null && a.rest >= 0 && a.rest <= 3)) {
-    angHinweise.push(["gelb", `Angebot <a href="#" class="start-alink" data-id="${a.id}">${esc(angebotName(a))}</a> (${esc(a.kunde.name)}) `
-      + (a.rest === 0 ? "läuft heute ab." : `läuft in ${a.rest} ${a.rest === 1 ? "Tag" : "Tagen"} ab.`)]);
-  }
-  $("#start-hinweise").innerHTML = hinweise.map(([art, text]) => `<li class="${art}">${text}</li>`).join("");
-  $("#start-hinweise").classList.toggle("hidden", !hinweise.length);
-  $("#start-ang-hinweise").innerHTML = angHinweise.map(([art, text]) => `<li class="${art}">${text}</li>`).join("");
-  $("#start-ang-hinweise").classList.toggle("hidden", !angHinweise.length);
+  if (!faellig.length && !belegPunkt) leer.push("keine Belege zu prüfen");
+  if (angebote.length) spalten.push(`<div class="start-spalte"><h3>Angebote <small>${euroGanz(angebote.filter(a => a.rest === null || a.rest >= 0).reduce((s, a) => s + a.gesamt, 0))} offen</small></h3>
+    ${angebote.slice(0, 5).map(a => `<div class="start-karte ${a.rest !== null && a.rest < 0 ? "" : a.rest !== null && a.rest <= 3 ? "gelb" : "gruen"}" data-angebot="${a.id}">
+      <div class="z1"><span>${esc(a.kunde.name)}</span><span>${euroCent(a.gesamt)}</span></div>
+      <small>Angebot ${esc(a.nummer)} · ${a.rest === null ? "ohne Frist" : a.rest < 0 ? `seit ${-a.rest} ${-a.rest === 1 ? "Tag" : "Tagen"} abgelaufen` : a.rest === 0 ? "läuft heute ab" : `noch ${a.rest} ${a.rest === 1 ? "Tag" : "Tage"} gültig`}</small>
+      <div class="k">${a.rest !== null && a.rest < 0 ? `<button type="button" class="small secondary" data-start="abgelehnt">Abgelehnt</button>`
+        : `<button type="button" class="small" data-start="zu-rechnung">→ Rechnung</button>`}<button type="button" class="small secondary" data-start="angebot">Ansehen</button></div></div>`).join("")}
+    ${angebote.length > 5 ? `<a href="#" class="mehr" data-start="angebote">alle ${angebote.length} →</a>` : ""}</div>`);
+  else leer.push("keine offenen Angebote");
+
+  // ---------- Dein Jahr (immer gefüllt) ----------
+  const imJahr = state.rechnungen.filter(r => r.datum.startsWith(String(jahr)) && !r.storno_von && !r.storniert_durch);
+  const monate = eu?.monate || [];
+  const bester = monate.reduce((b, m, i) => m.einnahmen > (monate[b]?.einnahmen || 0) ? i : b, 0);
+  const kunden = new Set(imJahr.map(r => (r.kunde.name || "").trim().toLowerCase())).size;
+  const g = eu?.grenzen, anteil = g ? Math.min(100, g.umsatz / g.grenze_vorjahr * 100) : null;
+  const gruss = jetzt.getHours() < 11 ? "Guten Morgen" : jetzt.getHours() < 18 ? "Hallo" : "Guten Abend";
+  const vorname = (state.absender?.name || "").trim().split(/\s+/)[0];
+
+  box.innerHTML = `
+    <section class="start-kopf">
+      <div>
+        <h2>${gruss}${vorname ? `, ${esc(vorname)}` : ""}!</h2>
+        <div class="datum">${jetzt.toLocaleDateString("de-DE", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</div>
+        <div class="wichtig">${wichtig.length ? `<span class="wt">Heute wichtig</span>${wichtig.map(([s, t, attr]) => `<button type="button" class="start-chip ${s}" ${attr}>${t}</button>`).join("")}`
+          : `<span class="ruhig">✓ Alles erledigt${erster ? ` · als Nächstes: ${fmtDate(erster[0]).slice(0, 6)} ${esc(erster[1][0].lang)}` : ""}</span>`}</div>
+      </div>
+      <div class="knoepfe"><button type="button" data-start="neu">＋ Neue Rechnung</button><button type="button" data-start="angebot-neu">＋ Neues Angebot</button>
+        <button type="button" data-start="beleg">⇪ Beleg hochladen</button></div>
+    </section>
+    ${zeit}
+    ${spalten.length ? `<section class="start-pinnwand" style="--spalten:${spalten.length}">${spalten.join("")}</section>` : ""}
+    ${leer.length ? `<div class="start-leer">${leer.map(t => `<span>✓ ${t}</span>`).join("")}</div>` : ""}
+    <section class="start-jahr"><h3>Dein Jahr ${jahr}</h3><div class="start-jahr-zahlen">
+      <div><b>${imJahr.length}</b><small>Rechnung${imJahr.length === 1 ? "" : "en"} geschrieben</small></div>
+      <div><b>${imJahr.length ? euroGanz(imJahr.reduce((s, r) => s + r.gesamt, 0) / imJahr.length) : "–"}</b><small>im Schnitt je Rechnung</small></div>
+      <div><b>${monate[bester]?.einnahmen ? MONATE[bester] : "–"}</b><small>stärkster Monat${monate[bester]?.einnahmen ? ` · ${euroGanz(monate[bester].einnahmen)}` : ""}</small></div>
+      <div><b>${kunden}</b><small>Kund${kunden === 1 ? "e" : "en"}</small></div>
+      <div><b>${euroGanz(eu?.gewinn)}</b><small>${(eu?.gewinn || 0) < 0 ? "Verlust" : "Gewinn"} bisher</small></div></div></section>
+    <section class="start-status">
+      <button type="button" class="start-plakette${sich.faellig ? " rot" : ""}" data-start="sichern">⇩ Sicherung ${sich.tage === null ? "noch nie" : tageText(sich.tage)} – jetzt sichern</button>
+      ${anteil !== null ? `<button type="button" class="start-plakette${anteil >= 80 ? " gelb" : ""}" data-start="finanzen">Kleinunternehmer-Grenze ${Math.round(anteil)} % <span class="mini"><i style="width:${anteil}%"></i></span></button>` : ""}
+      ${abschluss.hinweis ? `<span class="start-plakette"><button type="button" class="link" data-start="abschluss" data-jahr="${Number(abschluss.hinweis)}">🔒 ${Number(abschluss.hinweis)} abschließen</button>
+        <button type="button" class="link aus" data-start="abschluss-aus" data-jahr="${Number(abschluss.hinweis)}" title="Hinweis ausblenden" aria-label="Hinweis ausblenden">✕</button></span>` : ""}
+    </section>`;
 }
+
+$("#start").addEventListener("click", async e => {
+  const tag = e.target.closest("[data-tag]");
+  if (tag) { startTag = startTag === tag.dataset.tag ? null : tag.dataset.tag; return renderStart(); }
+  const b = e.target.closest("[data-start]");
+  if (!b) return;
+  e.preventDefault();
+  const was = b.dataset.start;
+  const rid = Number(b.closest("[data-rechnung]")?.dataset.rechnung), aid = Number(b.closest("[data-angebot]")?.dataset.angebot);
+  const r = state.rechnungen.find(x => x.id === rid), a = state.angebote.find(x => x.id === aid);
+  try {
+    switch (was) {
+      case "neu": return neueRechnung();
+      case "angebot-neu": return neuesAngebot();
+      case "beleg": showTab("ausgaben"); return setTimeout(() => $("#beleg-dateien").click(), 300);
+      case "liste": case "angebote": case "ausgaben": case "finanzen": return showTab(was);
+      case "belege": showTab("ausgaben"); return setTimeout(() => $("#alle-pruefen")?.click(), 700);
+      case "bezahlt-am": return oeffneBezahltAm();
+      case "einstellungen": return $("#einstellungen-btn").click();
+      case "zu-karte": {
+        const z = $(`#start ${b.dataset.ziel}`);
+        z?.scrollIntoView({ behavior: "smooth", block: "center" });
+        return z?.animate([{ boxShadow: "0 0 0 3px var(--neon)" }, { boxShadow: "none" }], 1200);
+      }
+      case "mahnen":
+        b.disabled = true;
+        await api(`rechnungen/${rid}/mahnung`, { method: "POST" });
+        toast(`${b.textContent} zu Rechnung ${r.nummer} erstellt – unter Rechnungen per E-Mail senden oder herunterladen`);
+        break;
+      case "qr": return oeffneQr(r);
+      case "bezahlt":
+        b.disabled = true;
+        await api(`rechnungen/${rid}/bezahlt`, { method: "PATCH", body: { bezahlt: true } });
+        toast(`Rechnung ${r.nummer} als bezahlt markiert`);
+        break;
+      case "angebot": return loadAngebotIntoForm(a);
+      case "zu-rechnung": return angebotZuRechnung(a);
+      case "abgelehnt":
+        await api(`angebote/${aid}/status`, { method: "PATCH", body: { status: "abgelehnt" } });
+        toast(`Angebot ${a.nummer} als abgelehnt markiert`);
+        break;
+      case "sichern": return sicherungHerunterladen();
+      case "abschluss": showTab("euer"); return setTimeout(() => abschlussStarten(Number(b.dataset.jahr)), 400);
+      case "abschluss-aus":
+        await api("abschluss/hinweis-aus", { method: "POST", body: { jahr: Number(b.dataset.jahr) } });
+        toast("Hinweis ausgeblendet – unter Finanzen → EÜR & Export bleibt der Knopf");
+        break;
+    }
+  } catch (err) { b.disabled = false; return toast(err.message, true); }
+  renderStart();
+});
 
 // ---------- Start ----------
 

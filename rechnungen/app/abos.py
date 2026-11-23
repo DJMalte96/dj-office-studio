@@ -349,8 +349,12 @@ def aendern(aid):
     if fehler:
         return jsonify({"error": "; ".join(fehler)}), 400
     neuer_betrag = w.pop("betrag", None)
-    ab = (d.get("betrag_ab") or heute).strip()
-    if not DATUM.fullmatch(ab):
+    ab = str(d.get("betrag_ab") or heute).strip()
+    try:
+        if not DATUM.fullmatch(ab):
+            raise ValueError
+        date.fromisoformat(ab)
+    except ValueError:
         return jsonify({"error": "Ungültiges Datum für den neuen Betrag"}), 400
     with db.connect() as con:
         if w:

@@ -857,34 +857,9 @@ $("#einnahmen-body").addEventListener("click", async e => {
   try { await api(`einnahmen/${tr.dataset.id}`, { method: "DELETE" }); ladeEuer(); } catch (err) { toast(err.message, true); }
 });
 
-// Startseite: Kachel „Finanzen <Jahr>“
-async function renderStartFinanzen() {
-  const jahr = String(new Date().getFullYear());
-  let d;
-  try { d = await api(`finanzen/euer?jahr=${jahr}`); } catch (_) { return; }
-  $("#start-finanzen-titel").textContent = `Finanzen ${jahr}`;
-  const neu = d.pruefliste.find(p => p.aktion === "ausgaben" && p.stufe === "warn" && /Beleg/.test(p.text));
-  const grenze = (d.grenzen?.hinweise || []).filter(h => h.stufe === "rot" || h.stufe === "gelb")[0];
-  $("#start-finanzen-inhalt").innerHTML = `<div class="stat-gross">${euro2(d.gewinn)}<small>${d.gewinn >= 0 ? "Gewinn" : "Verlust"} bis heute · Einnahmen ${euro2(d.einnahmen)} · Ausgaben ${euro2(d.ausgaben)}</small></div>`
-    + (neu || grenze ? `<ul class="hinweise">`
-      + (grenze ? `<li class="${grenze.stufe}">${grenze.stufe === "rot" ? "⚠ " : ""}${esc(grenze.text)} – <a href="#" data-goto-tab="finanzen">Übersicht</a></li>` : "")
-      + (neu ? `<li class="gelb">${esc(neu.text)} – <a href="#" data-pruef="ausgaben">jetzt prüfen</a></li>` : "") + `</ul>` : "");
-  try {   // seit 1.9: fällige Abos
-    const n = (await api("abos/faellig")).length;
-    if (n) {
-      let ul = $("#start-finanzen-inhalt ul.hinweise");
-      if (!ul) { ul = document.createElement("ul"); ul.className = "hinweise"; $("#start-finanzen-inhalt").append(ul); }
-      ul.insertAdjacentHTML("afterbegin", `<li class="gelb">${n} Abo${n === 1 ? "" : "s"} fällig – <a href="#" data-pruef="ausgaben">bestätigen</a></li>`);
-    }
-  } catch (_) { /* nur ohne Hinweis */ }
-  try {   // seit 1.8: dezenter Hinweis, wenn ein Jahr abgeschlossen werden kann (sperrt nichts, lässt sich ausblenden)
-    const h = (await api("abschluss")).hinweis;
-    if (!h) return;
-    let ul = $("#start-finanzen-inhalt ul.hinweise");
-    if (!ul) { ul = document.createElement("ul"); ul.className = "hinweise"; $("#start-finanzen-inhalt").append(ul); }
-    ul.insertAdjacentHTML("beforeend", `<li class="ja-hinweis">🔒 <b>${h} kann abgeschlossen werden</b> – <a href="#" data-abschluss="hinweis" data-jahr="${h}">jetzt prüfen</a>
-      <a href="#" class="ausblenden" data-abschluss="hinweis-aus" data-jahr="${h}">ausblenden</a></li>`);
-  } catch (_) { /* nur ohne Hinweis */ }
+// Startseite (seit 1.10 in app.js): nach Änderungen an Finanzen, Abos oder Abschluss neu zeichnen, falls sichtbar
+function renderStartFinanzen() {
+  if ($("#tab-start").classList.contains("active")) renderStart();
 }
 
 // ---------- Paperless: Einstellungen und Abholen ----------

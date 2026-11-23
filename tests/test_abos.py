@@ -229,3 +229,11 @@ def test_sicherung_enthaelt_abos(client):
 def test_fremde_seite_kann_kein_abo_anlegen(app_modul):
     r = app_modul.app.test_client().post("/api/abos", json={"lieferant": "x", "betrag": 1, "beginn": H})
     assert r.status_code == 403
+
+
+def test_preis_ab_unmoeglichem_datum_abgelehnt(client):
+    a = abo(client)
+    for ab in ("2026-13-45", "2026-02-30", "morgen", 20260101):
+        r = client.put(f"/api/abos/{a['id']}", json={"betrag": "29,99", "betrag_ab": ab})
+        assert r.status_code == 400, ab
+    assert client.get("/api/abos").get_json()["abos"][0]["preise"] == []

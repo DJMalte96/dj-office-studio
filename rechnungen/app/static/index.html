@@ -91,71 +91,7 @@
     <!-- ================= Neue Rechnung ================= -->
     <!-- ================= Startseite ================= -->
     <section id="tab-start" class="tab active">
-      <div class="start-kopf">
-        <h2 id="start-gruss" class="gruss">Hallo!</h2>
-        <p id="start-datum" class="hint"></p>
-      </div>
-
-      <div class="aktionen">
-        <button type="button" class="aktion haupt" data-goto="neu">
-          <span class="a-icon">＋</span><span class="a-titel">Neue Rechnung</span><small>Rechnung schreiben &amp; PDF erzeugen</small>
-        </button>
-        <button type="button" class="aktion" data-goto="liste">
-          <span class="a-icon">☰</span><span class="a-titel">Rechnungen</span><small>Offene Rechnungen &amp; Archiv</small>
-        </button>
-        <button type="button" class="aktion" data-goto="angebot-neu">
-          <span class="a-icon">✎</span><span class="a-titel">Neues Angebot</span><small>Angebot schreiben &amp; PDF erzeugen</small>
-        </button>
-        <button type="button" class="aktion" data-goto="angebote">
-          <span class="a-icon">❐</span><span class="a-titel">Angebote</span><small>Status &amp; in Rechnung umwandeln</small>
-        </button>
-        <button type="button" class="aktion" data-goto="import">
-          <span class="a-icon">⇪</span><span class="a-titel">Importieren</span><small>Alte Rechnungen &amp; Angebote hochladen</small>
-        </button>
-        <button type="button" class="aktion" data-goto="kunden">
-          <span class="a-icon">◉</span><span class="a-titel">Kunden</span><small>Adressen verwalten</small>
-        </button>
-        <button type="button" class="aktion" data-goto="textbausteine">
-          <span class="a-icon">♪</span><span class="a-titel">Rechnungsposten</span><small>Textvorlagen für Positionen</small>
-        </button>
-        <button type="button" class="aktion" data-goto="zahlungsbedingungen">
-          <span class="a-icon">€</span><span class="a-titel">Zahlungsbedingungen</span><small>Zahlungsoptionen pflegen</small>
-        </button>
-      </div>
-
-      <div class="start-grid">
-        <div class="start-spalte">
-          <div class="card">
-            <div class="row between"><h2>Offene Rechnungen</h2><a href="#" class="mehr" data-goto="liste">alle →</a></div>
-            <ul id="start-hinweise" class="hinweise"></ul>
-            <div id="start-offen"></div>
-          </div>
-          <div class="card">
-            <div class="row between"><h2>Offene Angebote</h2><a href="#" class="mehr" data-goto="angebote">alle →</a></div>
-            <ul id="start-ang-hinweise" class="hinweise"></ul>
-            <div id="start-angebote"></div>
-          </div>
-        </div>
-
-        <div class="start-spalte">
-          <div class="card" id="start-finanzen">
-            <div class="row between"><h2 id="start-finanzen-titel">Finanzen</h2><a href="#" class="mehr" data-goto-tab="finanzen">Übersicht →</a></div>
-            <div id="start-finanzen-inhalt"></div>
-          </div>
-          <div class="card sicherung-karte" id="start-sicherung-karte">
-            <div class="row between"><h2>Datensicherung</h2><a href="#" class="mehr zu-einstellungen">Einstellungen →</a></div>
-            <div id="start-sicherung"></div>
-          </div>
-          <div class="card">
-            <h2>Umsatz</h2>
-            <div id="start-umsatz" class="stat-liste"></div>
-          </div>
-          <div class="card">
-            <div class="row between"><h2>Letzte Rechnungen</h2><a href="#" class="mehr" data-goto="liste">alle →</a></div>
-            <ul id="start-letzte" class="mini-liste"></ul>
-          </div>
-        </div>
-      </div>
+      <div id="start" aria-live="polite"></div>
     </section>
 
     <section id="tab-neu" class="tab">

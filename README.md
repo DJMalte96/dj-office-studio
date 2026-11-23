@@ -8,7 +8,7 @@ DJ Office Studio ist eine App zum Schreiben von DJ-Rechnungen und -Angeboten –
 
 ## Funktionen
 
-- **Startseite** mit Kacheln für alle Aktionen der App und dem aktuellen Stand: offene Rechnungen mit Restzeit und Warnung bei Überfälligkeit, offene Angebote mit Restlaufzeit, Gewinn des laufenden Jahres, Zeit seit der letzten Datensicherung, Umsatz nach Monat/Jahr und die letzten Rechnungen.
+- **Startseite** mit allem, was ansteht: „Heute wichtig“ (überfällige Rechnungen, fällige Abos, ungeprüfte Belege, ablaufende Angebote, fällige Sicherung), die nächsten Termine, eine Pinnwand mit „Geld kommt rein / Geld geht raus / Angebote“ und Knöpfen direkt an jedem Eintrag, dazu „Dein Jahr“ mit den wichtigsten Zahlen. In ruhigen Zeiten bleibt sie aufgeräumt statt leer.
 - **Rechnungseditor**
   - Kunde mit Autovervollständigung aus bisherigen Kunden; neue Kunden werden beim Speichern automatisch angelegt
   - Positionen per **Rechnungsposten** (Hochzeit, Geburtstag, Firmenfeier, …) mit **von/bis-Zeiten** – der Rechnungstext wird daraus erzeugt, z. B. „DJ – Tätigkeit Hochzeit – 17:00 Uhr bis 2:00 Uhr“
@@ -47,7 +47,13 @@ DJ Office Studio ist eine App zum Schreiben von DJ-Rechnungen und -Angeboten –
 Oben in der Kopfzeile gibt es auf jeder Seite das Menü: **Start**, **Rechnungen** (Neue Rechnung, Rechnungen), **Angebote** (Neues Angebot, Angebote), **Finanzen** (Übersicht, Ausgaben, Fahrten, Anschaffungen, EÜR & Export) und **Stammdaten** (Kunden, Rechnungsposten, Zahlungsbedingungen).
 
 
-**Start:** Die Startseite öffnet sich beim Aufruf. Über das Menü oder die Kacheln geht es direkt zu jedem Bereich der App (inkl. Import alter Rechnungen und Angebote). Ein Klick auf das Logo führt zurück zur Startseite. Darunter steht der aktuelle Stand: offene Rechnungen mit Restzeit, offene Angebote mit Restlaufzeit, die Zeit seit der letzten Datensicherung (mit **Jetzt sichern**), Umsatz und die letzten Rechnungen – plus Hinweise bei überfälligen Rechnungen und bald ablaufenden Angeboten.
+**Start:** Die Startseite öffnet sich beim Aufruf; ein Klick auf das Logo führt zurück.
+
+- **Oben:** Begrüßung, **Heute wichtig** (z. B. „2 Rechnungen überfällig“, „1 Abo fällig“, „1 Beleg zu prüfen“ – ein Klick führt hin) und die Schnellknöpfe **Neue Rechnung**, **Neues Angebot**, **Beleg hochladen**. Ist nichts zu tun: „✓ Alles erledigt“ mit dem nächsten Termin.
+- **Demnächst:** die nächsten Termine ab morgen – fällige Rechnungen, Abo-Abbuchungen, ablaufende Angebote, Sicherung. Ist viel los, als Leiste der nächsten 14 Tage (ein Klick auf einen Tag zeigt die Einzelheiten).
+- **Pinnwand:** **Geld kommt rein** (offene Rechnungen mit Zahlungserinnerung/Mahnung, QR-Code, ✓ Bezahlt), **Geld geht raus** (fällige Abos, ungeprüfte Belege, nächste Abbuchungen), **Angebote** (→ Rechnung, Ansehen, Abgelehnt). Leere Spalten fallen weg.
+- **Dein Jahr:** Rechnungen geschrieben, Schnitt je Rechnung, stärkster Monat, Kunden, Gewinn bisher.
+- **Statuszeile:** Datensicherung (mit **Jetzt sichern**), Kleinunternehmer-Grenze, ggf. „Jahr abschließen“. Alle Bereiche der App erreicht man über das Menü.
 
 ![Screenshot: Startseite](docs/bilder/startseite.png)
 
