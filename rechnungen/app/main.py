@@ -23,6 +23,7 @@ import sqlite3
 import abos
 import abschluss
 import db
+import kundenakte
 import vertraege
 import finanzen
 import importer
@@ -40,6 +41,7 @@ app.register_blueprint(finanzen.bp)   # Finanzen: Ausgaben, Belege (seit 1.1)
 app.register_blueprint(abschluss.bp)  # Jahresabschluss (seit 1.8)
 app.register_blueprint(abos.bp)       # Abos / wiederkehrende Ausgaben (seit 1.9)
 app.register_blueprint(vertraege.bp)  # Booking-Verträge (seit 1.13)
+app.register_blueprint(kundenakte.bp)  # Kundenakte, bar bezahlt (seit 1.14)
 
 
 @app.errorhandler(abschluss.Gesperrt)
@@ -258,7 +260,7 @@ def _asset_version(name):
 def index():
     with open(os.path.join(STATIC_DIR, "index.html"), encoding="utf-8") as f:
         html = f.read()
-    for name in ("theme.js", "style.css", "datum.js", "app.js", "finanzen.js", "rundgang.js", "vertraege.js"):
+    for name in ("theme.js", "style.css", "datum.js", "app.js", "finanzen.js", "rundgang.js", "vertraege.js", "kundenakte.js"):
         html = html.replace(f'"static/{name}"', f'"static/{name}?v={_asset_version(name)}"')
     return Response(html, mimetype="text/html", headers={"Cache-Control": "no-cache"})
 
@@ -739,9 +741,17 @@ def invoices_create():
     inv = _validate_invoice(_daten())
     abschluss.pruefen(*_rechnung_jahre(inv))
     inv["kunde_id"] = db.upsert_customer({**inv["kunde"], "id": inv["kunde_id"]})
-    angebot_id = _daten().get("angebot_id")
+    angebot_id, vertrag_id = _daten().get("angebot_id"), _daten().get("vertrag_id")
+    # seit 1.14: Rechnung aus einem Vertrag – gehört auch zu dessen Angebot; Rechnung aus einem Angebot mit Vertrag
+    # gehört zum Vertrag (so findet die Startseite „Rechnung schreiben“ erledigt, egal welcher Weg genommen wurde)
+    vertrag = vertraege.lesen(vertrag_id) if isinstance(vertrag_id, int) and not isinstance(vertrag_id, bool) else None
+    if vertrag and vertrag.get("angebot_id") and not isinstance(angebot_id, int):
+        angebot_id = vertrag["angebot_id"]
     angebot = db.get_offer(angebot_id) if isinstance(angebot_id, int) else None
+    if angebot and not vertrag:
+        vertrag = next((v for v in reversed(vertraege.liste()) if v["angebot_id"] == angebot["id"]), None)
     inv["angebot_id"] = angebot["id"] if angebot else None
+    inv["vertrag_id"] = vertrag["id"] if vertrag else None
     inv_id = db.save_invoice(inv)
     if angebot:
         db.set_offer_status(angebot["id"], "angenommen", inv_id)
@@ -919,7 +929,7 @@ def backup_download():
         with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED, allowZip64=True) as zf:
             zf.write(pfad, "rechnungen.db")
             anzahl_belege = 0
-            for ordner in ("belege", abschluss.ORDNER, vertraege.ORDNER):   # seit 1.8 Jahresabschlüsse, seit 1.13 Verträge
+            for ordner in ("belege", abschluss.ORDNER, vertraege.ORDNER, kundenakte.ORDNER):   # seit 1.8 Abschlüsse, 1.13 Verträge, 1.14 Bar
                 basis = os.path.join(db.DATA_DIR, ordner)
                 for wurzel, _, dateien in os.walk(basis):
                     for n in sorted(dateien):
@@ -954,6 +964,7 @@ def backup_restore():
                     _belege_entpacken(zf, belege_tmp, rest)
                     _belege_entpacken(zf, os.path.join(tmp, abschluss.ORDNER), rest, abschluss.ORDNER)
                     _belege_entpacken(zf, os.path.join(tmp, vertraege.ORDNER), rest, vertraege.ORDNER)
+                    _belege_entpacken(zf, os.path.join(tmp, kundenakte.ORDNER), rest, kundenakte.ORDNER)
             except (KeyError, zipfile.BadZipFile):
                 return _fehler("Die ZIP-Datei enthält keine Sicherung von DJ Office Studio.")
             except _ZuGross:
@@ -979,6 +990,7 @@ def backup_restore():
         belege = _belege_uebernehmen(belege_tmp)
         _belege_uebernehmen(os.path.join(tmp, abschluss.ORDNER), abschluss.ORDNER)
         _belege_uebernehmen(os.path.join(tmp, vertraege.ORDNER), vertraege.ORDNER)
+        _belege_uebernehmen(os.path.join(tmp, kundenakte.ORDNER), kundenakte.ORDNER)
         if letzte and letzte > (db.get_settings().get("_letzte_sicherung") or ""):
             db.save_settings({"_letzte_sicherung": letzte})   # Zeitpunkt der letzten Sicherung nicht zurückdrehen
     return jsonify({"anzahl": anzahl, "belege": belege, "vorher_gesichert": vorher})

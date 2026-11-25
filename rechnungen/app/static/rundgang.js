@@ -232,7 +232,7 @@
     $("#suche").close();
     if (t.art === "rechnung") return loadIntoForm(t.r);
     if (t.art === "angebot") return loadAngebotIntoForm(t.a);
-    if (t.art === "kunde") { showTab("liste"); $("#liste-suche").value = t.k.name; return setTimeout(() => renderListe(), 400); }
+    if (t.art === "kunde") return oeffneAkte(t.k.name);   // seit 1.14: Kundenakte
     if (t.art === "beleg") { showTab("ausgaben"); return setTimeout(() => oeffneBeleg(t.b.id), 300); }
     if (t.art === "vertrag") return oeffneVertrag(t.v.id);
     const ziel = t.s[1];

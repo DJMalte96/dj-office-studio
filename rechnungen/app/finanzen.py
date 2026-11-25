@@ -16,6 +16,7 @@ import belege
 import dateilesen
 import db
 import erechnung
+import kundenakte
 import pdflesen
 import texterkennung
 
@@ -1151,18 +1152,25 @@ def _zahlungen(rechnungen, jahr):
     return sorted(out)
 
 
+def _bar_zahlungen(jahr):
+    """Barzahlungen eines Jahres (seit 1.14, Quittung von Hand) → [(datum, netto)]."""
+    with db.connect() as con:
+        return [(r["datum"], r["betrag"] / (1 + r["ust_satz"] / 100) if r["ust_satz"] else r["betrag"])
+                for r in con.execute("SELECT datum, betrag, ust_satz FROM barzahlungen WHERE datum LIKE ?", (f"{jahr}%",))]
+
+
 def kleinunternehmer_grenzen(jahr, a=None, rechnungen=None, heute=None):
     """Stand gegenüber den Grenzen der Kleinunternehmerregelung. Umsatz = vereinnahmte Entgelte aus Rechnungen
-    (nach Zahlungseingang, wie in der EÜR; ohne sonstige Einnahmen und Geräteverkäufe). Nur für Kleinunternehmer."""
+    (nach Zahlungseingang, wie in der EÜR) und Barzahlungen; ohne sonstige Einnahmen und Geräteverkäufe. Nur für Kleinunternehmer."""
     a = a or _einstellungen()
     if not a.get("kleinunternehmer"):
         return None
     rechnungen = rechnungen if rechnungen is not None else db.list_invoices()
     heute = heute or date.today()
     jahr = int(jahr)
-    zahlungen = _zahlungen(rechnungen, jahr)
+    zahlungen = sorted(_zahlungen(rechnungen, jahr) + _bar_zahlungen(jahr))
     umsatz = _r2(sum(b for _, b in zahlungen))
-    vorjahr = _r2(sum(b for _, b in _zahlungen(rechnungen, jahr - 1)))
+    vorjahr = _r2(sum(b for _, b in _zahlungen(rechnungen, jahr - 1) + _bar_zahlungen(jahr - 1)))
     offen = _r2(sum(sum(float(p.get("preis") or 0) for p in r["positionen"]) for r in rechnungen
                     if not r["bezahlt"] and not r.get("storno_von") and not r.get("storniert_durch")
                     and r["datum"].startswith(str(jahr))))
@@ -1255,6 +1263,14 @@ def euer(jahr, a=None):
         sonstige_summe += netto
         umsatzsteuer += brutto - netto
         monate[int(e["datum"][5:7])]["einnahmen"] += brutto
+    # seit 1.14: bar bezahlt (Quittung von Hand) – Steuersatz wie beim Vermerken festgehalten
+    bar = kundenakte.liste(jahr)
+    bar_summe = 0.0
+    for b in bar:
+        netto = b["betrag"] / (1 + b["ust_satz"] / 100) if b.get("ust_satz") and not ku else b["betrag"]
+        bar_summe += netto
+        umsatzsteuer += b["betrag"] - netto
+        monate[int(b["datum"][5:7])]["einnahmen"] += b["betrag"]
 
     # --- Anschaffungen: Abschreibung, Abgänge ---
     anlagen = anlagen_liste(jahr)
@@ -1301,6 +1317,7 @@ def euer(jahr, a=None):
     zeilen_aus.sort(key=lambda z: -z["betrag"])
     zeilen_ein = [z for z in (
         {"id": "rechnungen", "name": "Rechnungen (nach Zahlungseingang)" + ("" if ku else ", netto"), "betrag": _r2(erloese)},
+        {"id": "bar", "name": "Bar bezahlt (Quittung von Hand)" + ("" if ku else ", netto"), "betrag": _r2(bar_summe)},
         {"id": "sonstige", "name": "Sonstige Einnahmen", "betrag": _r2(sonstige_summe)},
         {"id": "abgang_erloes", "name": "Verkauf von Geräten", "betrag": _r2(abgang_erloes)},
         {"id": "umsatzsteuer", "name": "Vereinnahmte Umsatzsteuer", "betrag": _r2(umsatzsteuer)}) if z["betrag"] or z["id"] == "rechnungen"]
@@ -1311,7 +1328,7 @@ def euer(jahr, a=None):
                           for x in (grenzen or {}).get("hinweise", []) if x["stufe"] in ("rot", "gelb")]
     return {"jahr": int(jahr), "kleinunternehmer": ku, "einnahmen": einnahmen, "ausgaben": ausgaben_summe,
             "gewinn": _r2(einnahmen - ausgaben_summe), "einnahmen_zeilen": zeilen_ein, "ausgaben_zeilen": zeilen_aus,
-            "anzahl_rechnungen": anzahl, "fahrtkosten": _r2(fahrtkosten), "afa": _r2(afa), "sonstige": sonstige,
+            "anzahl_rechnungen": anzahl, "barzahlungen": bar, "fahrtkosten": _r2(fahrtkosten), "afa": _r2(afa), "sonstige": sonstige,
             "monate": [{"monat": m, "einnahmen": _r2(v["einnahmen"]), "ausgaben": _r2(v["ausgaben"])} for m, v in monate.items()],
             "pruefliste": pruefliste(jahr, a, rechnungen) + grenzen_pruefliste,
             "grenzen": grenzen}
@@ -1357,7 +1374,7 @@ def jahre(heute=None):
         werte = [r[0] for r in con.execute(
             f"SELECT {AUS_JAHR} FROM ausgaben WHERE status != 'papierkorb'"
             " UNION SELECT datum FROM rechnungen UNION SELECT bezahlt_am FROM rechnungen"
-            " UNION SELECT datum FROM fahrten UNION SELECT datum FROM einnahmen_sonstige")]
+            " UNION SELECT datum FROM fahrten UNION SELECT datum FROM einnahmen_sonstige UNION SELECT datum FROM barzahlungen")]
     for a in anlagen_liste():               # ohne Anlagen aus dem Papierkorb
         werte += [a.get("anschaffung_am"), a.get("start_jahr"), a.get("abgang_am")]
     da = {int(m[0]) for w in werte if (m := re.match(r"[1-9]\d{3}(?=-|$)", str(w or "")))}
@@ -1482,7 +1499,19 @@ def export_finanzen(zf, jahr, a):
             orig = db.get_invoice(r["storno_von"])
             if orig and orig["bezahlt"]:
                 ein.append([r["datum"], "Storno (Erstattung)", r["nummer"], r["kunde"].get("name", ""), _b(r["gesamt"])])
+    with db.connect() as con:
+        dateien = dict(con.execute("SELECT id, beleg_datei FROM barzahlungen WHERE datum LIKE ?", (f"{jahr}%",)).fetchall())
+    for x in e["barzahlungen"]:
+        foto = ""
+        pfad = kundenakte.beleg_pfad(dateien.get(x["id"]))
+        if pfad:   # Foto vom Durchschlag mit in die ZIP
+            stamm = _dateiname(f"{x['datum']}_{x['kunde'].get('name', '')}_{_b(x['betrag'])}")
+            foto = f"Barzahlungen/{stamm}{os.path.splitext(pfad)[1].lower()}"
+            zf.write(pfad, foto)
+        text = " · ".join(t for t in (f"Quittung {x['quittung_nr']}" if x["quittung_nr"] else "", x["anlass"], foto) if t)
+        ein.append([x["datum"], "Bar bezahlt (Quittung von Hand)", text, x["kunde"].get("name", ""), _b(x["betrag"])])
     ein += [[x["datum"], "Sonstige Einnahme", x["beschreibung"], "", _b(x["betrag"])] for x in e["sonstige"]]
+    ein[1:] = sorted(ein[1:], key=lambda z: z[0])
     zf.writestr(f"Einnahmen_{jahr}.csv", _csv(ein))
 
     aus = [["Bezahlt am", "Belegdatum", "Lieferant", "Beschreibung", "Kategorie", "Betrag brutto (EUR)", "USt-Satz",

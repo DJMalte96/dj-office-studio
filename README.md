@@ -43,6 +43,8 @@ DJ Office Studio ist eine App zum Schreiben von DJ-Rechnungen, -Angeboten und Bo
 - [Bei Angeboten nachfragen](#nachfragen)
 - [Booking-Verträge](#verträge)
 - [Vertragsvorlage](#vertragsvorlage)
+- [Vom Vertrag zur Rechnung, bar bezahlt](#vom-vertrag-zur-rechnung)
+- [Kundenakte & Stammkunden](#kundenakte)
 - [Alte PDFs importieren](#alte-rechnungen-und-angebote-importieren)
 
 </td>
@@ -112,6 +114,8 @@ DJ Office Studio ist eine App zum Schreiben von DJ-Rechnungen, -Angeboten und Bo
 - **QR-Code zum Bezahlen (GiroCode)**: Auf Rechnungen, Zahlungserinnerungen und Mahnungen steht neben der Zahlungsbedingung ein QR-Code. Der Kunde scannt ihn mit seiner Banking-App, und Empfänger, IBAN, Betrag und Verwendungszweck („Rechnung 037“) sind schon ausgefüllt. Bei offenen Rechnungen zeigt die App den Code auch groß auf dem Bildschirm an, z. B. wenn direkt nach der Feier bezahlt wird. Nicht auf Angeboten, Stornorechnungen und bei „Bar erhalten“ / „Bereits bezahlt“; abschaltbar unter ⚙ Einstellungen.
 - **Datensicherung & Export**: Unter ⚙ Einstellungen alle Daten samt Ausgaben-Belegen als eine Sicherungsdatei herunterladen bzw. wieder einspielen. Die Startseite zeigt, wie lange die letzte Sicherung her ist, und erinnert nach einstellbarer Zeit (Standard 30 Tage) an eine neue. Dazu ein **Export für den Steuerberater**: alle Rechnungen eines Jahres als Excel-Tabelle (CSV, mit Bezahlt-Datum, Stornos und ggf. Umsatzsteuer) plus PDFs, dazu EÜR, Ausgaben, Fahrten, Anlagenverzeichnis und alle Belege – als ein ZIP. Die Desktop-Version sichert zusätzlich automatisch einmal pro Tag.
 - **Booking-Verträge** (Menü Dokumente): aus einem Angebot oder ohne Angebot, mit deiner Vorlage (Verpflegung, Ersatz-DJ, GEMA, Schäden durch Gäste und 16 weitere Bausteine, eigene Abschnitte, eigener Vertrag zum Hochladen), PDF, Versand per Mail und Unterschrift (Datei, Mail-Bestätigung oder vor Ort).
+- **Vom Vertrag zur Rechnung**: Vor der Feier erinnert die Startseite an die vereinbarte Anzahlung, danach an die Rechnung – ein Klick übernimmt Kunde, Termin, Ort und Gage (mit Anzahlung als Schlussrechnung), Verlängerung oder weitere Posten lassen sich vor dem Speichern ergänzen. **Bar bezahlt** (Quittung von Hand auf dem Quittungsblock) wird nur vermerkt – Betrag, Tag, Nummer vom Block, auf Wunsch ein Foto vom Durchschlag – und zählt in EÜR, Export und Kleinunternehmer-Grenze.
+- **Kundenakte** (Stammdaten → Kunden): je Kunde Umsatz, Feiern, üblicher Preis, letzte und nächste Feier und alle Angebote, Verträge, Rechnungen und Barzahlungen. Stammkunden bekommen knapp ein Jahr nach ihrer letzten Feier eine Erinnerung auf der Startseite – „Diesmal nicht“ oder „Nicht mehr erinnern“ blenden sie aus.
 - **Angebote**: Im selben Editor wie Rechnungen (Kunde, Rechnungsposten mit von/bis-Zeiten, Preise) – mit eigenem Nummernkreis, Angebotsdatum, **Gültig bis** (Bindefrist, Standard 30 Tage), optionaler Zahlungsbedingung und freien **Hinweisen** (z. B. Verlängerungsstunde, Leistungsumfang, GEMA). Das PDF hat dasselbe Layout wie die Rechnung (`Angebot_001_120627.pdf`). Oben in der Angebotsansicht und auf der Startseite: **Offene Angebote** mit Angebotsdatum und Restlaufzeit („noch 12 Tage“, „seit 3 Tagen abgelaufen“), auf der Startseite zusätzlich ein Hinweis, wenn ein Angebot in den nächsten 3 Tagen abläuft. In der Angebotsliste: mehrere markieren und als ZIP herunterladen oder an Paperless senden, Status (offen / angenommen / abgelehnt), Restlaufzeit bzw. „abgelaufen“ und **→ Rechnung**, das Kunde und Positionen in eine neue Rechnung übernimmt und das Angebot als angenommen markiert. Bleibt ein Angebot ein paar Tage ohne Antwort, erinnert die Startseite ans **Nachfragen** – mit fertiger Mail.
 - **Import alter Rechnungen und Angebote**: Bisherige PDFs hochladen (gemischt möglich – die App erkennt Rechnung oder Angebot selbst). Empfänger, Positionen und Vorschläge für Rechnungsposten werden erkannt und können übernommen werden, optional auch die Rechnungen selbst als Archiv und die Angebote (mit „gültig bis“ und Hinweisen) in die Angebotsliste.
 - **Finanzen**
@@ -226,6 +230,29 @@ Unter **Dokumente → Vertragsvorlage** stehen die Abschnitte für neue Verträg
 Die mitgelieferten Texte sind ein Vorschlag und keine Rechtsberatung – bitte einmal prüfen lassen (z. B. Anwalt oder DJ-Verband).
 
 ![Screenshot: Vertragsvorlage](docs/bilder/vertragsvorlage.png)
+
+### Vom Vertrag zur Rechnung
+
+Ist bei einem unterschriebenen Vertrag eine Anzahlung vereinbart, zeigt die Startseite **€ Anzahlung anfordern** – ein Klick bereitet die Anzahlungsrechnung vor. Nach dem Tag der Feier erscheint **✎ Rechnung schreiben: Feier … war am …**. Die App fragt dann, wie bezahlt wurde:
+
+- **Rechnung schreiben** – Kunde, Termin, Spielzeit, Ort und Gage kommen aus dem Vertrag; gibt es eine Anzahlung, wird es die Schlussrechnung und zieht sie ab. **＋ Verlängerung** und **＋ weitere Position** ergänzen, was dazugekommen ist. Gespeichert gehört die Rechnung zum Vertrag.
+- **Bar bezahlt** – die Quittung schreibst du wie gewohnt von Hand auf den Quittungsblock, die App erzeugt keine. Sie vermerkt nur Betrag (nach einer bezahlten Anzahlung ist der Rest vorausgefüllt), Tag, auf Wunsch die Nummer vom Block und ein Foto vom Durchschlag. Die Zahlung zählt in EÜR, Export und bei der Kleinunternehmer-Grenze, das Angebot gilt als angenommen. Bei Firmen und Vereinen weist die App darauf hin, dass sie meist eine richtige Rechnung brauchen.
+
+Dieselben Knöpfe gibt es in **Dokumente → Verträge** (mit dem Stand: „Anzahlung 025 ✓ bezahlt · Rechnung 026 offen“), im Vertragsfenster (**→ Rechnung**) und bei den Angeboten (**Bar bezahlt** neben **→ Rechnung**).
+
+![Screenshot: Wie wurde bezahlt?](docs/bilder/zahlweg.png)
+
+![Screenshot: Bar bezahlt](docs/bilder/bar-bezahlt.png)
+
+### Kundenakte
+
+Unter **Stammdaten → Kunden** stehen alle Kunden mit Feiern, Umsatz und letzter bzw. nächster Feier, nach Umsatz sortiert. Wer in mindestens zwei Jahren gebucht hat, ist **Stammkunde**. Ein Klick auf den Namen – auch im Archiv, bei den Angeboten und Verträgen oder in der Schnellsuche – öffnet die **Kundenakte**: Anschrift, ＋ Angebot / Vertrag / Rechnung, Umsatz, Feiern, üblicher Preis, Umsatz je Jahr und alle Angebote, Verträge, Rechnungen und Barzahlungen (ein Klick öffnet sie; eine versehentlich vermerkte Barzahlung lässt sich dort löschen).
+
+Steht bei einem Stammkunden der Jahrestag der letzten Feier in den nächsten sechs Wochen an und gibt es noch nichts Neues, erinnert die Startseite: **↻ Stammkunde …: letztes Jahr am … – Angebot schicken?** In der Akte macht **Angebot wie letztes Jahr** daraus ein neues Angebot. **Diesmal nicht** (oder ✕ auf der Startseite) blendet die Erinnerung bis zum nächsten Jahr aus, **Nicht mehr erinnern** für diesen Kunden ganz – **Wieder einschalten** steht dann in der Akte.
+
+![Screenshot: Kunden](docs/bilder/kunden.png)
+
+![Screenshot: Kundenakte](docs/bilder/kundenakte.png)
 
 ### Rechnungsposten
 
@@ -543,6 +570,7 @@ rechnungen/
     abschluss.py         Jahresabschluss: prüfen, Paket mit Prüfsumme, wieder öffnen; Kleinunternehmer/Fahrzeug je Jahr
     abos.py              Abos: wiederkehrende Ausgaben, fällige Abbuchungen, Belege erkennen
     vertraege.py         Booking-Verträge: Vorlage mit Bausteinen, eigener Vertrag hochladen, Vertragstext, Unterschrift
+    kundenakte.py        Bar bezahlt (Quittung von Hand, Foto vom Durchschlag) und Jahres-Erinnerung für Stammkunden
     belege.py            Auslesen von Belegen (PDF, Fotos, Kauf-Mails .eml/.msg/.mbox)
     texterkennung.py     Texterkennung für Fotos und Scans (lokal, im eigenen Prozess)
     pdflesen.py          Lesen fremder PDFs im eigenen Prozess
@@ -551,7 +579,8 @@ rechnungen/
     erechnung.py         Lesen von E-Rechnungen (XRechnung, ZUGFeRD/Factur-X) samt Lesefassung
     paperless.py         Abholen von Ausgaben-Belegen aus Paperless-ngx (REST-Schnittstelle, nur lesend)
     strecken.py          Entfernungen über OpenStreetMap (Nominatim, OSRM) mit Zwischenspeicher
-    static/              Oberfläche (HTML, CSS, JavaScript; vertraege.js = Dokumente, rundgang.js = Rundgang und Schnellsuche)
+    static/              Oberfläche (HTML, CSS, JavaScript; vertraege.js = Dokumente, kundenakte.js = Kundenakte und Vertrag → Rechnung,
+                         rundgang.js = Rundgang und Schnellsuche)
 desktop/
   start.py               Starter der Desktop-Version (Server + eigenes App-Fenster mit pywebview, Daten im Dokumente-Ordner)
   requirements.txt       Zusätzliche Pakete nur für die Desktop-Version (pywebview)
@@ -562,7 +591,7 @@ desktop/
 docs/
   screenshots.py         Erzeugt die README-Screenshots (docs/bilder/) mit Beispieldaten
 tests/                   Automatische Tests (pytest): API, PDFs, Pflichtangaben, Umsatzsteuer, QR-Code, Festschreiben/Storno,
-                         Mahnungen, E-Mail-Versand, Sicherung, Import, Belege, Fahrten, Abschreibung, EÜR, Jahresabschluss, Abos, Verträge …
+                         Mahnungen, E-Mail-Versand, Sicherung, Import, Belege, Fahrten, Abschreibung, EÜR, Jahresabschluss, Abos, Verträge, Kundenakte …
 ```
 
 ### Neue Version veröffentlichen

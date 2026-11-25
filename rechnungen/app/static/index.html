@@ -992,6 +992,7 @@
       <div class="vt-kopfzeile">
         <h2 id="vt-titel"></h2>
         <div class="vt-aktionen">
+          <button type="button" class="secondary hidden" id="vt-zur-rechnung" title="Rechnung zu diesem Vertrag">→ Rechnung</button>
           <button type="button" class="secondary" data-vt="pdf">PDF ansehen</button>
           <button type="button" data-vt="senden">✉ Senden</button>
           <button type="button" class="icon" data-vt="zu" title="Schließen" aria-label="Schließen">✕</button>
@@ -1052,6 +1053,38 @@
     </form>
   </dialog>
 
+  <!-- seit 1.14: Wie wurde bezahlt? / Bar bezahlt / Kundenakte -->
+  <dialog id="rv-wahl" class="dialog">
+    <form method="dialog">
+      <h2 id="rv-wahl-titel">Wie wurde bezahlt?</h2>
+      <p class="hint" id="rv-wahl-info"></p>
+      <div class="rv-wahl">
+        <button type="button" data-zahlweg="rechnung"><b>Rechnung schreiben</b><small>Der Kunde überweist – Rechnung mit Zahlungsziel, QR-Code und Erinnerung.</small></button>
+        <button type="button" data-zahlweg="bar"><b>Bar bezahlt</b><small>Geld schon erhalten, Quittung von Hand auf dem Quittungsblock – hier nur vermerken, damit es in Kundenakte und EÜR zählt.</small></button>
+      </div>
+      <div class="actions"><button type="submit" class="secondary">Abbrechen</button></div>
+    </form>
+  </dialog>
+  <dialog id="bar-dialog" class="dialog">
+    <form method="dialog" autocomplete="off">
+      <h2 id="bar-titel">Bar bezahlt</h2>
+      <p class="hint" id="bar-info"></p>
+      <div class="vt-zwei">
+        <label>Betrag erhalten (€)<input id="bar-betrag" type="number" min="0" step="0.01" inputmode="decimal"></label>
+        <label>Am<input id="bar-am" type="date"></label>
+      </div>
+      <label>Quittungs-Nr. vom Block <span class="opt">(optional)</span><input id="bar-nr" maxlength="40" placeholder="z. B. 0347"></label>
+      <label>Foto vom Durchschlag <span class="opt">(optional, als Beleg)</span><input id="bar-foto" type="file" accept="image/*,.pdf,.heic,.heif"></label>
+      <p class="mini-hinweis">Die Quittung schreibst du wie gewohnt auf deinen Quittungsblock. Hier wird nur vermerkt, dass bezahlt ist – die Zahlung zählt dann in Kundenakte, EÜR und Export, und die Erinnerung „Rechnung schreiben“ verschwindet.</p>
+      <p class="mini-hinweis" id="bar-firma"></p>
+      <div class="actions"><button type="button" class="secondary" data-bar="zu">Abbrechen</button><button type="button" data-bar="speichern">Als bar bezahlt vermerken</button></div>
+    </form>
+  </dialog>
+  <dialog id="kundenakte" class="dialog kundenakte" aria-label="Kundenakte">
+    <div id="ka-inhalt"></div>
+    <div class="actions"><button type="button" class="secondary" data-ka="zu">Schließen</button></div>
+  </dialog>
+
   <dialog id="tour-frage" class="dialog tour-frage">
     <form method="dialog">
       <h2>Kurzer Rundgang?</h2>
@@ -1090,6 +1123,7 @@
   <script src="static/app.js"></script>
   <script src="static/finanzen.js"></script>
   <script src="static/vertraege.js"></script>
+  <script src="static/kundenakte.js"></script>
   <script src="static/rundgang.js"></script>
 </body>
 </html>

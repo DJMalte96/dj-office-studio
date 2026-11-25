@@ -61,6 +61,7 @@ K = {
     "verein": {"name": "Sportverein Musterstadt e. V.", "strasse": "Sportplatz 1", "plz": "12345", "ort": "Musterstadt"},
     "firma": {"name": "Beispiel GmbH", "strasse": "Industriestr. 5", "plz": "12349", "ort": "Neustadt"},
     "eva": {"name": "Eva und Tom Probe", "strasse": "Birkenallee 7", "plz": "12346", "ort": "Beispielhausen"},
+    "musik": {"name": "Musikverein Beispiel", "strasse": "Am Markt 4", "plz": "12349", "ort": "Neustadt"},
 }
 H = "Jede weitere angefangene Stunde wird mit 80,- Euro berechnet.\nDie GEMA-Anmeldung erfolgt durch den Veranstalter."
 
@@ -102,6 +103,10 @@ c.put(f"/api/vertraege/{v1}", json={"felder": {"aufbau": "15:30", "kontakt": "Tr
 v2 = c.post("/api/vertraege", json={}).get_json()["vertrag"]["id"]
 c.put(f"/api/vertraege/{v2}", json={"kunde": K["dora"], "anlass": "Geburtstagsfeier", "datum": d(70), "von": "19:00", "bis": "01:00", "gage": 600})
 c.post(f"/api/vertraege/{v2}/status", json={"status": "verschickt"})
+# seit 1.14: Vertrag ohne Angebot, Feier vor drei Tagen, unterschrieben → Startseite „Rechnung schreiben“
+v3 = c.post("/api/vertraege", json={}).get_json()["vertrag"]["id"]
+c.put(f"/api/vertraege/{v3}", json={"kunde": K["carla"], "anlass": "Geburtstagsfeier", "datum": d(-3), "von": "19:00", "bis": "01:00", "gage": 650})
+c.post(f"/api/vertraege/{v3}/unterschrieben", data={"weg": "vorort", "am": d(-40)}, content_type="multipart/form-data")
 
 # Rechnungen: bezahlt, überfällig mit Zahlungserinnerung, offen, storniert
 rechnung("030", "dora", f"{heute.year - 1}-11-15",
@@ -118,6 +123,11 @@ db.festschreiben(r040, main.absender_jetzt())
 for k in db.list_items("kunden"):                                               # E-Mail-Adresse bei Bernd
     if k["name"] == "Bernd Probe":
         db.set_customer_email(k["id"], "bernd.probe@example.de")
+# Stammkunde (seit 1.14): Sommerfest vor knapp zwei Jahren per Rechnung, letztes Jahr bar bezahlt → Jahres-Erinnerung
+r019 = rechnung("019", "musik", d(-710), [pos("DJ – Tätigkeit Sommerfest – 18:00 Uhr bis 0:00 Uhr", d(-710), 650)], bezahlt=True)
+c.put(f"/api/rechnungen/{r019}/bezahlt_am", json={"bezahlt_am": d(-706)})
+c.post("/api/barzahlungen", data={"betrag": "700", "datum": d(-345), "quittung_nr": "0347", "anlass": "Sommerfest",
+                                  "kunde": json.dumps(K["musik"])}, content_type="multipart/form-data")
 r038 = next(r["id"] for r in db.list_invoices() if r["nummer"] == "038")
 c.post(f"/api/rechnungen/{r038}/stornieren")                                    # 038 → Stornorechnung 042
 
@@ -339,6 +349,26 @@ with sync_playwright() as p:
     page.wait_for_timeout(900)
     page.evaluate("window.scrollTo(0, 0)")
     page.screenshot(path=str(ZIEL / "vertragsvorlage.png"))
+
+    # Vertrag → Rechnung, Bar bezahlt, Kundenakte (seit 1.14)
+    page.evaluate("showTab('start')")
+    page.wait_for_timeout(1200)
+    page.locator("#start [data-ka-start=rechnung]").first.click()
+    page.wait_for_timeout(500)
+    page.locator("#rv-wahl").screenshot(path=str(ZIEL / "zahlweg.png"))
+    page.click("#rv-wahl [data-zahlweg=bar]")
+    page.wait_for_timeout(500)
+    page.fill("#bar-nr", "0412")
+    page.evaluate("document.activeElement && document.activeElement.blur()")
+    page.locator("#bar-dialog").screenshot(path=str(ZIEL / "bar-bezahlt.png"))
+    page.click("#bar-dialog [data-bar=zu]")
+    page.evaluate("showTab('kunden')")
+    page.wait_for_timeout(1200)
+    page.locator("#tab-kunden .card").nth(1).screenshot(path=str(ZIEL / "kunden.png"))
+    page.locator("#tab-kunden [data-akte]", has_text="Musikverein").click()
+    page.wait_for_timeout(1000)
+    page.locator("#kundenakte").screenshot(path=str(ZIEL / "kundenakte.png"))
+    page.click("#kundenakte [data-ka=zu]")
 
     # Rundgang und Schnellsuche (seit 1.12)
     page.evaluate("showTab('start')")

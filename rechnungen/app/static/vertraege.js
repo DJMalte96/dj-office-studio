@@ -29,6 +29,7 @@ async function ladeVertraege() {
         <button type="button" class="small secondary" data-vt-act="oeffnen">Ansehen</button>
         ${v.status !== "unterschrieben" ? `<button type="button" class="icon del" data-vt-act="loeschen" title="Vertrag löschen" aria-label="Vertrag löschen">✕</button>` : ""}</td>
     </tr>`).join("") || `<tr><td colspan="5" class="hint">Noch keine Verträge – mit „＋ Neuer Vertrag“ den ersten anlegen.</td></tr>`;
+  await kaVertraegeErgaenzen();   // Stand der Rechnungen, → Rechnung, Bar bezahlt, Kundenakte (kundenakte.js)
 }
 
 $("#vt-neu-knopf").addEventListener("click", () => neuerVertrag());
@@ -111,6 +112,7 @@ async function zeigeVertragDialog({ vertrag, inhalt }) {
 
 function felderFuellen() {
   const v = vtState.aktuell, f = v.felder, gesperrt = v.status !== "entwurf";
+  kaVertragKopf(v);
   $("#vt-titel").innerHTML = `${esc(v.name)}${v.kunde.name ? ` · ${esc(v.kunde.name)}` : ""} <span class="vt-status ${v.status}">${VT_STATUS[v.status]}</span>`;
   $("#vt-termin-hinweis").textContent = v.angebot_id ? `aus Angebot ${v.angebot_nummer}` : "";
   for (const [id, wert] of [["vf-name", v.kunde.name], ["vf-strasse", v.kunde.strasse], ["vf-plz", v.kunde.plz], ["vf-ort", v.kunde.ort],

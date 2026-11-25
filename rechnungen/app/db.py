@@ -249,6 +249,28 @@ CREATE TABLE IF NOT EXISTS vertrag_anlagen (
     name TEXT NOT NULL,
     datei TEXT NOT NULL                          -- relativ zu vertraege/anlagen
 );
+-- seit 1.14: bar bezahlt – die Quittung schreibt man von Hand auf den Quittungsblock, die App vermerkt nur die Zahlung
+CREATE TABLE IF NOT EXISTS barzahlungen (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    datum TEXT NOT NULL,                         -- Tag, an dem das Geld kam
+    betrag REAL NOT NULL,                        -- erhaltener Betrag (brutto)
+    ust_satz REAL,                               -- NULL = Kleinunternehmer (keine Umsatzsteuer)
+    kunde_id INTEGER,
+    kunde_json TEXT NOT NULL,
+    angebot_id INTEGER,
+    vertrag_id INTEGER,
+    anlass TEXT NOT NULL DEFAULT '',
+    feier_datum TEXT NOT NULL DEFAULT '',
+    quittung_nr TEXT NOT NULL DEFAULT '',
+    beleg_datei TEXT,                            -- Foto vom Durchschlag, relativ zu barzahlungen/
+    beleg_name TEXT,
+    erstellt TEXT DEFAULT CURRENT_TIMESTAMP
+);
+-- seit 1.14: Jahres-Erinnerung für Stammkunden ausgeblendet („Diesmal nicht“ bis zum Jahrestag, „Nicht mehr erinnern“)
+CREATE TABLE IF NOT EXISTS kunden_erinnerung (
+    kunde TEXT PRIMARY KEY,                      -- Kundenname, klein geschrieben
+    ruhe TEXT NOT NULL                           -- 'nie' oder Datum (JJJJ-MM-TT), bis zu dem nicht erinnert wird
+);
 -- seit 1.8: Kleinunternehmer und Fahrzeug je Jahr (fehlt ein Jahr: aktuelle Einstellungen)
 CREATE TABLE IF NOT EXISTS jahr_einstellungen (
     jahr INTEGER PRIMARY KEY,
@@ -293,6 +315,7 @@ def _sperr_trigger():
     plan = ("kosten", "nutzungsdauer", "anschaffung_am", "restwert_start", "start_jahr", "rest_nutzungsdauer")
     abgang = ("abgang_am", "abgang_erloes")
     ein = ("datum", "betrag", "ust_satz")
+    bar = ("datum", "betrag", "ust_satz")
     abg = lambda x: _ZU_AB.format(_J.format(x + ".abgang_am"))
     return [
         ("ausgaben_neu", "ausgaben", "INSERT", _ausgabe_zu("NEW")),
@@ -313,6 +336,10 @@ def _sperr_trigger():
         ("einnahmen_aendern", "einnahmen_sonstige", "UPDATE",
          f"{_geaendert(ein)} AND ({_ZU.format(_J.format('OLD.datum'))} OR {_ZU.format(_J.format('NEW.datum'))})"),
         ("einnahmen_loeschen", "einnahmen_sonstige", "DELETE", _ZU.format(_J.format("OLD.datum"))),
+        ("bar_neu", "barzahlungen", "INSERT", _ZU.format(_J.format("NEW.datum"))),
+        ("bar_aendern", "barzahlungen", "UPDATE",
+         f"{_geaendert(bar)} AND ({_ZU.format(_J.format('OLD.datum'))} OR {_ZU.format(_J.format('NEW.datum'))})"),
+        ("bar_loeschen", "barzahlungen", "DELETE", _ZU.format(_J.format("OLD.datum"))),
         ("jahre_neu", "jahr_einstellungen", "INSERT", _ZU.format("NEW.jahr")),
         ("jahre_aendern", "jahr_einstellungen", "UPDATE", f"({_ZU.format('OLD.jahr')} OR {_ZU.format('NEW.jahr')})"),
         ("jahre_loeschen", "jahr_einstellungen", "DELETE", _ZU.format("OLD.jahr")),
@@ -402,7 +429,8 @@ def init():
         # seit 1.1: Veranstaltungsort (Rechnung/Angebot) und „Fahrt erfassen“ (Rechnung)
         # seit 1.11: Anzahlungs-/Schlussrechnung, Herkunft aus einem Angebot, Nachfrage zum Angebot
         for tabelle, felder in (("rechnungen", (("veranstaltungsort_json", "TEXT"), ("fahrt_erfassen", "INTEGER DEFAULT 1"),
-                                                ("rechnungsart", "TEXT DEFAULT 'normal'"), ("angebot_id", "INTEGER"))),
+                                                ("rechnungsart", "TEXT DEFAULT 'normal'"), ("angebot_id", "INTEGER"),
+                                                ("vertrag_id", "INTEGER"))),   # seit 1.14: Rechnung aus einem Vertrag
                                 ("angebote", (("veranstaltungsort_json", "TEXT"), ("nachgefragt_am", "TEXT"), ("nachgefragt_wie", "TEXT")))):
             vorhanden = {r["name"] for r in con.execute(f"PRAGMA table_info({tabelle})")}
             for spalte, typ in felder:
@@ -596,19 +624,20 @@ def save_invoice(inv, inv_id=None):
         steuer = (_ku(inv.get("kleinunternehmer")), inv.get("ust_satz"))
         ort = (json.dumps(inv["veranstaltungsort"]) if inv.get("veranstaltungsort") else None,
                int(inv.get("fahrt_erfassen", True) is not False))
-        art = (inv.get("rechnungsart") or "normal", inv.get("angebot_id"))
+        art = (inv.get("rechnungsart") or "normal", inv.get("angebot_id"), inv.get("vertrag_id"))
         if inv_id:
             con.execute(
                 "UPDATE rechnungen SET nummer=?, datum=?, kunde_id=?, kunde_json=?,"
                 " positionen_json=?, zahlungsbedingung=?, gesamt=?, bezahlt=?, kleinunternehmer=?, ust_satz=?,"
-                " veranstaltungsort_json=?, fahrt_erfassen=?, rechnungsart=?, angebot_id=COALESCE(?, angebot_id) WHERE id=?",
+                " veranstaltungsort_json=?, fahrt_erfassen=?, rechnungsart=?, angebot_id=COALESCE(?, angebot_id),"
+                " vertrag_id=COALESCE(?, vertrag_id) WHERE id=?",
                 vals + steuer + ort + art + (inv_id,))
             return inv_id
         return con.execute(
             "INSERT INTO rechnungen (nummer, datum, kunde_id, kunde_json, positionen_json,"
             " zahlungsbedingung, gesamt, bezahlt, festgeschrieben, storno_von, bezahlt_am, kleinunternehmer, ust_satz,"
-            " veranstaltungsort_json, fahrt_erfassen, absender_json, rechnungsart, angebot_id)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            " veranstaltungsort_json, fahrt_erfassen, absender_json, rechnungsart, angebot_id, vertrag_id)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             vals + (int(bool(inv.get("festgeschrieben"))), inv.get("storno_von"), inv.get("bezahlt_am")) + steuer + ort
             + (_absender_text(inv.get("absender")) if inv.get("festgeschrieben") else None,) + art).lastrowid
 

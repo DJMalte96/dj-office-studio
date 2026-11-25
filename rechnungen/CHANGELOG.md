@@ -2,6 +2,19 @@
 
 Alle Änderungen an DJ Office Studio. Neueste Version oben.
 
+## 1.14.0 – 2026-11-25
+
+### Neu
+- **Vom Vertrag zur Rechnung**: Vor der Feier erinnert die Startseite an die vereinbarte Anzahlung (sobald der Vertrag unterschrieben ist), nach der Feier an die Rechnung. Ein Klick fragt „Wie wurde bezahlt?“:
+  - **Rechnung schreiben** übernimmt Kunde, Termin, Spielzeit, Ort und Gage aus dem Vertrag – mit Anzahlung als Schlussrechnung. **＋ Verlängerung** und **＋ weitere Position** ergänzen vor dem Speichern, was dazugekommen ist. Die Rechnung gehört danach zum Vertrag (auch, wenn sie über das Angebot geschrieben wird).
+  - **Bar bezahlt**: Die Quittung schreibst du weiter von Hand auf den Quittungsblock – die App vermerkt nur Betrag (Rest nach einer Anzahlung vorausgefüllt), Tag, optional die Nummer vom Block und ein Foto vom Durchschlag. Zählt in EÜR (eigene Zeile), Export (samt Foto), Kleinunternehmer-Grenze und Kundenakte; das Angebot gilt als angenommen. Hinweis bei Firmen und Vereinen, die meist eine richtige Rechnung brauchen. Gesperrt in abgeschlossenen Jahren, mit in der Datensicherung.
+  - Knöpfe auch in **Dokumente → Verträge** (mit Stand „Anzahlung 025 ✓ bezahlt · Rechnung 026 offen“), im Vertragsfenster (**→ Rechnung**) und bei den Angeboten – oben bei den offenen, in der Liste und auf der Startseite (**Bar bezahlt** neben **→ Rechnung**).
+- **Kundenakte** unter **Stammdaten → Kunden**: Liste mit Feiern, Umsatz, letzter/nächster Feier und Stammkunden-Kennzeichen; die Akte zeigt Umsatz, Feiern, üblichen Preis, Umsatz je Jahr und alle Angebote, Verträge, Rechnungen und Barzahlungen. Kundennamen im Archiv, bei Angeboten, Verträgen und in der Schnellsuche öffnen sie.
+- **Jahres-Erinnerung für Stammkunden**: Knapp ein Jahr nach der letzten Feier „↻ Stammkunde …: letztes Jahr am … – Angebot schicken?“ – mit **Angebot wie letztes Jahr**, **Diesmal nicht** (✕ auf der Startseite) und **Nicht mehr erinnern** (in der Akte wieder einschaltbar).
+
+### Geändert
+- Der Hinweis „Schlussrechnung …“ zu einem Angebot entfällt, wenn es dazu einen Vertrag gibt – dann erinnert der Vertrag.
+
 ## 1.13.1 – 2026-11-25
 
 ### Sicherheit

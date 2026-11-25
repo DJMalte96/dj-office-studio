@@ -13,6 +13,7 @@ const state = {
   angebote: [],
   modus: "rechnung",  // Editor schreibt eine "rechnung" oder ein "angebot"
   ausAngebot: null,   // Angebot, aus dem die Rechnung im Editor erzeugt wird
+  ausVertrag: null,   // Vertrag, aus dem die Rechnung im Editor erzeugt wird (seit 1.14)
   gueltigAuto: true,  // „Gültig bis“ folgt dem Angebotsdatum, bis es von Hand geändert wird
 };
 
@@ -900,6 +901,7 @@ function readForm() {
     gueltig_bis: istAngebot() ? $("#a-gueltig").value : undefined,
     hinweise: istAngebot() ? $("#a-hinweise").value : undefined,
     angebot_id: !istAngebot() && state.ausAngebot ? state.ausAngebot : undefined,
+    vertrag_id: !istAngebot() && state.ausVertrag ? state.ausVertrag : undefined,
     veranstaltungsort: $("#v-wie-kunde").checked ? null
       : { name: $("#v-name").value, strasse: $("#v-strasse").value, plz: $("#v-plz").value, ort: $("#v-ort").value },
     fahrt_erfassen: istAngebot() ? undefined : $("#r-fahrt").checked,
@@ -991,6 +993,7 @@ $("#r-fahrt").addEventListener("change", fahrtVorschau);
 /* Hinweis im Editor, wenn eine Rechnung aus einem Angebot erzeugt wird. */
 function setAusAngebot(a) {
   state.ausAngebot = a ? a.id : null;
+  state.ausVertrag = null;
   $("#aus-angebot").classList.toggle("hidden", !a);
   $("#aus-angebot").textContent = a
     ? `Aus Angebot ${a.nummer} übernommen – beim Speichern wird das Angebot als „angenommen“ markiert.` : "";
@@ -1105,7 +1108,7 @@ $("#rechnung").addEventListener("submit", e => {
       ? await api(`${pfad}/${state.editId}`, { method: "PUT", body: data })
       : await api(pfad, { method: "POST", body: data });
     state.editId = res.id;
-    if (data.angebot_id) setAusAngebot(null);   // Angebot ist jetzt als angenommen markiert
+    if (data.angebot_id || data.vertrag_id) setAusAngebot(null);   // Angebot angenommen bzw. Rechnung am Vertrag
     speichernText();
     toast(`${art} ${data.nummer} gespeichert` + (res.datei ? ` → ${res.datei.split("/").pop()}` : ""));
     return api(`${pfad}/${res.id}/pdf`);
@@ -1346,7 +1349,7 @@ function renderListe() {
       <td>${esc(r.nummer)}${artChip(r)}${schloss(r)}${stornoChip(r)}${versandChip(r)}${r.paperless_am
         ? plChip(r) : ""}${r.gesperrt ? ` <span class="lock" title="Einnahme in einem abgeschlossenen Jahr">🔒 ${(r.storno_von ? r.datum : r.bezahlt_am || "").slice(0, 4)}</span>` : ""}</td>
       <td>${fmtDate(r.datum)}</td>
-      <td>${esc(r.kunde.name)}<br><small>${esc(r.kunde.ort)}</small></td>
+      <td><button type="button" class="kunde-link" data-akte="${esc(r.kunde.name)}" title="Kundenakte öffnen">${esc(r.kunde.name)}</button><br><small>${esc(r.kunde.ort)}</small></td>
       <td class="num">${fmtEuro(r.gesamt)}</td>
       <td>${r.storno_von || r.storniert_durch ? `<span class="frist neutral">${r.storno_von ? "Storno" : "storniert"}</span>`
         : `<input type="checkbox" class="bezahlt" checked${r.gesperrt ? ` disabled title="Bezahlt in einem abgeschlossenen Jahr – zum Ändern das Jahr wieder öffnen"`
@@ -1527,7 +1530,7 @@ const angebotName = a => a.name || `Angebot_${a.nummer}`;
 
 async function loadAngebote() {
   try {
-    [state.angebote, state.rechnungen] = await Promise.all([api("angebote"), api("rechnungen")]);
+    [state.angebote, state.rechnungen, ka.bar] = await Promise.all([api("angebote"), api("rechnungen"), api("barzahlungen")]);
   } catch (e) { return toast("Laden fehlgeschlagen: " + e.message, true); }
   renderAngebote();
 }
@@ -1635,6 +1638,7 @@ function renderAngebote() {
       </td>
     </tr>`).join("") ||
     `<tr><td colspan="8" class="hint">${q ? "Keine Treffer." : "Noch keine Angebote – mit „＋ Neues Angebot“ das erste schreiben."}</td></tr>`;
+  kaAngeboteErgaenzen();   // „Bar bezahlt“, Kundenakte (kundenakte.js)
   const offen = state.angebote.filter(a => a.status === "offen");
   $("#angebote-summe").textContent = state.angebote.length
     ? `${state.angebote.length} Angebot${state.angebote.length === 1 ? "" : "e"} · ${offen.length} offen`
@@ -1986,6 +1990,7 @@ async function renderStamm(table) {
       </tbody></table>
     </div>`;
 
+  if (table === "kunden") await kaKundenListe(sec, items);   // Übersicht mit Kundenakte (kundenakte.js)
   const form = $(".stamm-form", sec);
   let editId = null;
   const setForm = (it = {}) => {
@@ -2276,14 +2281,19 @@ async function renderStart() {
   if (ohneDatum) wichtig.push(["gelb", "📅 Bezahlt-Datum fehlt", `data-start="bezahlt-am"`]);
   const baldAb = angebote.filter(a => a.rest !== null && a.rest >= 0 && a.rest <= 3).length;
   if (baldAb) wichtig.push(["gelb", `✎ ${baldAb} Angebot${baldAb === 1 ? " läuft" : "e laufen"} bald ab`, `data-start="angebote"`]);
-  const vtOffen = (await api("vertraege").catch(() => [])).filter(v => v.status === "verschickt").length;
+  [ka.vertraege, ka.bar, ka.ruhe] = await Promise.all([api("vertraege").catch(() => []), api("barzahlungen").catch(() => []),
+    api("kunden/erinnerung").catch(() => ({}))]);
+  const vtOffen = ka.vertraege.filter(v => v.status === "verschickt").length;
   if (vtOffen) wichtig.push(["gelb", `✍ ${vtOffen} ${vtOffen === 1 ? "Vertrag" : "Verträge"} nicht unterschrieben zurück`, `data-start="vertraege"`]);
   const nachfassen = angebote.filter(nachfassenFaellig).length;
   if (nachfassen) wichtig.push(["gelb", `✉ ${nachfassen} Angebot${nachfassen === 1 ? "" : "e"} nachfragen`, `data-start="zu-karte" data-ziel=".start-karte.nachfassen"`]);
-  for (const a of state.angebote.filter(a => schlussOffen(a) && veranstaltungAm(a) && veranstaltungAm(a) <= heute))
+  // Gibt es zum Angebot einen Vertrag, erinnert der Vertrag an die Rechnung (kaStartChips) – nicht doppelt
+  for (const a of state.angebote.filter(a => schlussOffen(a) && veranstaltungAm(a) && veranstaltungAm(a) <= heute
+    && !ka.vertraege.some(v => v.angebot_id === a.id)))
     wichtig.push(["gelb", `✎ Schlussrechnung ${esc(a.kunde.name.split(" ")[0])}`, `data-start="schluss" data-angebot="${a.id}" title="Feier am ${fmtDate(veranstaltungAm(a))} – Anzahlung wird abgezogen"`]);
   for (const g of (eu?.grenzen?.hinweise || []).filter(g => g.stufe === "rot")) wichtig.push(["rot", "! Kleinunternehmer-Grenze", `data-start="finanzen" title="${esc(g.text)}"`]);
   if (sich.faellig) wichtig.push(["rot", "⇩ Sicherung fällig", `data-start="sichern"`]);
+  const kaChips = kaStartChips(heute);   // Vertrag → Rechnung, Stammkunden (kundenakte.js)
   const erster = Object.entries(termine).filter(([t]) => t > heute).sort(([a], [b]) => a < b ? -1 : 1)[0];
 
   // ---------- Demnächst: Tagesleiste nur, wenn genug los ist ----------
@@ -2340,7 +2350,7 @@ async function renderStart() {
       <div class="z1"><span>${esc(a.kunde.name)}</span><span>${euroCent(a.gesamt)}</span></div>
       <small>Angebot ${esc(a.nummer)} · ${a.rest === null ? "ohne Frist" : a.rest < 0 ? `seit ${-a.rest} ${-a.rest === 1 ? "Tag" : "Tagen"} abgelaufen` : a.rest === 0 ? "läuft heute ab" : `noch ${a.rest} ${a.rest === 1 ? "Tag" : "Tage"} gültig`}${nachfassenFaellig(a) ? `<span class="nf-hinweis">${keineAntwort(a)}</span>` : nachgefragtChip(a)}</small>
       <div class="k">${nachfassenFaellig(a) ? `<button type="button" class="small" data-start="nachfragen">Nachfragen</button>` : ""}${a.rest !== null && a.rest < 0 ? `<button type="button" class="small secondary" data-start="abgelehnt">Abgelehnt</button>`
-        : `<button type="button" class="small" data-start="zu-rechnung">→ Rechnung</button>`}<button type="button" class="small secondary" data-start="angebot">Ansehen</button></div></div>`).join("")}
+        : `<button type="button" class="small" data-start="zu-rechnung">→ Rechnung</button><button type="button" class="small secondary" data-ka-start="bar" title="Bar bezahlt – Quittung von Hand">Bar bezahlt</button>`}<button type="button" class="small secondary" data-start="angebot">Ansehen</button></div></div>`).join("")}
     ${angebote.length > 5 ? `<a href="#" class="mehr" data-start="angebote">alle ${angebote.length} →</a>` : ""}</div>`);
   else leer.push("keine offenen Angebote");
 
@@ -2358,7 +2368,7 @@ async function renderStart() {
       <div>
         <h2>${gruss}${vorname ? `, ${esc(vorname)}` : ""}!</h2>
         <div class="datum">${jetzt.toLocaleDateString("de-DE", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</div>
-        <div class="wichtig">${wichtig.length ? `<span class="wt">Heute wichtig</span>${wichtig.map(([s, t, attr]) => `<button type="button" class="start-chip ${s}" ${attr}>${t}</button>`).join("")}`
+        <div class="wichtig">${wichtig.length || kaChips.length ? `<span class="wt">Heute wichtig</span>${wichtig.map(([s, t, attr]) => `<button type="button" class="start-chip ${s}" ${attr}>${t}</button>`).join("")}${kaChips.join("")}`
           : `<span class="ruhig">✓ Alles erledigt${erster ? ` · als Nächstes: ${fmtDate(erster[0]).slice(0, 6)} ${esc(erster[1][0].lang)}` : ""}</span>`}</div>
       </div>
       <div class="knoepfe"><button type="button" data-start="neu">＋ Neue Rechnung</button><button type="button" data-start="angebot-neu">＋ Neues Angebot</button>

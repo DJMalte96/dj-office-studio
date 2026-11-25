@@ -1028,3 +1028,45 @@ details.vt-gruppe > summary .hint { font-size: 12px; }
   .vt-aktionen { width: 100%; }
   .vt-aktionen [data-vt=senden] { flex: 1; }
 }
+
+/* ---------- seit 1.14: Kundenakte, Bar bezahlt, Vertrag → Rechnung ---------- */
+dialog.kundenakte { width: min(900px, calc(100vw - 24px)); }
+.ka-kopf { display: flex; gap: 16px; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; }
+.ka-kopf h2 { margin: 0 0 4px; }
+.ka-kacheln { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 16px 0; }
+.ka-kacheln div { border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; }
+.ka-kacheln b { display: block; font-size: 19px; }
+.ka-kacheln small { color: var(--muted); }
+.ka-jahre { display: flex; gap: 6px; flex-wrap: wrap; margin: 0 0 14px; }
+.ka-jahre span { border: 1px solid var(--border); border-radius: 999px; padding: 2px 10px; font-size: 13px; }
+.ka-liste { width: 100%; border-collapse: collapse; }
+.ka-liste td { padding: 8px 6px; border-top: 1px solid var(--border); vertical-align: top; }
+.ka-liste tr { cursor: pointer; }
+.ka-liste tr:hover td { background: var(--primary-soft); }
+.ka-art { display: inline-block; font-size: 11.5px; font-weight: 650; border: 1px solid var(--border); border-radius: 999px; padding: 0 8px; color: var(--muted); }
+.ka-hinweis { border: 1px dashed var(--primary-d); border-radius: 12px; padding: 10px 12px; margin: 0 0 14px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.ka-hinweis.ka-aus { border-style: solid; border-color: var(--border); color: var(--muted); }
+.ka-knoepfe { display: flex; gap: 8px; flex-wrap: wrap; width: 100%; }
+.kunde-link { background: none; border: 0; padding: 0; color: inherit; font: inherit; cursor: pointer; text-decoration: underline;
+  text-decoration-color: var(--border); text-underline-offset: 3px; min-height: 0; box-shadow: none; text-align: left; }
+.kunde-link:hover { background: none; text-decoration-color: var(--primary-d); }
+.ku-stamm { display: inline-block; font-size: 11.5px; font-weight: 650; border-radius: 999px; padding: 0 8px; margin-left: 6px;
+  background: var(--primary-soft); border: 1px solid var(--primary-d); vertical-align: middle; }
+.stamm-chip { display: inline-flex; gap: 8px; align-items: center; }
+.stamm-chip .link { background: none; border: 0; color: inherit; font: inherit; padding: 0; min-height: 0; cursor: pointer; box-shadow: none; }
+.stamm-chip .aus { opacity: .7; }
+.stamm-chip .aus:hover { opacity: 1; }
+.vt-rechnung { font-size: 12.5px; color: var(--muted); }
+.rv-leiste { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
+.rv-wahl { display: grid; gap: 10px; margin: 14px 0; }
+.rv-wahl button { text-align: left; background: var(--card); color: var(--text); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px;
+  font: inherit; min-height: 0; box-shadow: none; cursor: pointer; }
+.rv-wahl button:hover { border-color: var(--primary-d); background: var(--primary-soft); }
+.rv-wahl b { display: block; }
+.rv-wahl small { color: var(--muted); }
+.ka-liste td.num, .ka-kopf .row button { white-space: nowrap; }
+@media (max-width: 700px) {
+  .ka-kacheln { grid-template-columns: 1fr 1fr; }
+  .ka-liste td { padding: 8px 4px; font-size: 13.5px; }
+  .ka-kopf .row { flex-wrap: wrap; }
+}
