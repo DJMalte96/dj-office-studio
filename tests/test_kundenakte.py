@@ -76,6 +76,7 @@ def test_foto_vom_durchschlag(client, app_modul):
     assert b["hat_beleg"]
     r = client.get(f"/api/barzahlungen/{b['id']}/beleg")
     assert r.data == PNG and r.mimetype == "image/png" and "attachment" in r.headers["Content-Disposition"]
+    r.close()   # Windows: geöffnete Datei lässt sich nicht löschen
     ordner = os.path.join(db.DATA_DIR, "barzahlungen")
     assert len(os.listdir(ordner)) == 1
 

@@ -172,7 +172,10 @@ def barzahlung_loeschen(bid):
         con.execute("DELETE FROM barzahlungen WHERE id = ?", (bid,))
     pfad = _sicherer_pfad(r["beleg_datei"])
     if pfad:
-        os.remove(pfad)
+        try:
+            os.remove(pfad)
+        except OSError:   # z. B. unter Windows gerade geöffnet – der Vermerk ist trotzdem gelöscht
+            pass
     return "", 204
 
 
