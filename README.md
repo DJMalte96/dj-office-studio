@@ -42,12 +42,21 @@ DJ Office Studio ist eine App zum Schreiben von DJ-Rechnungen und -Angeboten –
   - **Abos**: Musikpool, DJ-Software & Co. einmal anlegen – wöchentlich bis alle paar Jahre oder im eigenen Rhythmus. Fällige Abbuchungen erscheinen zum Bestätigen; kommt die Rechnung als Mail oder PDF, hängt die App sie an, statt doppelt zu buchen. Preisänderungen ab einem Datum, Kündigung mit Enddatum, 10-Tage-Regel automatisch.
   - **Jahr abschließen**: Ein fertiges Jahr in drei Schritten prüfen, kontrollieren und abschließen. Die App legt ein Paket mit Abschlussblatt und Prüfsumme ab und sperrt das Jahr gegen Änderungen – ansehen, herunterladen und erneut verschicken geht weiter. Ein Jahr wird nie von selbst gesperrt; wieder öffnen geht mit Begründung. Kleinunternehmer und Fahrzeug gelten je Jahr.
 - **Stammdaten** für Kunden, Rechnungsposten und Zahlungsbedingungen.
+- **Schnellsuche** (Lupe oder Strg/⌘ + K) über Rechnungen, Angebote, Kunden, Belege und Seiten – und ein **Rundgang** durch die App für den Einstieg (beim ersten Start, jederzeit wiederholbar).
 - Helles und dunkles Design (folgt der Geräteeinstellung, umschaltbar oben rechts), nutzbar am Computer, Tablet und Handy.
 
 ## Bedienung
 
 Oben in der Kopfzeile gibt es auf jeder Seite das Menü: **Start**, **Rechnungen** (Neue Rechnung, Rechnungen), **Angebote** (Neues Angebot, Angebote), **Finanzen** (Übersicht, Ausgaben, Fahrten, Anschaffungen, EÜR & Export) und **Stammdaten** (Kunden, Rechnungsposten, Zahlungsbedingungen).
 
+
+**Rundgang:** Beim allerersten Start bietet die App einen kurzen Rundgang an (ca. zwei Minuten, zwölf Schritte). Der jeweilige Bereich wird hervorgehoben, die App wechselt selbst auf die passende Seite; Weiter/Zurück per Knopf oder Pfeiltasten, Esc beendet. Wiederholen: ⚙ Einstellungen → ganz unten **Rundgang starten**.
+
+![Screenshot: Rundgang](docs/bilder/rundgang.png)
+
+**Schnellsuche:** Die Lupe oben rechts oder **Strg + K** (Mac: **⌘ + K**) öffnet die Suche über Rechnungen, Angebote, Kunden, Belege und Seiten. Gesucht wird in Namen, Orten, Nummern, Texten, Daten und Beträgen; mehrere Wörter grenzen ein („eva hochzeit“). Mit ↑ ↓ auswählen, Enter öffnet den Treffer direkt.
+
+![Screenshot: Schnellsuche](docs/bilder/suche.png)
 
 **Start:** Die Startseite öffnet sich beim Aufruf; ein Klick auf das Logo führt zurück.
 

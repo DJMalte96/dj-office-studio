@@ -903,3 +903,48 @@ button.start-plakette:hover, .start-plakette button.link:hover { border-color: v
   .rechnungsart-wahl { display: grid; grid-template-columns: 1fr; width: 100%; border-radius: 14px; }
   .rechnungsart-wahl label { border-radius: 10px; text-align: center; }
 }
+
+/* ---------- Seit 1.12: Rundgang und Schnellsuche ---------- */
+/* ---------- Rundgang ---------- */
+.tour-licht { position: fixed; z-index: 1000; border-radius: 14px; pointer-events: none;
+  box-shadow: 0 0 0 4px var(--primary), 0 0 0 9999px rgba(0, 0, 0, .55); transition: all .25s ease; }
+.tour-licht.ohne { box-shadow: 0 0 0 9999px rgba(0, 0, 0, .55); width: 0 !important; height: 0 !important; left: 50% !important; top: 40% !important; }
+.tour-sperre { position: fixed; inset: 0; z-index: 999; }
+.tour-karte { position: fixed; z-index: 1001; width: min(380px, calc(100vw - 24px)); background: var(--card); color: var(--text);
+  border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow-lg); padding: 18px 18px 14px; transition: top .25s ease, left .25s ease; }
+.tour-karte h3 { margin: 0 0 6px; font-size: 16px; }
+.tour-karte p { margin: 0 0 12px; font-size: 14px; line-height: 1.5; color: var(--text); }
+.tour-karte .tour-fuss { display: flex; align-items: center; gap: 8px; }
+.tour-karte .tour-schritt { font-size: 12.5px; color: var(--muted); margin-right: auto; }
+.tour-karte .tour-punkte { display: flex; gap: 4px; margin: 0 0 12px; }
+.tour-karte .tour-punkte i { width: 6px; height: 6px; border-radius: 50%; background: var(--border); }
+.tour-karte .tour-punkte i.an { background: var(--primary-d); }
+.tour-karte .link { background: none; border: 0; color: var(--muted); padding: 0; font-size: 13px; cursor: pointer; text-decoration: underline; min-height: 0; }
+@media (max-width: 700px) { .tour-karte { left: 12px !important; right: 12px; width: auto; top: auto !important; bottom: 12px; } }
+.tour-frage { width: min(460px, calc(100vw - 24px)); }
+.tour-frage p { line-height: 1.55; }
+/* ---------- Schnellsuche ---------- */
+.suche-knopf svg { width: 18px; height: 18px; }
+dialog.suche { width: min(640px, calc(100vw - 24px)); padding: 0; margin-top: 10vh; border: 1px solid var(--border); border-radius: 16px;
+  background: var(--card); color: var(--text); box-shadow: var(--shadow-lg); }
+dialog.suche::backdrop { background: rgba(0, 0, 0, .35); }
+.suche-feld { display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-bottom: 1px solid var(--border); }
+.suche-feld svg { width: 18px; height: 18px; color: var(--muted); flex: none; }
+.suche-feld input { border: 0; background: none; font-size: 16px; padding: 0; margin: 0; outline: none; box-shadow: none; width: 100%; color: var(--text); }
+.suche-feld kbd, .suche-fuss kbd { font: 600 11px/1 inherit; border: 1px solid var(--border); border-radius: 5px; padding: 3px 5px; color: var(--muted); }
+.suche-liste { max-height: min(60vh, 460px); overflow: auto; padding: 6px; }
+.suche-gruppe { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); padding: 10px 10px 4px; }
+.suche-treffer { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; background: none; border: 0; border-radius: 10px;
+  padding: 8px 10px; cursor: pointer; color: var(--text); font: inherit; min-height: 0; }
+.suche-treffer .sym { width: 28px; height: 28px; border-radius: 8px; background: var(--input-bg); border: 1px solid var(--border);
+  display: grid; place-items: center; font-size: 13px; flex: none; }
+.suche-treffer .txt { flex: 1; min-width: 0; }
+.suche-treffer .txt b { display: block; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.suche-treffer .txt small { color: var(--muted); display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.suche-treffer .rechts { color: var(--muted); font-size: 13px; white-space: nowrap; }
+dialog.suche .suche-treffer:hover, dialog.suche .suche-treffer.aktiv { background: var(--primary-soft); color: var(--text); }
+.suche-treffer mark { background: none; color: inherit; text-decoration: underline; text-decoration-color: var(--primary-d); text-underline-offset: 2px; }
+.suche-leer { padding: 22px; text-align: center; color: var(--muted); }
+.suche-fuss { display: flex; gap: 14px; padding: 9px 16px; border-top: 1px solid var(--border); font-size: 12px; color: var(--muted); }
+  
+.tour-karte .tour-ende { margin-top: 8px; }

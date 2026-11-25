@@ -2,6 +2,14 @@
 
 Alle Änderungen an DJ Office Studio. Neueste Version oben.
 
+## 1.12.0 – 2026-11-25
+
+### Neu
+- **Rundgang durch die App**: Bei einer neuen Installation fragt die App nach dem ersten Hinweis „Kurzer Rundgang?“. In zwölf Schritten zeigt sie Menü, Einstellungen, Startseite, Rechnung schreiben, Rechnungen, Angebote, Ausgaben, EÜR, Schnellsuche und Datensicherung – der jeweilige Bereich wird hervorgehoben, die App wechselt selbst auf die passende Seite. Weiter/Zurück auch mit den Pfeiltasten, Esc beendet.
+  - Jederzeit wiederholbar unter ⚙ Einstellungen → **Rundgang starten**.
+  - Bestehende Installationen bekommen den Rundgang nach dem Update nicht angeboten.
+- **Schnellsuche**: Lupe oben rechts oder **Strg + K** (Mac: **⌘ + K**). Sucht in Rechnungen, Angeboten, Kunden, Belegen und Seiten – nach Name, Ort, Nummer, Text, Datum oder Betrag, mehrere Wörter grenzen ein (z. B. „eva hochzeit“). Mit ↑ ↓ und Enter direkt öffnen: Rechnung oder Angebot im Editor, Kunde mit seinen Rechnungen, Beleg im Prüfen-Dialog oder die Seite.
+
 ## 1.11.0 – 2026-11-25
 
 ### Neu

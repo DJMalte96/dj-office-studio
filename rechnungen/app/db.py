@@ -335,7 +335,10 @@ def connect():
 
 def init():
     with connect() as con:
+        neu = not con.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'rechnungen'").fetchone()
         con.executescript(SCHEMA)
+        if neu:   # seit 1.12: nur bei einer neuen Installation einmal den Rundgang anbieten
+            con.execute("INSERT OR IGNORE INTO einstellungen (schluessel, wert) VALUES ('_rundgang_anbieten', 'true')")
         if con.execute("SELECT COUNT(*) FROM zahlungsbedingungen").fetchone()[0] == 0:
             con.executemany(
                 "INSERT INTO zahlungsbedingungen (titel, text, sortierung) VALUES (?, ?, ?)",

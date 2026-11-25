@@ -67,7 +67,8 @@
         </div>
       </div>
     </nav>
-    <button type="button" id="einstellungen-btn" class="theme-toggle header-rechts" title="Einstellungen" aria-label="Einstellungen">
+    <button type="button" id="suche-knopf" class="theme-toggle header-rechts suche-knopf" title="Suchen (Strg + K)" aria-label="Suchen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></button>
+    <button type="button" id="einstellungen-btn" class="theme-toggle" title="Einstellungen" aria-label="Einstellungen">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
     </button>
     <button type="button" id="theme-toggle" class="theme-toggle" title="Hell/Dunkel umschalten" aria-label="Hell/Dunkel umschalten">
@@ -485,6 +486,7 @@
           <div><strong>DJ Office Studio</strong> <span class="hint">Version <span id="app-version">–</span></span>
             <span id="update-status" class="nur-desktop"></span></div>
           <span class="info-links">
+            <button type="button" class="small secondary" id="rundgang-starten">Rundgang starten</button>
             <a href="#" id="hinweis-zeigen" class="mehr">Hinweise &amp; Lizenz</a>
             <a href="https://github.com/DJMalte96/dj-office-studio/blob/main/rechnungen/CHANGELOG.md" target="_blank" rel="noopener" class="mehr">Was ist neu? (Changelog) ↗</a>
           </span>
@@ -947,6 +949,21 @@
     </form>
   </dialog>
 
+  <dialog id="tour-frage" class="dialog tour-frage">
+    <form method="dialog">
+      <h2>Kurzer Rundgang?</h2>
+      <p>Schön, dass du da bist! In etwa zwei Minuten zeige ich dir die wichtigsten Stellen der App – vom ersten Rechnungsentwurf bis zum Export für den Steuerberater.</p>
+      <p class="hint">Du kannst den Rundgang jederzeit abbrechen und später unter ⚙ Einstellungen wiederholen.</p>
+      <div class="actions"><button type="button" class="secondary" data-frage="spaeter">Später</button><button type="button" data-frage="los">Los geht's</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="suche" class="suche" aria-label="Schnellsuche">
+    <div class="suche-feld"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="suche-eingabe" placeholder="Rechnung, Angebot, Kunde, Beleg oder Seite …" autocomplete="off" spellcheck="false" aria-label="Suchbegriff"><kbd>Esc</kbd></div>
+    <div class="suche-liste" id="suche-liste" role="listbox"></div>
+    <div class="suche-fuss"><span><kbd>↑</kbd> <kbd>↓</kbd> auswählen</span><span><kbd>↵</kbd> öffnen</span><span>z. B. „Müller“, „037“, „Hochzeit“, „950“</span></div>
+  </dialog>
+
   <template id="tpl-position">
     <div class="pos">
       <button type="button" class="icon del" title="Position entfernen">✕</button>
@@ -969,5 +986,6 @@
   <script src="static/datum.js"></script>
   <script src="static/app.js"></script>
   <script src="static/finanzen.js"></script>
+  <script src="static/rundgang.js"></script>
 </body>
 </html>

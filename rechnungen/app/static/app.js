@@ -2435,6 +2435,7 @@ $("#start").addEventListener("click", async e => {
     await loadLookups();
     await resetForm();
     await renderStart();
+    if (typeof rundgangAnbieten === "function") rundgangAnbieten();   // nur bei neuer Installation (rundgang.js)
   } catch (e) {
     toast("Laden fehlgeschlagen: " + e.message, true);
   }

@@ -49,6 +49,7 @@ c = main.app.test_client()
 c.environ_base["HTTP_X_DJOS"] = "1"
 heute = date.today()
 db.save_settings({"_letzte_sicherung": f"{heute - timedelta(days=12)}T19:42:00"})   # Startseite: Sicherung vor 12 Tagen
+db.save_settings({"_rundgang_anbieten": False})   # Frage nach dem Rundgang nicht auf jedem Bild (eigenes Bild unten)
 d = lambda n: (heute + timedelta(days=n)).isoformat()   # noqa: E731
 ZB8 = "Bitte den Betrag innerhalb der nächsten 8 Tage auf das unten genannte Konto überweisen."
 K = {
@@ -318,6 +319,27 @@ with sync_playwright() as p:
     page.wait_for_timeout(300)
     page.locator("#oeffnen-dialog").screenshot(path=str(ZIEL / "jahr-oeffnen.png"))
     page.click("#oeffnen-abbrechen")
+
+    # Rundgang und Schnellsuche (seit 1.12)
+    page.evaluate("showTab('start')")
+    page.wait_for_timeout(800)
+    page.evaluate("document.querySelector('#tour-frage').showModal()")
+    page.wait_for_timeout(300)
+    page.locator("#tour-frage").screenshot(path=str(ZIEL / "rundgang-frage.png"))
+    page.click("#tour-frage [data-frage=los]")
+    page.wait_for_timeout(500)
+    for _ in range(3):
+        page.click(".tour-karte [data-tour=weiter]")
+        page.wait_for_timeout(600)
+    page.screenshot(path=str(ZIEL / "rundgang.png"))
+    page.keyboard.press("Escape")
+    page.wait_for_timeout(400)
+    page.keyboard.press("Control+k")
+    page.wait_for_timeout(800)
+    page.keyboard.type("hochzeit")
+    page.wait_for_timeout(400)
+    page.screenshot(path=str(ZIEL / "suche.png"))
+    page.keyboard.press("Escape")
 
     # Nachfrage zu einem Angebot ohne Antwort (seit 1.11)
     page.evaluate("showTab('start')")

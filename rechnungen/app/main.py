@@ -233,7 +233,7 @@ def _asset_version(name):
 def index():
     with open(os.path.join(STATIC_DIR, "index.html"), encoding="utf-8") as f:
         html = f.read()
-    for name in ("style.css", "datum.js", "app.js", "finanzen.js"):
+    for name in ("style.css", "datum.js", "app.js", "finanzen.js", "rundgang.js"):
         html = html.replace(f'"static/{name}"', f'"static/{name}?v={_asset_version(name)}"')
     return Response(html, mimetype="text/html", headers={"Cache-Control": "no-cache"})
 
@@ -425,6 +425,7 @@ def get_absender():
                       "mail": mail.konfiguriert(a),
                       "sicherung": _sicherung_status(a),
                       "hinweis_bestaetigt": db.get_settings().get("_hinweis_bestaetigt", 0) >= HINWEIS_VERSION,
+                      "rundgang_anbieten": bool(db.get_settings().get("_rundgang_anbieten")),
                       "fahrt_standard": bool(a.get("fahrt_standard")), "kartendienst": bool(a.get("kartendienst")),
                       "fahrzeug": a.get("fahrzeug"), "km_satz": a.get("km_satz"),
                       "version": APP_VERSION,
@@ -435,6 +436,13 @@ def get_absender():
 # Hinweis „Nutzung ohne Gewähr“ beim ersten Start. Bei einer inhaltlichen Änderung des Textes
 # HINWEIS_VERSION erhöhen – dann erscheint er einmal erneut.
 HINWEIS_VERSION = 1
+
+
+@app.post("/api/rundgang")
+def tour_offered():
+    """Frage nach dem Rundgang beantwortet (Los geht's oder Später) – nicht noch einmal anbieten."""
+    db.save_settings({"_rundgang_anbieten": False})
+    return "", 204
 
 
 @app.post("/api/hinweis")
