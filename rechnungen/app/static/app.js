@@ -534,6 +534,7 @@ function fillKunde(k) {
   $("#k-plz").value = k.plz || "";
   $("#k-ort").value = k.ort || "";
   setKundeHinweis();
+  kundeGewaehlt();   // Spickzettel und ggf. Anzahlungen der Schlussrechnung zum neuen Kunden
 }
 
 function closeAc() { acList.classList.add("hidden"); acIndex = -1; }
@@ -629,6 +630,12 @@ function addPosition(p = {}) {
   $(".beschreibung", pos).value = p.beschreibung || "";
   $(".lieferdatum", pos).value = p.lieferdatum ?? (prev ? $(".lieferdatum", prev).value : "");
   $(".preis", pos).value = p.preis ?? "";
+  if (p.anzahlung_id) {             // Abzug einer Anzahlung (Schlussrechnung) – Betrag kommt aus der Anzahlungsrechnung
+    pos.dataset.anzahlung = p.anzahlung_id;
+    pos.classList.add("abzug");
+    $(".preis", pos).readOnly = true;
+    $(".preis", pos).title = "Betrag der Anzahlungsrechnung – zum Ändern unten bei „Schlussrechnung“ abwählen";
+  }
 
   updatePosMode(pos);
   $(".tb", pos).addEventListener("change", e => {
@@ -645,6 +652,15 @@ function addPosition(p = {}) {
   $(".von", pos).addEventListener("input", () => applyTb(pos));
   $(".bis", pos).addEventListener("input", () => applyTb(pos));
   $(".preis", pos).addEventListener("input", updateTotal);
+  const spick = () => spickzettel(pos);
+  $(".tb", pos).addEventListener("change", spick);
+  for (const k of ["von", "bis", "preis", "beschreibung"]) $("." + k, pos).addEventListener("input", spick);
+  pos.addEventListener("click", e => {
+    const b = e.target.closest(".spick-preis");
+    if (!b) return;
+    $(".preis", pos).value = b.dataset.preis;
+    $(".preis", pos).dispatchEvent(new Event("input"));
+  });
   $(".del", pos).addEventListener("click", () => {
     pos.remove();
     if (!$$("#positionen .pos").length) addPosition();
@@ -653,6 +669,7 @@ function addPosition(p = {}) {
 
   $("#positionen").append(pos);
   updateTotal();
+  spickzettel(pos);
   return pos;
 }
 $("#pos-add").addEventListener("click", () => addPosition());
@@ -671,6 +688,204 @@ function updateTotal() {
 }
 const istUst = () => !!state.absender && !state.absender.kleinunternehmer;
 const ustSatz = () => Number(state.absender?.ust_satz) || 19;
+
+// ---------- Art der Rechnung: normal / Anzahlung / Schluss (seit 1.11) ----------
+
+const ANZ_SPEICHER = "djos-anzahlung";   // zuletzt gewählte Anzahlung (Prozent oder fester Betrag)
+const ra = { modus: "normal", vorher: null, haken: new Set(), fahrt: null, kunde: "",
+  ...(() => { try { const v = JSON.parse(localStorage.getItem(ANZ_SPEICHER)); return { art: v.art === "betrag" ? "betrag" : "prozent", wert: Number(v.wert) > 0 ? Number(v.wert) : 30 }; }
+    catch { return { art: "prozent", wert: 30 }; } })() };
+const gueltigeRechnungen = () => (state.rechnungen || []).filter(r => !r.storno_von && !r.storniert_durch);
+const istAbzugText = t => /^abzüglich Anzahlung\b/.test(t || "");
+/* Schlussrechnung, in der eine Anzahlungsrechnung abgezogen ist (ohne die gerade bearbeitete) */
+const verrechnetIn = (anz, ausser = null) => gueltigeRechnungen().find(r => r.id !== ausser && r.rechnungsart === "schluss"
+  && r.positionen.some(p => p.anzahlung_id === anz.id));
+const anzahlungenZu = a => gueltigeRechnungen().filter(r => r.rechnungsart === "anzahlung" && r.angebot_id === a.id);
+const veranstaltungAm = b => (b.positionen || []).map(p => p.lieferdatum).filter(Boolean).sort().at(-1) || null;
+const ohneUhrzeit = t => (t || "").replace(/\s*–\s*\d{1,2}:\d{2} Uhr bis \d{1,2}:\d{2} Uhr\s*$/, "");
+const posDaten = () => $$("#positionen .pos").map(p => ({ beschreibung: $(".beschreibung", p).value, lieferdatum: $(".lieferdatum", p).value,
+  preis: $(".preis", p).value, anzahlung_id: p.dataset.anzahlung ? Number(p.dataset.anzahlung) : undefined }));
+const anzBetrag = summe => ra.art === "betrag" ? Math.min(summe, ra.wert) : Math.round(summe * ra.wert) / 100;
+
+function positionenSetzen(liste) {
+  $("#positionen").innerHTML = "";
+  (liste.length ? liste : [{}]).forEach(p => addPosition(p));
+  updateTotal();
+}
+
+/* Beim Leeren bzw. Laden eines Belegs: Art übernehmen, ohne Positionen anzufassen */
+function raZuruecksetzen(modus = "normal") {
+  ra.modus = ["anzahlung", "schluss"].includes(modus) ? modus : "normal";
+  ra.vorher = null; ra.fahrt = null; ra.haken = new Set();
+  ra.kunde = $("#k-name").value.trim().toLowerCase();
+  raAnzeigen();
+}
+
+/* Art wechseln. Anzahlung: die eingetragenen Positionen (Leistung mit Gesamtpreis) werden zu einer Anzahlungszeile –
+   „Normale Rechnung“ holt sie zurück. Schluss: Anzahlungsrechnungen des Kunden zum Abziehen anbieten. */
+async function raSetzen(modus, haken) {
+  if (ra.modus === "anzahlung" && ra.vorher) positionenSetzen(ra.vorher);
+  if (ra.modus === "schluss") positionenSetzen(posDaten().filter(p => !p.anzahlung_id));
+  if (ra.modus === "anzahlung" && ra.fahrt !== null) $("#r-fahrt").checked = ra.fahrt;
+  ra.vorher = null; ra.fahrt = null; ra.haken = new Set();
+  if (modus === "anzahlung") {
+    const daten = posDaten().filter(p => p.beschreibung.trim());
+    if (!(daten.reduce((s, p) => s + (Number(p.preis) || 0), 0) > 0)) {
+      toast("Erst die Leistung mit dem vereinbarten Gesamtpreis eintragen (z. B. Hochzeit, 1.200 €) – dann „Anzahlungsrechnung“ wählen.", true);
+      modus = "normal";
+    } else {
+      ra.vorher = daten;
+      ra.fahrt = $("#r-fahrt").checked;
+      $("#r-fahrt").checked = false;          // die Fahrt gehört zur Schlussrechnung
+    }
+  }
+  if (modus === "schluss") {
+    try { state.rechnungen = await api("rechnungen"); } catch { /* mit dem Stand von eben weiter */ }
+    ra.haken = new Set(haken || anzahlungKandidaten().filter(r => !verrechnetIn(r, state.editId)).map(r => r.id));
+  }
+  ra.modus = modus;
+  ra.kunde = $("#k-name").value.trim().toLowerCase();
+  raAnwenden();
+}
+
+/* Anzahlungsrechnungen dieses Kunden, die noch nicht (anderswo) abgezogen sind – plus die schon angehakten */
+function anzahlungKandidaten() {
+  const name = $("#k-name").value.trim().toLowerCase();
+  return gueltigeRechnungen().filter(r => r.rechnungsart === "anzahlung" && r.id !== state.editId
+    && (ra.haken.has(r.id) || (name && r.kunde.name.trim().toLowerCase() === name && !verrechnetIn(r, state.editId))))
+    .sort((a, b) => a.datum.localeCompare(b.datum));
+}
+
+function raAnwenden() {
+  if (ra.modus === "anzahlung" && ra.vorher) {
+    const summe = ra.vorher.reduce((s, p) => s + (Number(p.preis) || 0), 0);
+    const am = ra.vorher.map(p => p.lieferdatum).filter(Boolean).sort().at(-1);
+    const ang = state.ausAngebot && (state.angebote || []).find(a => a.id === state.ausAngebot);
+    positionenSetzen([{ beschreibung: `Anzahlung${ra.art === "prozent" ? ` ${String(ra.wert).replace(".", ",")} %` : ""} für `
+      + `${ohneUhrzeit(ra.vorher[0].beschreibung)}${am ? ` am ${fmtDate(am)}` : ""}${ang ? ` laut Angebot ${ang.nummer}` : ""} (Gesamtpreis ${euroCent(summe)})`,
+      lieferdatum: am || "", preis: anzBetrag(summe) }]);
+  }
+  if (ra.modus === "schluss") {
+    const k = anzahlungKandidaten();
+    positionenSetzen([...posDaten().filter(p => !p.anzahlung_id), ...k.filter(r => ra.haken.has(r.id)).map(r => ({
+      beschreibung: `abzüglich Anzahlung laut Rechnung ${r.nummer} vom ${fmtDate(r.datum)}${r.bezahlt ? ` (bezahlt am ${fmtDate(r.bezahlt_am || r.datum)})` : ""}`,
+      lieferdatum: veranstaltungAm(r) || r.datum, anzahlung_id: r.id,
+      preis: -Math.round(r.positionen.reduce((s, p) => s + (Number(p.preis) || 0), 0) * 100) / 100 }))]);
+  }
+  raAnzeigen();
+}
+
+function raAnzeigen() {
+  const box = $("#rechnungsart-teil");
+  $$("#rechnungsart-box [name=rechnungsart]").forEach(i => { i.checked = i.value === ra.modus; });
+  if (ra.modus === "normal") { box.innerHTML = ""; return; }
+  if (ra.modus === "anzahlung") {
+    if (!ra.vorher) { box.innerHTML = `<p class="mini-hinweis">Anzahlungsrechnung – den Betrag direkt in der Position ändern.</p>`; return; }
+    const summe = ra.vorher.reduce((s, p) => s + (Number(p.preis) || 0), 0);
+    box.innerHTML = `<div class="ra-zeile">Vereinbarter Gesamtpreis <b>${euroCent(summe)}</b> · Anzahlung
+        <input type="number" min="1" step="1" id="ra-wert" value="${ra.wert}" aria-label="Anzahlung">
+        <select id="ra-art" aria-label="Prozent oder Euro"><option value="prozent"${ra.art === "prozent" ? " selected" : ""}>%</option>
+          <option value="betrag"${ra.art === "betrag" ? " selected" : ""}>€</option></select>
+        = <b id="ra-betrag">${euroCent(anzBetrag(summe))}</b></div>
+      <p class="mini-hinweis">Die Rechnung enthält nur die Anzahlung. Den Rest schreibst du nach der Feier als Schlussrechnung – die Fahrt wird dort erfasst. „Normale Rechnung“ holt die Positionen zurück.</p>`;
+    return;
+  }
+  const k = anzahlungKandidaten(), name = $("#k-name").value.trim();
+  box.innerHTML = k.length ? `<div class="ra-liste">${k.map(r => `<label><input type="checkbox" data-ra-anzahlung="${r.id}"${ra.haken.has(r.id) ? " checked" : ""}>
+      <span>Rechnung ${esc(r.nummer)} vom ${fmtDate(r.datum)} · <b>${euroCent(r.gesamt)}</b> · ${r.bezahlt ? `bezahlt am ${fmtDate(r.bezahlt_am || r.datum)}` : "noch nicht bezahlt"}</span></label>`).join("")}</div>
+      <p class="mini-hinweis">Angehakte Anzahlungen stehen als eigene Zeile mit Minus auf der Rechnung, der Gesamtbetrag ist der Rest.</p>`
+    : `<p class="mini-hinweis">${name ? `Für „${esc(name)}“ gibt es keine offene Anzahlungsrechnung.` : "Erst den Kunden eintragen – dann erscheinen hier seine Anzahlungsrechnungen."}</p>`;
+}
+
+$("#rechnungsart-box").addEventListener("change", e => {
+  if (e.target.name === "rechnungsart") return raSetzen(e.target.value).catch(err => toast(err.message, true));
+  if (e.target.id === "ra-art") { ra.art = e.target.value; raMerken(); return raAnwenden(); }
+  const id = Number(e.target.dataset.raAnzahlung);
+  if (id) { e.target.checked ? ra.haken.add(id) : ra.haken.delete(id); raAnwenden(); }
+});
+$("#rechnungsart-box").addEventListener("input", e => {
+  if (e.target.id !== "ra-wert" || !ra.vorher) return;
+  const wert = Number(e.target.value);
+  if (!(wert > 0)) return;
+  ra.wert = wert; raMerken();
+  // nur Zeile und Betrag anpassen – das Eingabefeld bleibt, damit man weitertippen kann
+  const summe = ra.vorher.reduce((s, p) => s + (Number(p.preis) || 0), 0);
+  const pos = $("#positionen .pos");
+  $(".beschreibung", pos).value = $(".beschreibung", pos).value.replace(/^Anzahlung( [\d,]+ %)?/, `Anzahlung${ra.art === "prozent" ? ` ${String(wert).replace(".", ",")} %` : ""}`);
+  $(".preis", pos).value = anzBetrag(summe);
+  $("#ra-betrag").textContent = euroCent(anzBetrag(summe));
+  updateTotal();
+});
+const raMerken = () => localStorage.setItem(ANZ_SPEICHER, JSON.stringify({ art: ra.art, wert: ra.wert }));
+// Kunde gewechselt: passende Anzahlungen neu anbieten
+const raKundeNeu = () => {
+  const name = $("#k-name").value.trim().toLowerCase();
+  if (name === ra.kunde) return;          // gleicher Kunde (z. B. beim Öffnen einer Rechnung) – Haken bleiben, wie sie sind
+  ra.kunde = name;
+  if (ra.modus === "schluss") { ra.haken = new Set(anzahlungKandidaten().filter(r => !verrechnetIn(r, state.editId)).map(r => r.id)); raAnwenden(); }
+};
+$("#k-name").addEventListener("change", raKundeNeu);
+
+// ---------- Preis-Spickzettel (seit 1.11) ----------
+
+/* Was hast du für diesen Rechnungsposten bisher genommen? Aus allen gültigen Rechnungen, Anzahlungen und Abzüge zählen nicht. */
+const tbMuster = tb => new RegExp("^" + tb.text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\\\{(von|bis)\\\}/g, "(\\d{1,2}:\\d{2})") + "$");
+const tbPasst = (tb, t) => !/^(Anzahlung|abzüglich Anzahlung)\b/.test(t) && (tbMuster(tb).test(t) || t.toLowerCase().includes(tb.titel.toLowerCase()));
+const stundenIm = t => { const m = (t || "").match(/(\d{1,2}:\d{2}) Uhr bis (\d{1,2}:\d{2}) Uhr/); return m ? hoursBetween(m[1].padStart(5, "0"), m[2].padStart(5, "0")) : null; };
+const auf10 = v => Math.round(v / 10) * 10;
+
+function anlassDerPosition(pos) {
+  if (pos._tb) return pos._tb;
+  const t = $(".beschreibung", pos).value.trim();
+  if (!t || pos.dataset.anzahlung || /^Anzahlung\b/.test(t)) return null;
+  return state.textbausteine.find(tb => tbMuster(tb).test(t)) || state.textbausteine.find(tb => tbPasst(tb, t)) || null;
+}
+
+function spickzettel(pos) {
+  let box = $(".spick", pos);
+  if (!box) { box = document.createElement("div"); box.className = "spick"; pos.append(box); }
+  const tb = ra.modus === "normal" || ra.modus === "schluss" ? anlassDerPosition(pos) : null;
+  if (!tb) { box.hidden = true; box.dataset.html = ""; return; }
+  const ausser = istAngebot() ? null : state.editId;
+  const bisher = gueltigeRechnungen().filter(r => r.id !== ausser && r.rechnungsart !== "anzahlung")
+    .flatMap(r => r.positionen.filter(p => !p.anzahlung_id && Number(p.preis) > 0 && tbPasst(tb, p.beschreibung))
+      .map(p => ({ preis: Number(p.preis), am: p.lieferdatum || r.datum, kunde: r.kunde.name, std: stundenIm(p.beschreibung) })))
+    .sort((a, b) => b.am.localeCompare(a.am));
+  const zeilen = [];
+  const knopf = v => `<button type="button" class="spick-preis" data-preis="${v}" title="Als Preis übernehmen">${euroGanz(v)}</button>`;
+  if (!bisher.length) zeilen.push(`<b>${esc(tb.titel)}</b> hast du noch nicht abgerechnet – der Spickzettel füllt sich mit jeder Rechnung.`);
+  else {
+    const preise = bisher.map(x => x.preis), schnitt = preise.reduce((s, p) => s + p, 0) / preise.length;
+    const min = Math.min(...preise), max = Math.max(...preise);
+    zeilen.push(`<b>${esc(tb.titel)} bisher:</b> ${bisher.length}× · zuletzt ${knopf(bisher[0].preis)} (${esc(bisher[0].kunde)}, ${fmtDate(bisher[0].am)})`
+      + ` · Schnitt ${knopf(auf10(schnitt))}${min !== max ? ` · ${euroGanz(min)} bis ${euroGanz(max)}` : ""}`);
+    const mitStd = bisher.filter(x => x.std);
+    const jetzt = hoursBetween($(".von", pos).value, $(".bis", pos).value) || stundenIm($(".beschreibung", pos).value);
+    if (mitStd.length) {
+      const proStd = mitStd.reduce((s, x) => s + x.preis / x.std, 0) / mitStd.length;
+      zeilen.push(`im Schnitt <b>${euroGanz(proStd)} pro Stunde</b>${jetzt ? ` → für ${String(jetzt).replace(".", ",")} Std. ${knopf(auf10(proStd * jetzt))}` : " – mit Uhrzeiten rechnet die App die Dauer mit"}`);
+    }
+    const preis = Number($(".preis", pos).value);
+    if (preis > 0) {
+      const abw = Math.round((preis - schnitt) / schnitt * 100);
+      if (Math.abs(abw) >= 15) zeilen.push(`<span class="spick-abw">Dein Preis liegt ${Math.abs(abw)} % ${abw < 0 ? "unter" : "über"} deinem Schnitt.</span>`);
+    }
+  }
+  const name = $("#k-name").value.trim().toLowerCase();
+  const echt = r => r.positionen.find(p => !p.anzahlung_id && Number(p.preis) > 0);
+  const zuletzt = name && gueltigeRechnungen().filter(r => r.id !== ausser && r.rechnungsart !== "anzahlung" && echt(r)
+    && r.kunde.name.trim().toLowerCase() === name).sort((a, b) => b.datum.localeCompare(a.datum))[0];
+  if (zuletzt) {
+    const p = echt(zuletzt);
+    zeilen.push(`<b>${esc(zuletzt.kunde.name)}</b> hat zuletzt ${euroGanz(p.preis)} gezahlt (${esc(ohneUhrzeit(p.beschreibung).replace(/^DJ – (Tätigkeit )?/, ""))}, ${fmtDate(p.lieferdatum || zuletzt.datum)})`);
+  }
+  const html = zeilen.map(z => `<div>${z}</div>`).join("");
+  // nur bei echter Änderung neu aufbauen – sonst geht ein Klick ins Leere, wenn das Feld davor den Fokus verliert
+  if (box.dataset.html !== html) { box.innerHTML = html; box.dataset.html = html; }
+  box.hidden = false;
+}
+for (const ev of ["input", "change"]) $("#k-name").addEventListener(ev, () => $$("#positionen .pos").forEach(spickzettel));
+function kundeGewaehlt() { setTimeout(() => { raKundeNeu(); $$("#positionen .pos").forEach(spickzettel); }, 0); }
 
 // ---------- Formular lesen / setzen ----------
 
@@ -691,10 +906,12 @@ function readForm() {
       name: $("#k-name").value, zusatz: $("#k-zusatz").value, strasse: $("#k-strasse").value,
       plz: $("#k-plz").value, ort: $("#k-ort").value,
     },
+    rechnungsart: istAngebot() ? undefined : ra.modus,
     positionen: $$("#positionen .pos").map(pos => ({
       beschreibung: $(".beschreibung", pos).value,
       lieferdatum: $(".lieferdatum", pos).value,
       preis: $(".preis", pos).value,
+      anzahlung_id: pos.dataset.anzahlung ? Number(pos.dataset.anzahlung) : undefined,
     })),
   };
 }
@@ -716,6 +933,7 @@ async function resetForm() {
   $("#a-gueltig").value = addDays(today(), gueltigkeitTage());
   $("#a-hinweise").value = "";
   $("#positionen").innerHTML = "";
+  raZuruecksetzen();
   addPosition();
   setVeranstaltung(null, state.absender ? state.absender.fahrt_standard : true);
   speichernText();
@@ -797,8 +1015,11 @@ function loadIntoForm(inv) {
   $("#r-datum").value = inv.datum;
   setZahlung(inv.zahlungsbedingung);
   $("#positionen").innerHTML = "";
+  raZuruecksetzen(inv.rechnungsart);
   inv.positionen.forEach(p => addPosition(p));
   setVeranstaltung(inv.veranstaltungsort, inv.fahrt_erfassen !== false);
+  ra.haken = new Set(inv.positionen.filter(p => p.anzahlung_id).map(p => p.anzahlung_id));
+  raAnzeigen();
   speichernText();
   showTab("neu");
   window.scrollTo(0, 0);
@@ -832,7 +1053,7 @@ async function kopiere(art, beleg) {
   if (beleg.zahlungsbedingung) setZahlung(beleg.zahlungsbedingung);
   if (art === "angebot") $("#a-hinweise").value = beleg.hinweise || "";
   $("#positionen").innerHTML = "";
-  beleg.positionen.forEach(p => addPosition({ beschreibung: p.beschreibung, preis: p.preis }));
+  beleg.positionen.filter(p => !p.anzahlung_id).forEach(p => addPosition({ beschreibung: p.beschreibung, preis: p.preis }));
   setVeranstaltung(beleg.veranstaltungsort);
   updateTotal();
   showTab("neu");
@@ -850,6 +1071,9 @@ async function angebotZuRechnung(a) {
   a.positionen.forEach(p => addPosition(p));
   setVeranstaltung(a.veranstaltungsort);
   setAusAngebot(a);
+  // Gibt es zum Angebot schon eine Anzahlung, wird das hier die Schlussrechnung
+  const anz = anzahlungenZu(a).filter(r => !verrechnetIn(r));
+  if (anz.length) await raSetzen("schluss", anz.map(r => r.id));
   showTab("neu");
   window.scrollTo(0, 0);
 }
@@ -863,7 +1087,7 @@ $("#btn-senden").addEventListener("click", async () => {
 });
 
 $("#btn-vorschau").addEventListener("click", () => {
-  const data = readForm();
+  const data = { ...readForm(), id: istAngebot() ? undefined : state.editId || undefined };
   openPdf(() => { checkPlaceholders(data); return api("vorschau", { method: "POST", body: data }); },
     `Vorschau_${istAngebot() ? "Angebot" : "Rechnung"}_${data.nummer || "neu"}.pdf`);
 });
@@ -1031,7 +1255,7 @@ function renderOffen() {
         <td></td><td></td>
       </tr>
       ${offen.map(r => `<tr data-id="${r.id}">
-        <td><a href="#" class="rlink" title="${r.festgeschrieben ? "PDF öffnen (festgeschrieben)" : "Im Editor öffnen"}">${esc(rechnungsName(r))}</a>${schloss(r)}${versandChip(r)}${mahnChips(r)}</td>
+        <td><a href="#" class="rlink" title="${r.festgeschrieben ? "PDF öffnen (festgeschrieben)" : "Im Editor öffnen"}">${esc(rechnungsName(r))}</a>${artChip(r)}${schloss(r)}${versandChip(r)}${mahnChips(r)}</td>
         <td class="num">${fmtEuro(r.gesamt)}</td>
         <td title="${r.ziel ? `fällig am ${utcToDe(r.ziel.faellig)}` : ""}">${fristBadge(r.ziel)}</td>
         <td class="haken-spalte"><input type="checkbox" class="offen-haken" title="Als bezahlt markieren → ins Archiv"></td>
@@ -1117,7 +1341,7 @@ function renderListe() {
   $("#liste-body").innerHTML = list.map(r => `
     <tr data-id="${r.id}"${auswahl.has(r.id) ? ' class="markiert"' : ""}>
       <td class="auswahl-spalte"><input type="checkbox" class="auswahl"${auswahl.has(r.id) ? " checked" : ""} title="Markieren (Herunterladen / Paperless)"></td>
-      <td>${esc(r.nummer)}${schloss(r)}${stornoChip(r)}${versandChip(r)}${r.paperless_am
+      <td>${esc(r.nummer)}${artChip(r)}${schloss(r)}${stornoChip(r)}${versandChip(r)}${r.paperless_am
         ? plChip(r) : ""}${r.gesperrt ? ` <span class="lock" title="Einnahme in einem abgeschlossenen Jahr">🔒 ${(r.storno_von ? r.datum : r.bezahlt_am || "").slice(0, 4)}</span>` : ""}</td>
       <td>${fmtDate(r.datum)}</td>
       <td>${esc(r.kunde.name)}<br><small>${esc(r.kunde.ort)}</small></td>
@@ -1281,6 +1505,21 @@ $("#tab-liste").addEventListener("click", async e => {
 // ---------- Angebote ----------
 
 const STATUS_TEXT = { offen: "offen", angenommen: "angenommen", abgelehnt: "abgelehnt" };
+
+/* Nachfassen (seit 1.11): gezählt ab dem letzten Versand per Mail, sonst ab dem Angebotsdatum; einmal pro Angebot */
+const gesendetAm = a => { const v = (a.versand || []).at(-1); return v ? v.zeitpunkt.slice(0, 10) : a.datum; };
+const nachfassenFaellig = a => {
+  const tage = Number(state.absender?.nachfassen_tage ?? 7);
+  return tage > 0 && a.status === "offen" && !a.nachgefragt_am && (!a.gueltig_bis || a.gueltig_bis >= isoLokal(new Date()))
+    && tageSeit(gesendetAm(a)) >= tage;
+};
+const keineAntwort = a => { const n = tageSeit(gesendetAm(a)); return `keine Antwort seit ${n} ${n === 1 ? "Tag" : "Tagen"}`; };
+const nachgefragtChip = a => a.nachgefragt_am
+  ? ` <span class="versand-chip" title="${esc(a.nachgefragt_wie || "")}">nachgefragt ${fmtDate(a.nachgefragt_am).slice(0, 6)}</span>` : "";
+/* Angenommenes Angebot mit Anzahlung, aber noch ohne Schlussrechnung */
+const schlussOffen = a => a.status === "angenommen" && anzahlungenZu(a).some(r => !verrechnetIn(r));
+const artChip = r => r.rechnungsart === "anzahlung" ? ` <span class="art-chip">Anzahlung</span>`
+  : r.rechnungsart === "schluss" ? ` <span class="art-chip">Schlussrechnung</span>` : "";
 const auswahlA = new Set();   // IDs der markierten Angebote
 const angebotName = a => a.name || `Angebot_${a.nummer}`;
 
@@ -1342,11 +1581,11 @@ function renderAngeboteOffen() {
         <td></td>
       </tr>
       ${offen.map(a => `<tr data-id="${a.id}">
-        <td><a href="#" class="rlink" title="Im Editor öffnen">${esc(angebotName(a))}</a>${versandChip(a)}<br><small>${esc(a.kunde.name)}</small></td>
+        <td><a href="#" class="rlink" title="Im Editor öffnen">${esc(angebotName(a))}</a>${versandChip(a)}${nachgefragtChip(a)}<br><small>${esc(a.kunde.name)}</small></td>
         <td>${fmtDate(a.datum)}</td>
         <td class="num">${fmtEuro(a.gesamt)}</td>
-        <td>${restBadge(a)}</td>
-        <td class="btns offen-aktionen"><button class="small" data-act="rechnung" title="Rechnung aus diesem Angebot erstellen">→ Rechnung</button><button type="button" class="icon senden" data-act="senden" title="Per E-Mail senden, herunterladen oder teilen" aria-label="Senden">${ICON_MAIL}</button></td>
+        <td>${restBadge(a)}${nachfassenFaellig(a) ? `<span class="nf-hinweis">${keineAntwort(a)}</span>` : ""}</td>
+        <td class="btns offen-aktionen">${nachfassenFaellig(a) ? `<button class="small secondary" data-act="nachfragen" title="Kurz nachfragen, ob das Angebot passt">Nachfragen</button>` : ""}<button class="small" data-act="rechnung" title="Rechnung aus diesem Angebot erstellen">→ Rechnung</button><button type="button" class="icon senden" data-act="senden" title="Per E-Mail senden, herunterladen oder teilen" aria-label="Senden">${ICON_MAIL}</button></td>
       </tr>`).join("")}
       </tbody></table>`
     : `<p class="hint alles-bezahlt">Keine offenen Angebote.</p>`}`;
@@ -1358,6 +1597,7 @@ $("#angebote-offen").addEventListener("click", async e => {
   const a = state.angebote.find(x => x.id === Number(tr.dataset.id));
   if (e.target.closest("a.rlink")) { e.preventDefault(); loadAngebotIntoForm(a); }
   if (e.target.closest("button[data-act='senden']")) oeffneVersand("angebot", a);
+  if (e.target.closest("button[data-act='nachfragen']")) oeffneNachfrage(a);
   if (e.target.closest("button[data-act='rechnung']")) {
     try { await angebotZuRechnung(a); } catch (err) { toast(err.message, true); }
   }
@@ -1376,7 +1616,10 @@ function renderAngebote() {
       <td>${fmtDate(a.datum)}</td>
       <td>${esc(a.kunde.name)}<br><small>${esc(a.kunde.ort)}</small></td>
       <td class="num">${fmtEuro(a.gesamt)}</td>
-      <td>${gueltigBadge(a)}</td>
+      <td>${gueltigBadge(a)}${(() => {
+        const anz = anzahlungenZu(a);
+        return anz.length ? `<br><small>Anzahlung ${euroGanz(anz.reduce((s, r) => s + r.gesamt, 0))} ${anz.every(r => r.bezahlt) ? "bezahlt" : "offen"}</small>` : "";
+      })()}</td>
       <td><select class="status-select ${a.status}" title="Status des Angebots">${Object.entries(STATUS_TEXT)
         .map(([k, t]) => `<option value="${k}"${k === a.status ? " selected" : ""}>${t}</option>`).join("")}</select></td>
       <td class="btns">
@@ -1384,7 +1627,8 @@ function renderAngebote() {
         <button class="small secondary" data-act="senden" title="Per E-Mail senden, herunterladen oder teilen" aria-label="Senden">${ICON_MAIL}</button>
         <button class="small secondary" data-act="kopie" title="Als neues Angebot kopieren" aria-label="Kopieren">${ICON_KOPIE}</button>
         <button class="small secondary" data-act="edit" title="Im Editor bearbeiten" aria-label="Bearbeiten">${ICON_EDIT}</button>
-        ${a.rechnung_id ? "" : `<button class="small" data-act="rechnung" title="Rechnung aus diesem Angebot erstellen">→ Rechnung</button>`}
+        ${schlussOffen(a) ? `<button class="small" data-act="rechnung" title="Schlussrechnung schreiben – die Anzahlung wird abgezogen">→ Schlussrechnung</button>`
+          : a.rechnung_id ? "" : `<button class="small" data-act="rechnung" title="Rechnung aus diesem Angebot erstellen">→ Rechnung</button>`}
         <button type="button" class="icon del" data-act="del" title="Angebot löschen" aria-label="Löschen">✕</button>
       </td>
     </tr>`).join("") ||
@@ -1614,6 +1858,67 @@ $("#versand-form").addEventListener("submit", async e => {
     if (versand.art === "angebot") await loadAngebote(); else await loadListe();
   } catch (err) { toast("Senden fehlgeschlagen: " + err.message, true); }
   finally { btn.disabled = false; btn.innerHTML = vorher; }
+});
+
+// ---------- Nachfrage zum Angebot (seit 1.11) ----------
+
+let nachfrageAngebot = null;
+async function oeffneNachfrage(a) {
+  nachfrageAngebot = a;
+  let e;
+  try { e = await api(`versand/entwurf?art=nachfrage&id=${a.id}`); } catch (err) { return toast(err.message, true); }
+  $("#nachfrage-titel").textContent = `Nachfrage zu Angebot ${a.nummer}`;
+  $("#nachfrage-info").textContent = `${a.kunde.name} · ${euroCent(a.gesamt)} · ${(a.versand || []).length ? "per Mail geschickt" : "erstellt"} am `
+    + `${fmtDate(gesendetAm(a))} (${tageText(tageSeit(gesendetAm(a)))})${a.gueltig_bis ? ` · gültig bis ${fmtDate(a.gueltig_bis)}` : ""}`;
+  $("#nachfrage-nicht-eingerichtet").classList.toggle("hidden", e.konfiguriert);
+  for (const id of ["#nachfrage-mail", "#nachfrage-anhang-label", "#nachfrage-kopie-label", "#nachfrage-senden"]) $(id).classList.toggle("hidden", !e.konfiguriert);
+  $("#nachfrage-an").value = e.an;
+  $("#nachfrage-betreff").value = e.betreff;
+  $("#nachfrage-text").value = e.text;
+  $("#nachfrage-datei").textContent = "📎 " + e.anhaenge[0];
+  $("#nachfrage-anhang").checked = true;
+  $("#nachfrage-kopie").checked = e.kopie;
+  $("#nachfrage").showModal();
+}
+async function nachNachfrage(text) {
+  $("#nachfrage").close();
+  toast(text);
+  if ($("#tab-start").classList.contains("active")) await renderStart();
+  if ($("#tab-angebote").classList.contains("active")) await loadAngebote();
+}
+$("#nachfrage-form").addEventListener("submit", async e => {
+  e.preventDefault();
+  const a = nachfrageAngebot, btn = $("#nachfrage-senden");
+  btn.disabled = true;
+  try {
+    const res = await api("versand", { method: "POST", body: { art: "nachfrage", id: a.id, an: $("#nachfrage-an").value,
+      betreff: $("#nachfrage-betreff").value, text: $("#nachfrage-text").value, kopie: $("#nachfrage-kopie").checked,
+      anhang: $("#nachfrage-anhang").checked } });
+    await nachNachfrage(`✉ Nachfrage zu Angebot ${a.nummer} an ${res.an.join(", ")} gesendet`);
+  } catch (err) { toast("Senden fehlgeschlagen: " + err.message, true); }
+  finally { btn.disabled = false; }
+});
+$("#nachfrage").addEventListener("click", async e => {
+  const b = e.target.closest("[data-nf]");
+  if (!b) return;
+  const a = nachfrageAngebot;
+  try {
+    switch (b.dataset.nf) {
+      case "zu": return $("#nachfrage").close();
+      case "kopieren":
+        await navigator.clipboard.writeText($("#nachfrage-text").value);
+        return toast("Text kopiert – z. B. für WhatsApp");
+      case "erledigt":
+        await api(`angebote/${a.id}/nachgefragt`, { method: "POST", body: { wie: "von Hand vermerkt" } });
+        return nachNachfrage(`Angebot ${a.nummer}: als nachgefragt vermerkt`);
+      case "angenommen":
+        $("#nachfrage").close();
+        return angebotZuRechnung(a);
+      case "abgelehnt":
+        await api(`angebote/${a.id}/status`, { method: "PATCH", body: { status: "abgelehnt" } });
+        return nachNachfrage(`Angebot ${a.nummer} als abgelehnt markiert`);
+    }
+  } catch (err) { toast(err.message, true); }
 });
 
 // ---------- Stammdaten-Tabs (Kunden, Textbausteine, Zahlungsbedingungen) ----------
@@ -1965,6 +2270,10 @@ async function renderStart() {
   if (ohneDatum) wichtig.push(["gelb", "📅 Bezahlt-Datum fehlt", `data-start="bezahlt-am"`]);
   const baldAb = angebote.filter(a => a.rest !== null && a.rest >= 0 && a.rest <= 3).length;
   if (baldAb) wichtig.push(["gelb", `✎ ${baldAb} Angebot${baldAb === 1 ? " läuft" : "e laufen"} bald ab`, `data-start="angebote"`]);
+  const nachfassen = angebote.filter(nachfassenFaellig).length;
+  if (nachfassen) wichtig.push(["gelb", `✉ ${nachfassen} Angebot${nachfassen === 1 ? "" : "e"} nachfragen`, `data-start="zu-karte" data-ziel=".start-karte.nachfassen"`]);
+  for (const a of state.angebote.filter(a => schlussOffen(a) && veranstaltungAm(a) && veranstaltungAm(a) <= heute))
+    wichtig.push(["gelb", `✎ Schlussrechnung ${esc(a.kunde.name.split(" ")[0])}`, `data-start="schluss" data-angebot="${a.id}" title="Feier am ${fmtDate(veranstaltungAm(a))} – Anzahlung wird abgezogen"`]);
   for (const g of (eu?.grenzen?.hinweise || []).filter(g => g.stufe === "rot")) wichtig.push(["rot", "! Kleinunternehmer-Grenze", `data-start="finanzen" title="${esc(g.text)}"`]);
   if (sich.faellig) wichtig.push(["rot", "⇩ Sicherung fällig", `data-start="sichern"`]);
   const erster = Object.entries(termine).filter(([t]) => t > heute).sort(([a], [b]) => a < b ? -1 : 1)[0];
@@ -2001,7 +2310,7 @@ async function renderStart() {
       const st = !r.ziel ? "" : r.ziel.rest < 0 ? "rot" : r.ziel.rest <= 3 ? "gelb" : "gruen";
       const m = r.mahnungen || [];
       return `<div class="start-karte ${st}" data-rechnung="${r.id}"><div class="z1"><span>${esc(r.kunde.name)}</span><span>${euroCent(r.gesamt)}</span></div>
-        <small>Rechnung ${esc(r.nummer)} · ${r.ziel ? (r.ziel.rest < 0 ? `<b>${-r.ziel.rest} ${-r.ziel.rest === 1 ? "Tag" : "Tage"} überfällig</b>` : r.ziel.rest === 0 ? "heute fällig" : `fällig in ${r.ziel.rest} ${r.ziel.rest === 1 ? "Tag" : "Tagen"}`) : "ohne Frist"}${m.length ? ` · ${MAHN_KURZ[m.at(-1).stufe]} ${fmtDate(m.at(-1).datum)}` : ""}</small>
+        <small>${artChip(r)}Rechnung ${esc(r.nummer)} · ${r.ziel ? (r.ziel.rest < 0 ? `<b>${-r.ziel.rest} ${-r.ziel.rest === 1 ? "Tag" : "Tage"} überfällig</b>` : r.ziel.rest === 0 ? "heute fällig" : `fällig in ${r.ziel.rest} ${r.ziel.rest === 1 ? "Tag" : "Tagen"}`) : "ohne Frist"}${m.length ? ` · ${MAHN_KURZ[m.at(-1).stufe]} ${fmtDate(m.at(-1).datum)}` : ""}</small>
         <div class="k">${r.ziel && r.ziel.rest < 0 && m.length < 3 ? `<button type="button" class="small" data-start="mahnen">${NAECHSTE_MAHNUNG[m.length]}</button>` : ""}
           ${OHNE_UEBERWEISUNG.test(r.zahlungsbedingung || "") ? "" : `<button type="button" class="small secondary" data-start="qr">QR</button>`}
           <button type="button" class="small secondary" data-start="bezahlt">✓ Bezahlt</button></div></div>`;
@@ -2019,10 +2328,10 @@ async function renderStart() {
   }
   if (!faellig.length && !belegPunkt) leer.push("keine Belege zu prüfen");
   if (angebote.length) spalten.push(`<div class="start-spalte"><h3>Angebote <small>${euroGanz(angebote.filter(a => a.rest === null || a.rest >= 0).reduce((s, a) => s + a.gesamt, 0))} offen</small></h3>
-    ${angebote.slice(0, 5).map(a => `<div class="start-karte ${a.rest !== null && a.rest < 0 ? "" : a.rest !== null && a.rest <= 3 ? "gelb" : "gruen"}" data-angebot="${a.id}">
+    ${angebote.slice(0, 5).map(a => `<div class="start-karte ${nachfassenFaellig(a) ? "gelb nachfassen" : a.rest !== null && a.rest < 0 ? "" : a.rest !== null && a.rest <= 3 ? "gelb" : "gruen"}" data-angebot="${a.id}">
       <div class="z1"><span>${esc(a.kunde.name)}</span><span>${euroCent(a.gesamt)}</span></div>
-      <small>Angebot ${esc(a.nummer)} · ${a.rest === null ? "ohne Frist" : a.rest < 0 ? `seit ${-a.rest} ${-a.rest === 1 ? "Tag" : "Tagen"} abgelaufen` : a.rest === 0 ? "läuft heute ab" : `noch ${a.rest} ${a.rest === 1 ? "Tag" : "Tage"} gültig`}</small>
-      <div class="k">${a.rest !== null && a.rest < 0 ? `<button type="button" class="small secondary" data-start="abgelehnt">Abgelehnt</button>`
+      <small>Angebot ${esc(a.nummer)} · ${a.rest === null ? "ohne Frist" : a.rest < 0 ? `seit ${-a.rest} ${-a.rest === 1 ? "Tag" : "Tagen"} abgelaufen` : a.rest === 0 ? "läuft heute ab" : `noch ${a.rest} ${a.rest === 1 ? "Tag" : "Tage"} gültig`}${nachfassenFaellig(a) ? `<span class="nf-hinweis">${keineAntwort(a)}</span>` : nachgefragtChip(a)}</small>
+      <div class="k">${nachfassenFaellig(a) ? `<button type="button" class="small" data-start="nachfragen">Nachfragen</button>` : ""}${a.rest !== null && a.rest < 0 ? `<button type="button" class="small secondary" data-start="abgelehnt">Abgelehnt</button>`
         : `<button type="button" class="small" data-start="zu-rechnung">→ Rechnung</button>`}<button type="button" class="small secondary" data-start="angebot">Ansehen</button></div></div>`).join("")}
     ${angebote.length > 5 ? `<a href="#" class="mehr" data-start="angebote">alle ${angebote.length} →</a>` : ""}</div>`);
   else leer.push("keine offenen Angebote");
@@ -2099,6 +2408,8 @@ $("#start").addEventListener("click", async e => {
         toast(`Rechnung ${r.nummer} als bezahlt markiert`);
         break;
       case "angebot": return loadAngebotIntoForm(a);
+      case "nachfragen": return oeffneNachfrage(a);
+      case "schluss": return angebotZuRechnung(a);
       case "zu-rechnung": return angebotZuRechnung(a);
       case "abgelehnt":
         await api(`angebote/${aid}/status`, { method: "PATCH", body: { status: "abgelehnt" } });

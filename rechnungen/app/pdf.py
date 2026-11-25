@@ -228,7 +228,9 @@ def build_invoice_pdf(inv, absender):
     pdf = InvoicePDF(absender, inv.get("datum"), inv.get("kleinunternehmer"))
     pdf.add_page()
 
-    titel = "Angebot" if angebot else "Stornorechnung" if storno else "Rechnung"
+    art = None if angebot or storno else inv.get("rechnungsart")
+    titel = ("Angebot" if angebot else "Stornorechnung" if storno else "Anzahlungsrechnung" if art == "anzahlung"
+             else "Schlussrechnung" if art == "schluss" else "Rechnung")
     _briefkopf(pdf, absender, inv["kunde"], f"{titel} Nr.: {inv['nummer']}", inv["datum"])
 
     # Einleitung
@@ -238,6 +240,10 @@ def build_invoice_pdf(inv, absender):
     elif storno:
         einleitung = (f"Hiermit storniere ich die Rechnung Nr. {storno['nummer']} vom "
                       f"{fmt_date_lang(storno['datum'])} vollständig:")
+    elif art == "anzahlung":
+        einleitung = "Wie vereinbart stelle ich Ihnen folgende Anzahlung in Rechnung:"
+    elif art == "schluss":
+        einleitung = "Gemäß Ihrem Auftrag stelle ich abzüglich der geleisteten Anzahlung wie folgt in Rechnung:"
     else:
         einleitung = "Gemäß Ihrem Auftrag stelle ich wie folgt in Rechnung:"
     pdf.cell(0, 5, einleitung)
@@ -269,7 +275,7 @@ def build_invoice_pdf(inv, absender):
                 zeile.cell(fmt_euro(betrag))
             gesamt = round(gesamt + ust, 2)
         total = table.row()
-        total.cell("Gesamtbetrag" if satz else "Gesamt", style=bold)
+        total.cell("Restbetrag" if art == "schluss" else "Gesamtbetrag" if satz else "Gesamt", style=bold)
         total.cell("")
         total.cell(fmt_euro(gesamt), style=bold if satz else None)
 

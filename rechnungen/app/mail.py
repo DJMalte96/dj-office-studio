@@ -32,6 +32,13 @@ VORLAGEN = {
         "Bitte überweisen Sie den Betrag bis zum {frist}.\n\n"
         "Sollte sich Ihre Zahlung mit dieser E-Mail überschnitten haben, betrachten Sie sie bitte als gegenstandslos.\n\n"
         "Viele Grüße\n{absender}\n{telefon}"),
+    "mail_betreff_nachfrage": "Kurze Nachfrage zu meinem Angebot {nummer}",
+    "mail_text_nachfrage": (
+        "Hallo {kunde},\n\n"
+        "vor ein paar Tagen habe ich Ihnen mein Angebot {nummer} über {betrag} für den {leistungsdatum} geschickt. "
+        "Haben Sie schon entschieden, oder sind noch Fragen offen?\n\n"
+        "Gern halte ich Ihnen den Termin bis zum {gueltig_bis} frei.\n\n"
+        "Viele Grüße\n{absender}\n{telefon}"),
 }
 
 # Stornorechnung (nicht einstellbar – kommt selten vor)

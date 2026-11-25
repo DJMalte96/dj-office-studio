@@ -161,6 +161,15 @@
           <button type="button" id="pos-add" class="secondary">+ Position hinzufügen</button>
           <div id="ust-zeilen" class="ust-zeilen hidden"></div>
           <div class="total"><span class="total-titel">Gesamt<span class="nur-ust"> (brutto)</span>:</span> <span id="gesamt">0,- Euro</span></div>
+          <div id="rechnungsart-box" class="rechnungsart-box nur-rechnung">
+            <div class="rechnungsart-kopf"><h3>Art der Rechnung</h3>
+              <div class="rechnungsart-wahl" role="radiogroup" aria-label="Art der Rechnung">
+                <label><input type="radio" name="rechnungsart" value="normal" checked> Normale Rechnung</label>
+                <label><input type="radio" name="rechnungsart" value="anzahlung"> Anzahlungsrechnung</label>
+                <label><input type="radio" name="rechnungsart" value="schluss"> Schlussrechnung</label>
+              </div></div>
+            <div id="rechnungsart-teil"></div>
+          </div>
         </div>
 
         <div class="card nur-angebot">
@@ -322,6 +331,9 @@
               <label>Zahlungsfrist in Mahnungen <span class="opt">(Tage)</span>
                 <input name="mahnfrist_tage" type="number" min="1" step="1"></label>
             </div>
+            <label>Bei Angeboten ohne Antwort nachfragen nach <span class="opt">(Tagen, 0 = nie)</span>
+              <input name="nachfassen_tage" type="number" min="0" step="1"></label>
+            <p class="hint">Gezählt ab dem Versand per Mail, sonst ab dem Angebotsdatum. Die Startseite erinnert einmal pro Angebot, solange es gültig ist.</p>
           </div>
           <div class="card">
             <h2>Ablage &amp; Paperless</h2>
@@ -439,6 +451,9 @@
               <div><strong>Zahlungserinnerung / Mahnung</strong>
                 <label>Betreff<input name="mail_betreff_mahnung"></label>
                 <label>Text<textarea name="mail_text_mahnung" rows="10"></textarea></label></div>
+              <div><strong>Nachfrage zum Angebot</strong>
+                <label>Betreff<input name="mail_betreff_nachfrage"></label>
+                <label>Text<textarea name="mail_text_nachfrage" rows="10"></textarea></label></div>
             </div>
           </details>
         </div>
@@ -903,6 +918,32 @@
         <button type="button" class="small secondary" id="versand-download">⇩ PDF herunterladen</button>
         <button type="button" class="small secondary hidden" id="versand-teilen">↗ Teilen …</button>
       </div>
+    </form>
+  </dialog>
+
+  <dialog id="nachfrage" class="dialog">
+    <form method="dialog" id="nachfrage-form" autocomplete="off">
+      <h2 id="nachfrage-titel">Nachfrage zum Angebot</h2>
+      <p class="hint" id="nachfrage-info"></p>
+      <p id="nachfrage-nicht-eingerichtet" class="hinweis-box hidden">Der E-Mail-Versand ist noch nicht eingerichtet –
+        unter ⚙ Einstellungen → E-Mail-Versand dein Postfach eintragen. Den Text kannst du trotzdem kopieren (unten).</p>
+      <div id="nachfrage-mail">
+        <label>An <span class="opt">(mehrere mit Komma trennen)</span><input id="nachfrage-an" type="text" inputmode="email"></label>
+        <label>Betreff<input id="nachfrage-betreff"></label>
+      </div>
+      <label>Text<textarea id="nachfrage-text" rows="10"></textarea></label>
+      <label class="inline" id="nachfrage-anhang-label"><input type="checkbox" id="nachfrage-anhang" checked> <span>Angebot noch einmal anhängen (<span id="nachfrage-datei"></span>)</span></label>
+      <label class="inline" id="nachfrage-kopie-label"><input type="checkbox" id="nachfrage-kopie"> <span>Kopie an mich</span></label>
+      <div class="actions">
+        <button type="button" class="secondary" data-nf="zu">Abbrechen</button>
+        <button type="submit" id="nachfrage-senden">✉ Senden</button>
+      </div>
+      <div class="versand-alternativ"><span>Schon angerufen oder per WhatsApp gefragt?</span>
+        <button type="button" class="small secondary" data-nf="kopieren">Text kopieren</button>
+        <button type="button" class="small secondary" data-nf="erledigt">✓ Als nachgefragt vermerken</button></div>
+      <div class="versand-alternativ"><span>Antwort schon da?</span>
+        <button type="button" class="small" data-nf="angenommen">Angenommen → Rechnung</button>
+        <button type="button" class="small secondary" data-nf="abgelehnt">Abgelehnt</button></div>
     </form>
   </dialog>
 

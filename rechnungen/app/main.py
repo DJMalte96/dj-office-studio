@@ -128,7 +128,8 @@ FELDER = {
     "paperless_url": (str, ""), "paperless_token": (str, ""), "paperless_tag": (int, 0), "paperless_tag_name": (str, ""),
     "update_pruefen": (bool, True),   # nur Desktop-Version: beim Start nach neuer Version suchen
     "mahnfrist_tage": (int, 7),       # Frist in Zahlungserinnerung/Mahnung (Tage ab Datum)
-    "sicherung_erinnerung_tage": (int, 30),   # Startseite erinnert an eine Sicherung nach so vielen Tagen (0 = nie)
+    "sicherung_erinnerung_tage": (int, 30),
+    "nachfassen_tage": (int, 7),      # Startseite erinnert an Angebote ohne Antwort nach so vielen Tagen (0 = nie)   # Startseite erinnert an eine Sicherung nach so vielen Tagen (0 = nie)
     # E-Mail-Versand über das eigene Postfach (beliebiger Anbieter / eigener Server)
     "absender_email": (str, ""), "smtp_server": (str, ""), "smtp_port": (int, 587),
     "smtp_sicherheit": (str, "starttls"), "smtp_benutzer": (str, ""), "smtp_passwort": (str, ""),
@@ -281,8 +282,9 @@ def settings_put():
             except (TypeError, ValueError):
                 fehler.append(f"„{k}“ muss eine Zahl sein")
                 continue
-            if werte[k] < (0 if k in ("sicherung_erinnerung_tage", "paperless_tag") else 1):
-                fehler.append(f"„{k}“ muss mindestens {0 if k == 'sicherung_erinnerung_tage' else 1} sein")
+            null_erlaubt = k in ("sicherung_erinnerung_tage", "paperless_tag", "nachfassen_tage")
+            if werte[k] < (0 if null_erlaubt else 1):
+                fehler.append(f"„{k}“ muss mindestens {0 if null_erlaubt else 1} sein")
         elif k.startswith("mail_text_"):
             werte[k] = (v or "").rstrip() if (v or "").strip() else standard   # leere Vorlage → Standardtext
         else:
@@ -419,6 +421,7 @@ def get_absender():
                                                and a.get("paperless_token") and a.get("paperless_tag")),
                       "paperless_tag_name": a.get("paperless_tag_name") or "",
                       "angebot_gueltigkeit_tage": a.get("angebot_gueltigkeit_tage") or 30,
+                      "nachfassen_tage": a.get("nachfassen_tage", 7),
                       "mail": mail.konfiguriert(a),
                       "sicherung": _sicherung_status(a),
                       "hinweis_bestaetigt": db.get_settings().get("_hinweis_bestaetigt", 0) >= HINWEIS_VERSION,
@@ -565,7 +568,68 @@ def _validate_invoice(data, inv_id=None, check_number=True, art="rechnung", pfli
                 "hinweise": (data.get("hinweise") or "").strip()}
     else:
         doc["bezahlt"] = bool(data.get("bezahlt"))
+        _rechnungsart(doc, data, positionen, inv_id)
     return doc
+
+
+RECHNUNGSARTEN = ("normal", "anzahlung", "schluss")
+
+
+def _rechnungsart(doc, data, positionen, inv_id):
+    """Anzahlungs- bzw. Schlussrechnung (seit 1.11). Eine Schlussrechnung zieht Anzahlungsrechnungen desselben Kunden
+    als eigene Zeile ab – der Betrag kommt immer aus der Anzahlungsrechnung (netto), nie aus dem Browser."""
+    art = data.get("rechnungsart") or "normal"
+    if art not in RECHNUNGSARTEN:
+        abort(Response(json.dumps({"error": f"Unbekannte Rechnungsart: {art}"}), 400, mimetype="application/json"))
+    doc["rechnungsart"] = art
+    fehler = []
+    gesehen = set()
+    for p, roh in zip(doc["positionen"], positionen):
+        aid = roh.get("anzahlung_id")
+        if aid in (None, ""):
+            continue
+        if art != "schluss":
+            fehler.append("Anzahlungen lassen sich nur in einer Schlussrechnung abziehen")
+            break
+        try:
+            aid = int(aid)
+        except (TypeError, ValueError):
+            fehler.append("Ungültiger Bezug auf eine Anzahlung")
+            continue
+        a = db.get_invoice(aid)
+        if not a or a.get("rechnungsart") != "anzahlung" or a["storno_von"] or a["storniert_durch"] or aid == inv_id:
+            fehler.append("Die abgezogene Anzahlungsrechnung gibt es nicht (mehr) oder sie wurde storniert")
+            continue
+        if aid in gesehen:
+            fehler.append(f"Die Anzahlung {a['nummer']} ist doppelt abgezogen")
+            continue
+        gesehen.add(aid)
+        if (a["kunde"].get("name") or "").strip().lower() != doc["kunde"]["name"].strip().lower():
+            fehler.append(f"Die Anzahlung {a['nummer']} gehört zu einem anderen Kunden")
+            continue
+        schon = db.anzahlung_verrechnet(aid, inv_id)
+        if schon:
+            fehler.append(f"Die Anzahlung {a['nummer']} ist schon in Rechnung {schon['nummer']} abgezogen")
+            continue
+        p["anzahlung_id"] = aid
+        p["preis"] = -round(sum(float(x.get("preis") or 0) for x in a["positionen"]), 2)
+    if art == "schluss" and not gesehen and not fehler:
+        fehler.append("Eine Schlussrechnung braucht mindestens eine abgezogene Anzahlung – sonst „Normale Rechnung“ wählen")
+    if fehler:
+        abort(Response(json.dumps({"error": "; ".join(fehler)}), 400, mimetype="application/json"))
+    if art == "anzahlung":
+        doc["fahrt_erfassen"] = False          # die Fahrt gehört zur Schlussrechnung
+    if gesehen:
+        doc |= _steuer(sum(p["preis"] for p in doc["positionen"]))
+        if doc["gesamt"] < 0:
+            abort(Response(json.dumps({"error": "Die Anzahlungen sind höher als die Schlussrechnung"}), 400, mimetype="application/json"))
+
+
+def _anzahlung_gebunden(inv):
+    """Fehlertext, wenn eine Anzahlungsrechnung schon in einer Schlussrechnung abgezogen ist."""
+    s = db.anzahlung_verrechnet(inv["id"]) if inv.get("rechnungsart") == "anzahlung" else None
+    return (f"Die Anzahlung {inv['nummer']} ist in der Schlussrechnung {s['nummer']} abgezogen – "
+            "erst die Schlussrechnung ändern bzw. stornieren.") if s else None
 
 
 def _veranstaltungsort(d):
@@ -639,10 +703,12 @@ def invoices_create():
     inv = _validate_invoice(_daten())
     abschluss.pruefen(*_rechnung_jahre(inv))
     inv["kunde_id"] = db.upsert_customer({**inv["kunde"], "id": inv["kunde_id"]})
-    inv_id = db.save_invoice(inv)
     angebot_id = _daten().get("angebot_id")
-    if angebot_id and db.get_offer(angebot_id):
-        db.set_offer_status(angebot_id, "angenommen", inv_id)
+    angebot = db.get_offer(angebot_id) if isinstance(angebot_id, int) else None
+    inv["angebot_id"] = angebot["id"] if angebot else None
+    inv_id = db.save_invoice(inv)
+    if angebot:
+        db.set_offer_status(angebot["id"], "angenommen", inv_id)
     finanzen.fahrt_aktualisieren(inv_id, absender())
     return jsonify({"id": inv_id, "datei": _write_pdf_file(inv)}), 201
 
@@ -660,6 +726,8 @@ def invoices_update(inv_id):
     alt = db.get_invoice(inv_id) or abort(404)
     if alt["festgeschrieben"]:
         return _fehler(FESTGESCHRIEBEN, 409)
+    if _anzahlung_gebunden(alt):
+        return _fehler(_anzahlung_gebunden(alt), 409)
     inv = _validate_invoice(_daten(), inv_id)
     abschluss.pruefen(*_rechnung_jahre(alt), *_rechnung_jahre(inv))
     inv["kunde_id"] = db.upsert_customer({**inv["kunde"], "id": inv["kunde_id"]})
@@ -695,6 +763,8 @@ def invoices_delete(inv_id):
     inv = db.get_invoice(inv_id) or abort(404)
     if inv["festgeschrieben"]:
         return _fehler(FESTGESCHRIEBEN, 409)
+    if _anzahlung_gebunden(inv):
+        return _fehler(_anzahlung_gebunden(inv), 409)
     abschluss.pruefen(*_rechnung_jahre(inv))
     finanzen.fahrten_der_rechnung_entfernen(inv_id)
     db.delete_invoice(inv_id)
@@ -716,11 +786,14 @@ def invoices_cancel(inv_id):
         return _fehler("Eine Stornorechnung kann nicht storniert werden.")
     if inv["storniert_durch"]:
         return _fehler(f"Die Rechnung wurde bereits storniert (Stornorechnung {inv['storniert_durch_nummer']}).")
+    if _anzahlung_gebunden(inv):
+        return _fehler(_anzahlung_gebunden(inv), 409)
     storno = {
         "nummer": db.next_number(absender().get("startnummer") or 1),
         "datum": date.today().isoformat(),
         "kunde": inv["kunde"], "kunde_id": inv["kunde_id"],
-        "positionen": [{**p, "preis": -round(float(p.get("preis") or 0), 2)} for p in inv["positionen"]],
+        "positionen": [{k: v for k, v in p.items() if k != "anzahlung_id"} | {"preis": -round(float(p.get("preis") or 0), 2)}
+                       for p in inv["positionen"]],
         "zahlungsbedingung": "", "gesamt": -inv["gesamt"],
         "kleinunternehmer": inv.get("kleinunternehmer"), "ust_satz": inv.get("ust_satz"),
         "veranstaltungsort": inv.get("veranstaltungsort"), "fahrt_erfassen": False,
@@ -959,6 +1032,11 @@ def export_zip(jahr, a=None, ziel=None):
                       else "bezahlt" if r["bezahlt"] else "offen")
             bezug = (f"Storno zu {r['storno_zu']['nummer']}" if r["storno_zu"]
                      else f"storniert durch {r['storniert_durch_nummer']}" if r["storniert_durch"] else "")
+            if not r["storno_zu"] and r.get("rechnungsart") == "anzahlung":
+                bezug = " · ".join(x for x in ("Anzahlungsrechnung", bezug) if x)
+            elif not r["storno_zu"] and r.get("rechnungsart") == "schluss":
+                abz = [x["beschreibung"].split("Rechnung ", 1)[-1].split(" ")[0] for x in r["positionen"] if x.get("anzahlung_id")]
+                bezug = " · ".join(x for x in (f"Schlussrechnung, abzgl. Anzahlung {', '.join(abz)}", bezug) if x)
             leistung = next((p.get("lieferdatum") for p in r["positionen"] if p.get("lieferdatum")), "")
             name = pdf_filename(r)
             netto = round(sum(float(p.get("preis") or 0) for p in r["positionen"]), 2)
@@ -990,7 +1068,7 @@ def _de(iso):
 def _versand_beleg(art, beleg_id, mahnung_id=None, a=None):
     """Beleg, Anhänge und Platzhalter-Werte für eine E-Mail. art: rechnung | angebot | mahnung."""
     a = a or absender()
-    if art == "angebot":
+    if art in ("angebot", "nachfrage"):
         beleg = db.get_offer(beleg_id) or abort(404)
     elif art in ("rechnung", "mahnung"):
         beleg = db.get_invoice(beleg_id) or abort(404)
@@ -1003,13 +1081,13 @@ def _versand_beleg(art, beleg_id, mahnung_id=None, a=None):
     if mahnung:
         anhaenge.insert(0, (mahnung_filename(beleg, mahnung),
                             build_mahnung_pdf(beleg, mahnung, absender_fuer(mahnung, a), _faellig_am(beleg))))
-    offen = art != "angebot" and not beleg["bezahlt"] and not beleg["storno_von"]
+    offen = art in ("rechnung", "mahnung") and not beleg["bezahlt"] and not beleg["storno_von"]
     werte = {
         "kunde": beleg["kunde"].get("name", ""),
         "nummer": beleg["nummer"], "datum": _de(beleg["datum"]),
         "betrag": fmt_euro(beleg["gesamt"]),
         "faellig": _de(_faellig_am(beleg)) if offen else "",
-        "gueltig_bis": _de(beleg.get("gueltig_bis")) if art == "angebot" else "",
+        "gueltig_bis": _de(beleg.get("gueltig_bis")) if art in ("angebot", "nachfrage") else "",
         "leistungsdatum": _de(next((p.get("lieferdatum") for p in beleg["positionen"] if p.get("lieferdatum")), "")),
         "stufe": MAHNSTUFEN[mahnung["stufe"]] if mahnung else "",
         "frist": _de(mahnung["frist"]) if mahnung else "",
@@ -1049,6 +1127,8 @@ def mail_send():
     art = d.get("art", "")
     a = absender()
     beleg, mahnung, anhaenge, _ = _versand_beleg(art, d.get("id"), d.get("mahnung_id"), a)
+    if art == "nachfrage" and d.get("anhang") is False:
+        anhaenge = []
     try:
         an = mail.adressen(d.get("an"))
     except ValueError as e:
@@ -1063,7 +1143,9 @@ def mail_send():
     except ValueError as e:
         return _fehler(str(e), 502)
     db.add_versand(art, beleg["id"], ", ".join(an), betreff, mahnung["id"] if mahnung else None)
-    if art != "angebot":
+    if art == "nachfrage":
+        db.set_offer_nachgefragt(beleg["id"], date.today().isoformat(), f"per Mail an {', '.join(an)}")
+    if art in ("rechnung", "mahnung"):
         db.festschreiben(beleg["id"], absender_jetzt(a=a))   # verschickt = ausgestellt, genau mit diesem Absender
     if d.get("email_speichern") and len(an) == 1:
         kid = beleg.get("kunde_id") or db.upsert_customer(beleg["kunde"])
@@ -1225,7 +1307,9 @@ def invoices_to_paperless():
 def invoices_preview():
     data = _daten()
     data["nummer"] = (data.get("nummer") or "").strip() or "VORSCHAU"
-    return _pdf_response(_validate_invoice(data, check_number=False, art=data.get("art") or "rechnung", pflicht=False))
+    # id = gerade bearbeitete Rechnung – damit ihre eigenen Anzahlungs-Abzüge nicht als „schon abgezogen“ gelten
+    inv_id = data.get("id") if isinstance(data.get("id"), int) else None
+    return _pdf_response(_validate_invoice(data, inv_id, check_number=False, art=data.get("art") or "rechnung", pflicht=False))
 
 
 # ---------- Angebote ----------
@@ -1269,6 +1353,18 @@ def offers_status(offer_id):
     if status not in db.STATUS:
         abort(400)
     db.set_offer_status(offer_id, status)
+    return "", 204
+
+
+@app.post("/api/angebote/<int:offer_id>/nachgefragt")
+def offers_followed_up(offer_id):
+    """Nachfrage von Hand vermerken (z. B. angerufen) bzw. mit {"nachgefragt": false} zurücknehmen."""
+    db.get_offer(offer_id) or abort(404)
+    d = _daten()
+    if d.get("nachgefragt") is False:
+        db.set_offer_nachgefragt(offer_id, None)
+    else:
+        db.set_offer_nachgefragt(offer_id, date.today().isoformat(), str(d.get("wie") or "von Hand vermerkt"))
     return "", 204
 
 

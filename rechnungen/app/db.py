@@ -358,8 +358,10 @@ def init():
         if "paperless_am" not in {r["name"] for r in con.execute("PRAGMA table_info(angebote)")}:
             con.execute("ALTER TABLE angebote ADD COLUMN paperless_am TEXT")   # seit 0.8.4
         # seit 1.1: Veranstaltungsort (Rechnung/Angebot) und „Fahrt erfassen“ (Rechnung)
-        for tabelle, felder in (("rechnungen", (("veranstaltungsort_json", "TEXT"), ("fahrt_erfassen", "INTEGER DEFAULT 1"))),
-                                ("angebote", (("veranstaltungsort_json", "TEXT"),))):
+        # seit 1.11: Anzahlungs-/Schlussrechnung, Herkunft aus einem Angebot, Nachfrage zum Angebot
+        for tabelle, felder in (("rechnungen", (("veranstaltungsort_json", "TEXT"), ("fahrt_erfassen", "INTEGER DEFAULT 1"),
+                                                ("rechnungsart", "TEXT DEFAULT 'normal'"), ("angebot_id", "INTEGER"))),
+                                ("angebote", (("veranstaltungsort_json", "TEXT"), ("nachgefragt_am", "TEXT"), ("nachgefragt_wie", "TEXT")))):
             vorhanden = {r["name"] for r in con.execute(f"PRAGMA table_info({tabelle})")}
             for spalte, typ in felder:
                 if spalte not in vorhanden:
@@ -552,19 +554,21 @@ def save_invoice(inv, inv_id=None):
         steuer = (_ku(inv.get("kleinunternehmer")), inv.get("ust_satz"))
         ort = (json.dumps(inv["veranstaltungsort"]) if inv.get("veranstaltungsort") else None,
                int(inv.get("fahrt_erfassen", True) is not False))
+        art = (inv.get("rechnungsart") or "normal", inv.get("angebot_id"))
         if inv_id:
             con.execute(
                 "UPDATE rechnungen SET nummer=?, datum=?, kunde_id=?, kunde_json=?,"
                 " positionen_json=?, zahlungsbedingung=?, gesamt=?, bezahlt=?, kleinunternehmer=?, ust_satz=?,"
-                " veranstaltungsort_json=?, fahrt_erfassen=? WHERE id=?",
-                vals + steuer + ort + (inv_id,))
+                " veranstaltungsort_json=?, fahrt_erfassen=?, rechnungsart=?, angebot_id=COALESCE(?, angebot_id) WHERE id=?",
+                vals + steuer + ort + art + (inv_id,))
             return inv_id
         return con.execute(
             "INSERT INTO rechnungen (nummer, datum, kunde_id, kunde_json, positionen_json,"
             " zahlungsbedingung, gesamt, bezahlt, festgeschrieben, storno_von, bezahlt_am, kleinunternehmer, ust_satz,"
-            " veranstaltungsort_json, fahrt_erfassen, absender_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            " veranstaltungsort_json, fahrt_erfassen, absender_json, rechnungsart, angebot_id)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             vals + (int(bool(inv.get("festgeschrieben"))), inv.get("storno_von"), inv.get("bezahlt_am")) + steuer + ort
-            + (_absender_text(inv.get("absender")) if inv.get("festgeschrieben") else None,)).lastrowid
+            + (_absender_text(inv.get("absender")) if inv.get("festgeschrieben") else None,) + art).lastrowid
 
 
 def _ku(wert):
@@ -778,6 +782,23 @@ def set_offer_status(offer_id, status, rechnung_id=None):
                         (status, rechnung_id, offer_id))
         else:
             con.execute("UPDATE angebote SET status = ? WHERE id = ?", (status, offer_id))
+
+
+def set_offer_nachgefragt(offer_id, am, wie=""):
+    """Nachfrage zum Angebot vermerken (am = None: Vermerk zurücknehmen)."""
+    with connect() as con:
+        con.execute("UPDATE angebote SET nachgefragt_am = ?, nachgefragt_wie = ? WHERE id = ?",
+                    (am, (wie or "")[:200] if am else None, offer_id))
+
+
+def anzahlung_verrechnet(anzahlung_id, ausser=None):
+    """Gültige Rechnung (nicht storniert, keine Stornorechnung), die diese Anzahlung abzieht – sonst None."""
+    with connect() as con:
+        for r in con.execute("SELECT id, nummer, positionen_json FROM rechnungen WHERE storno_von IS NULL"
+                             " AND storniert_durch IS NULL AND rechnungsart = 'schluss' AND id IS NOT ?", (ausser,)):
+            if any(p.get("anzahlung_id") == anzahlung_id for p in json.loads(r["positionen_json"])):
+                return {"id": r["id"], "nummer": r["nummer"]}
+    return None
 
 
 def delete_offer(offer_id):

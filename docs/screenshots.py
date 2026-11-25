@@ -319,6 +319,14 @@ with sync_playwright() as p:
     page.locator("#oeffnen-dialog").screenshot(path=str(ZIEL / "jahr-oeffnen.png"))
     page.click("#oeffnen-abbrechen")
 
+    # Nachfrage zu einem Angebot ohne Antwort (seit 1.11)
+    page.evaluate("showTab('start')")
+    page.wait_for_timeout(1000)
+    page.locator("#start [data-start=nachfragen]").first.click()
+    page.wait_for_timeout(700)
+    page.locator("#nachfrage").screenshot(path=str(ZIEL / "nachfrage.png"))
+    page.keyboard.press("Escape")
+
     # Rechnungseditor mit Bestandskunde und zwei Positionen
     ctx2 = browser.new_context(viewport={"width": 1240, "height": 1180}, device_scale_factor=2, locale="de-DE")
     ctx2.add_init_script("try { localStorage.setItem('theme','light') } catch (e) {}")
@@ -346,6 +354,14 @@ with sync_playwright() as p:
     page.mouse.move(5, 1100)
     page.wait_for_timeout(400)
     page.screenshot(path=str(ZIEL / "rechnungseditor.png"))
+    # Preis-Spickzettel und Anzahlungsrechnung (seit 1.11)
+    erste.locator(".spick").evaluate("e => e.scrollIntoView({block: 'center'})")
+    page.wait_for_timeout(200)
+    erste.locator(".spick").screenshot(path=str(ZIEL / "spickzettel.png"))
+    page.locator("#rechnungsart-box label", has_text="Anzahlungsrechnung").click()
+    page.wait_for_timeout(400)
+    page.evaluate("document.activeElement && document.activeElement.blur()")
+    page.locator("#positionen").locator("xpath=ancestor::div[contains(@class,'card')]").screenshot(path=str(ZIEL / "anzahlung.png"))
     browser.close()
 
 print("Bilder in", ZIEL, "– JavaScript-Fehler:", fehler or "keine")

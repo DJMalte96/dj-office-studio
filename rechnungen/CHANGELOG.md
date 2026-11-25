@@ -2,6 +2,20 @@
 
 Alle Änderungen an DJ Office Studio. Neueste Version oben.
 
+## 1.11.0 – 2026-11-25
+
+### Neu
+- **Angebote nachfassen**: Hat ein Kunde nach einigen Tagen nicht geantwortet, steht unter „Heute wichtig“ z. B. „✉ 2 Angebote nachfragen“, und an der Karte bzw. in der Angebotsliste steht „keine Antwort seit 10 Tagen“.
+  - **Nachfragen** öffnet eine fertige Mail; das Angebot hängt auf Wunsch noch einmal an. Ohne eingerichteten Mailversand: Text kopieren (z. B. für WhatsApp).
+  - „Als nachgefragt vermerken“, „Angenommen → Rechnung“ oder „Abgelehnt“ direkt im Dialog.
+  - Erinnert wird einmal pro Angebot, solange es gültig ist. Die Tage (Standard 7, 0 = nie) stehen unter ⚙ Einstellungen → Nummern & Fristen, die Vorlage bei den Textvorlagen.
+- **Preis-Spickzettel**: Im Editor zeigt die App unter jeder Position, was du für diesen Rechnungsposten bisher genommen hast – zuletzt, im Schnitt, von–bis und pro Stunde (mit Vorschlag für die eingetragene Dauer), dazu was der Kunde zuletzt gezahlt hat. Ein Klick auf einen Betrag übernimmt ihn. Liegt der Preis deutlich unter oder über dem Schnitt, steht das dabei. Auch bei Angeboten.
+- **Anzahlungen**: Unter den Positionen steht „Art der Rechnung“ – **Normale Rechnung** (wie bisher), **Anzahlungsrechnung** oder **Schlussrechnung**. Wer keine Anzahlungen nutzt, muss nichts tun.
+  - **Anzahlungsrechnung**: Leistung mit Gesamtpreis eintragen, dann „Anzahlungsrechnung“ – daraus wird eine Anzahlung über z. B. 30 % oder einen festen Betrag. Die App merkt sich den letzten Wert. Die Fahrt wird erst mit der Schlussrechnung erfasst.
+  - **Schlussrechnung**: Die Anzahlungsrechnungen des Kunden stehen zum Anhaken da und werden als eigene Minus-Zeile abgezogen; der Betrag kommt immer aus der Anzahlungsrechnung (bei Umsatzsteuer netto). Das PDF heißt „Anzahlungsrechnung“ bzw. „Schlussrechnung“ mit „Restbetrag“.
+  - Kommt die Anzahlung aus einem Angebot, macht „→ Rechnung“ daraus später automatisch die Schlussrechnung; die Startseite erinnert nach der Feier („✎ Schlussrechnung …“).
+  - In der EÜR zählt jede Zahlung in ihrem Jahr. Eine abgezogene Anzahlung lässt sich nicht mehr ändern, löschen oder stornieren, bis die Schlussrechnung storniert ist. Der Export für den Steuerberater nennt Anzahlungs- und Schlussrechnungen.
+
 ## 1.10.0 – 2026-11-23
 
 ### Neu
