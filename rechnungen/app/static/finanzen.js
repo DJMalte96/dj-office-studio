@@ -365,10 +365,19 @@ async function oeffneBeleg(id) {
 
 function belegVorschauHtml(a) {
   const url = `api/ausgaben/${a.id}/ansicht`;
-  return a.beleg_typ === "bild" ? `<img src="${url}" alt="Beleg" onerror="this.outerHTML='<div class=&quot;ohne-beleg&quot;>Für dieses Foto ist keine Vorschau möglich – bitte über „Original öffnen“ ansehen.</div>'">`
+  return a.beleg_typ === "bild" ? `<img src="${url}" alt="Beleg" class="beleg-foto">`
     : a.beleg_typ === "unbekannt" ? `<div class="ohne-beleg">Keine Vorschau für diesen Dateityp.</div>`
     : `<iframe src="${url}" title="Beleg" ${a.beleg_typ === "pdf" ? "" : 'sandbox=""'}></iframe>`;
 }
+
+// Foto ohne Vorschau (z. B. HEIC ohne Umwandlung): Hinweis statt kaputtem Bild – als Listener, die CSP verbietet Inline-Handler
+document.addEventListener("error", e => {
+  if (!e.target.matches?.("img.beleg-foto")) return;
+  const hinweis = document.createElement("div");
+  hinweis.className = "ohne-beleg";
+  hinweis.textContent = "Für dieses Foto ist keine Vorschau möglich – bitte über „Original öffnen“ ansehen.";
+  e.target.replaceWith(hinweis);
+}, true);
 
 document.addEventListener("click", e => {
   if (e.target.id !== "beleg-original-link") return;

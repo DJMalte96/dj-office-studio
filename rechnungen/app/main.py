@@ -91,6 +91,29 @@ def _schutz():
     return None
 
 
+# Seit 1.13.1: Sicherheits-Header an jeder Antwort.
+# - Content-Security-Policy: nur Skripte der App selbst (kein Inline-Code, kein eval) – zweite Verteidigungslinie gegen XSS
+# - frame-ancestors/X-Frame-Options: keine fremde Seite darf die App einbetten (Clickjacking); Home Assistant bettet sie
+#   über Ingress von derselben Adresse ein – das bleibt erlaubt
+# - nosniff: der Browser hält sich an den angegebenen Dateityp (ein „PDF“ mit HTML darin bleibt ein PDF)
+APP_CSP = ("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; "
+           "font-src 'self' data:; connect-src 'self'; frame-src 'self' blob:; object-src 'none'; base-uri 'none'; "
+           "form-action 'self'; frame-ancestors 'self'")
+
+
+@app.after_request
+def _sicherheits_header(resp):
+    resp.headers.setdefault("X-Content-Type-Options", "nosniff")
+    resp.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
+    resp.headers.setdefault("Referrer-Policy", "same-origin")
+    csp = resp.headers.get("Content-Security-Policy")
+    if csp is None and resp.mimetype in ("text/html", "image/svg+xml"):
+        resp.headers["Content-Security-Policy"] = APP_CSP
+    elif csp is not None and "frame-ancestors" not in csp:
+        resp.headers["Content-Security-Policy"] = csp + "; frame-ancestors 'self'"
+    return resp
+
+
 def _daten():
     """JSON aus der Anfrage – fehlt es oder ist es ungültig, ein leeres dict (→ verständliche Fehlermeldung statt 500)."""
     d = request.get_json(silent=True)
@@ -235,7 +258,7 @@ def _asset_version(name):
 def index():
     with open(os.path.join(STATIC_DIR, "index.html"), encoding="utf-8") as f:
         html = f.read()
-    for name in ("style.css", "datum.js", "app.js", "finanzen.js", "rundgang.js", "vertraege.js"):
+    for name in ("theme.js", "style.css", "datum.js", "app.js", "finanzen.js", "rundgang.js", "vertraege.js"):
         html = html.replace(f'"static/{name}"', f'"static/{name}?v={_asset_version(name)}"')
     return Response(html, mimetype="text/html", headers={"Cache-Control": "no-cache"})
 
@@ -456,6 +479,9 @@ def notice_confirm():
 
 # ---------- Stammdaten (Kunden, Textbausteine, Zahlungsbedingungen) ----------
 
+STAMM_MAX = {"text": 5000, "titel": 200}   # Zeichen; übrige Textfelder (Name, Anschrift, E-Mail …) höchstens 300
+
+
 def _clean(table, data):
     out = {}
     for col in db.TABLES[table]:
@@ -467,7 +493,7 @@ def _clean(table, data):
         elif col == "erledigt":
             v = 1 if v in (True, 1, "1", "true", "on") else 0
         else:
-            v = (v or "").strip()
+            v = str(v or "").strip()[:STAMM_MAX.get(col, 300)]
         out[col] = v
     if table == "textbausteine" and out["titel"] and not out["text"]:
         out["text"] = db.anlass_text(out["titel"])  # Anlass ohne eigene Vorlage → Standardtext

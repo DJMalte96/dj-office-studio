@@ -298,7 +298,7 @@ Unter **Ausgaben → ↻ Abos** legt man Musikpool, DJ-Software & Co. einmal an:
 
 #### Schutz vor fremden Webseiten
 
-Die App hat keine eigene Anmeldung. Änderungen nimmt sie deshalb nur von ihrer eigenen Oberfläche an. Die Desktop-App antwortet nur unter 127.0.0.1 bzw. localhost, das Add-on nur über Home Assistant. Mail-Passwort und Paperless-Token gehen nur an den gespeicherten Server; wer Server oder Adresse ändert, gibt sie neu ein.
+Die App hat keine eigene Anmeldung. Änderungen nimmt sie deshalb nur von ihrer eigenen Oberfläche an. Die Desktop-App antwortet nur unter 127.0.0.1 bzw. localhost, das Add-on nur über Home Assistant. Mail-Passwort und Paperless-Token gehen nur an den gespeicherten Server; wer Server oder Adresse ändert, gibt sie neu ein. Seit 1.13.1 schickt die App außerdem Sicherheits-Header mit: Eine Content-Security-Policy erlaubt nur ihre eigenen Skripte (eingeschleuster Code würde vom Browser nicht ausgeführt), fremde Seiten dürfen sie nicht einbetten (Schutz vor „Clickjacking“), und der Browser hält sich streng an den angegebenen Dateityp.
 
 #### Schutz vor präparierten Dateien
 

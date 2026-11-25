@@ -8,6 +8,16 @@ build/
 Daten/
 PDFs/
 
+# Geheimnisse und Datenbanken nie committen (vorbeugend)
+.env
+.env.*
+*.db
+*.sqlite
+*.sqlite3
+*.pem
+*.key
+sicherungen/
+
 # Echte Beispiel-Mails (persönliche Daten) – nie committen; bereinigte Testfälle liegen unter tests/
 Beispielmails/
 beispielmails/

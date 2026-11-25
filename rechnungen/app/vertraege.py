@@ -137,6 +137,17 @@ def _sicherer_pfad(unterordner, rel):
     return pfad if os.path.dirname(pfad) == basis and os.path.isfile(pfad) else None
 
 
+def _inhalt_passt(endung, daten):
+    """Die ersten Bytes müssen zur Endung passen – eine HTML-Datei namens „vertrag.pdf“ wird abgelehnt."""
+    if endung == ".pdf":
+        return daten[:5] == b"%PDF-"
+    if endung in (".jpg", ".jpeg"):
+        return daten[:3] == b"\xff\xd8\xff"
+    if endung == ".png":
+        return daten[:8] == b"\x89PNG\r\n\x1a\n"
+    return daten[4:8] == b"ftyp" and daten[8:12] in (b"heic", b"heix", b"hevc", b"heim", b"heis", b"mif1", b"msf1")
+
+
 def _ist_datum(text):
     try:
         return bool(re.fullmatch(r"\d{4}-\d{2}-\d{2}", text)) and bool(date.fromisoformat(text))
@@ -552,7 +563,7 @@ def vertrag_unterschrieben(vid):
         if len(daten) > MAX_DATEI:
             return _fehler("Die Datei ist zu groß (höchstens 20 MB).", 413)
         endung = os.path.splitext(f.filename or "")[1].lower()
-        if endung not in UNTERSCHRIFT_ENDUNGEN:
+        if endung not in UNTERSCHRIFT_ENDUNGEN or not _inhalt_passt(endung, daten):
             return _fehler("Bitte als PDF oder Foto (JPG, PNG, HEIC).")
         dateiname = os.path.basename(f.filename)[:120]
         datei = f"{vid}_{uuid.uuid4().hex[:12]}{endung}"

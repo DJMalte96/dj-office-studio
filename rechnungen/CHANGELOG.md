@@ -2,6 +2,17 @@
 
 Alle Änderungen an DJ Office Studio. Neueste Version oben.
 
+## 1.13.1 – 2026-11-25
+
+### Sicherheit
+- **Content-Security-Policy**: Der Browser führt nur noch die Skripte der App selbst aus – kein eingeschleuster Code, kein Inline-Code. Eine zweite Verteidigungslinie: Bei der Prüfung wurde kein Weg gefunden, Code über Textfelder, Dateinamen oder Mails einzuschleusen.
+- **Kein Einbetten in fremde Seiten** (Clickjacking): Eine präparierte Webseite konnte die laufende Desktop-App unsichtbar einbinden und zu Klicks verleiten. Home Assistant bettet die App weiterhin ein.
+- **Dateityp streng**: Jede Antwort trägt „nosniff“ – auch Vertragsanlagen und statische Dateien.
+- **Unterschriebene Verträge**: Der Inhalt muss zur Endung passen; eine HTML-Datei namens „vertrag.pdf“ wird abgelehnt.
+- **Flask 3.0.3 → 3.1.3 und fpdf2 2.8.1 → 2.8.9**: schließen die bekannten Lücken der Bibliotheken (betrafen die App nicht direkt).
+- **Stammdaten**: Kunden, Rechnungsposten und Zahlungsbedingungen haben jetzt Längengrenzen.
+- Entwicklung: GitHub-Workflows mit festen Action-Versionen und nur Leserechten für die Tests, `.gitignore` gegen versehentlich eingecheckte `.env`- und Datenbankdateien.
+
 ## 1.13.0 – 2026-11-25
 
 ### Neu
