@@ -136,7 +136,7 @@ $("#bar-dialog").addEventListener("click", async e => {
     const d = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(d.error || `Fehler ${res.status}`);
     $("#bar-dialog").close();
-    toast(`${euroCent(d.betrag)} bar bezahlt vermerkt${d.quittung_nr ? ` (Quittung ${d.quittung_nr})` : ""} – zählt in EÜR und Export`);
+    toast(`${euroCent(d.betrag)} bar bezahlt vermerkt${d.quittung_nr ? ` (Quittung ${d.quittung_nr})` : ""}`);
     kaNeuZeichnen();
   } catch (err) { toast(err.message, true); }
   b.disabled = false;
@@ -400,7 +400,7 @@ $("#kundenakte").addEventListener("click", async e => {
   if (zeile) {
     const x = akte.eintraege[Number(zeile.dataset.i)];
     if (x.bar) {
-      if (x.bar.gesperrt || !confirm(`Barzahlung über ${euroCent(x.betrag)} vom ${fmtDate(x.bar.datum)} löschen?\n\n`
+      if (!confirm(`Barzahlung über ${euroCent(x.betrag)} vom ${fmtDate(x.bar.datum)} löschen?\n\n`
         + "Nur nötig, wenn sie versehentlich vermerkt wurde – die Quittung auf dem Block bleibt davon unberührt.")) return;
       try { await api(`barzahlungen/${x.bar.id}`, { method: "DELETE" }); toast("Barzahlung gelöscht"); } catch (err) { return toast(err.message, true); }
       return oeffneAkte(akte.name);

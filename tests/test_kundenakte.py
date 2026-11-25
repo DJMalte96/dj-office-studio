@@ -5,7 +5,6 @@ import os
 import zipfile
 
 from conftest import KUNDE
-from test_abschluss import Y, _abschliessen, jahr  # noqa: F401  (Fixture)
 
 HOCHZEIT = "DJ – Tätigkeit Hochzeit – 17:00 Uhr bis 2:00 Uhr"
 PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 64
@@ -34,28 +33,21 @@ def test_bar_bezahlt_aus_angebot(client):
     assert r.status_code == 201, r.get_json()
     b = r.get_json()
     assert (b["betrag"], b["datum"], b["quittung_nr"], b["anlass"], b["feier_datum"]) == (1250, "2026-11-22", "0347", "Hochzeit", "2027-06-13")
-    assert b["kunde"]["name"] == "Anna Muster" and b["angebot_id"] == aid and b["ust_satz"] is None and not b["hat_beleg"]
+    assert b["kunde"]["name"] == "Anna Muster" and b["angebot_id"] == aid and not b["hat_beleg"]
     assert angebot_status(client, aid) == "angenommen"            # bar bezahlt heißt angenommen
     assert [x["id"] for x in client.get("/api/barzahlungen").get_json()] == [b["id"]]
 
-    # zählt als Einnahme: EÜR, Grenze der Kleinunternehmerregelung
+    # nur ein Vermerk für die Kundenakte – zählt nicht in EÜR und Kleinunternehmer-Grenze
     e = client.get("/api/finanzen/euer?jahr=2026").get_json()
-    zeilen = {z["id"]: z["betrag"] for z in e["einnahmen_zeilen"]}
-    assert zeilen["bar"] == 1250 and e["einnahmen"] == 1250 and e["monate"][10]["einnahmen"] == 1250
-    assert e["grenzen"]["umsatz"] == 1250
-    assert client.get("/api/finanzen/euer?jahr=2027").get_json()["einnahmen"] == 0   # Feier 2027 – Geld kam 2026
+    assert e["einnahmen"] == 0 and not any(z["id"] == "bar" for z in e["einnahmen_zeilen"]) and e["grenzen"]["umsatz"] == 0
 
 
-def test_bar_bezahlt_aus_vertrag_mit_umsatzsteuer(client):
-    client.put("/api/einstellungen", json={"kleinunternehmer": False, "steuernummer": "1", "ust_satz": 19})
+def test_bar_bezahlt_aus_vertrag(client):
     v = client.post("/api/vertraege", json={}).get_json()["vertrag"]
     client.put(f"/api/vertraege/{v['id']}", json={"kunde": {"name": "Carla Test", "ort": "Testdorf"}, "anlass": "Geburtstagsfeier",
                                                  "datum": "2026-10-03", "gage": 595})
     b = bar(client, vertrag_id=v["id"], betrag=595, datum="2026-10-03").get_json()
-    assert (b["vertrag_id"], b["anlass"], b["feier_datum"], b["ust_satz"], b["kunde"]["name"]) == \
-        (v["id"], "Geburtstagsfeier", "2026-10-03", 19, "Carla Test")
-    zeilen = {z["id"]: z["betrag"] for z in client.get("/api/finanzen/euer?jahr=2026").get_json()["einnahmen_zeilen"]}
-    assert zeilen["bar"] == 500 and zeilen["umsatzsteuer"] == 95
+    assert (b["vertrag_id"], b["anlass"], b["feier_datum"], b["kunde"]["name"]) == (v["id"], "Geburtstagsfeier", "2026-10-03", "Carla Test")
 
 
 def test_bar_bezahlt_ohne_vertrag_und_angebot(client):
@@ -87,13 +79,10 @@ def test_foto_vom_durchschlag(client, app_modul):
     ordner = os.path.join(db.DATA_DIR, "barzahlungen")
     assert len(os.listdir(ordner)) == 1
 
-    # im Export: Zeile in Einnahmen und das Foto
+    # nicht im Export für den Steuerberater
     zf = zipfile.ZipFile(io.BytesIO(client.get("/api/export?jahr=2026").data))
     zeilen = list(csv.reader(io.StringIO(zf.read("Einnahmen_2026.csv").decode("utf-8").lstrip("﻿")), delimiter=";"))
-    zeile = next(z for z in zeilen if z[1] == "Bar bezahlt (Quittung von Hand)")
-    assert zeile[0] == "2026-11-22" and zeile[3] == "Anna Muster" and zeile[4] == "500,00" and "Hochzeit" in zeile[2]
-    fotos = [n for n in zf.namelist() if n.startswith("Barzahlungen/")]
-    assert len(fotos) == 1 and zf.read(fotos[0]) == PNG and fotos[0] in zeile[2]
+    assert not any("Anna Muster" in z for z in zeilen) and not any(n.startswith("Barzahlungen/") for n in zf.namelist())
 
     # Löschen entfernt das Foto
     assert client.delete(f"/api/barzahlungen/{b['id']}").status_code == 204
@@ -111,23 +100,6 @@ def test_sicherung_enthaelt_barzahlungen(client, app_modul):
     assert r.status_code == 200
     assert client.get(f"/api/barzahlungen/{b['id']}/beleg").data == PNG
     assert os.path.isdir(os.path.join(db.DATA_DIR, "barzahlungen"))
-
-
-def test_abgeschlossenes_jahr_gesperrt(client, jahr):   # noqa: F811
-    b = bar(client, betrag=300, datum=f"{Y}-08-01", kunde='{"name": "Ben Beispiel"}').get_json()
-    _abschliessen(client)
-    assert bar(client, betrag=100, datum=f"{Y}-09-01", kunde='{"name": "Ben Beispiel"}').status_code == 409
-    assert client.delete(f"/api/barzahlungen/{b['id']}").status_code == 409
-    liste = client.get("/api/barzahlungen").get_json()
-    assert len(liste) == 1 and liste[0]["gesperrt"]
-    import db
-    import sqlite3
-    try:   # auch am Server vorbei (Trigger)
-        with db.connect() as con:
-            con.execute("DELETE FROM barzahlungen")
-        assert False, "Trigger fehlt"
-    except sqlite3.IntegrityError:
-        pass
 
 
 # ---------- Vertrag → Rechnung ----------

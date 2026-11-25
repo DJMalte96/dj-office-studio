@@ -249,12 +249,11 @@ CREATE TABLE IF NOT EXISTS vertrag_anlagen (
     name TEXT NOT NULL,
     datei TEXT NOT NULL                          -- relativ zu vertraege/anlagen
 );
--- seit 1.14: bar bezahlt – die Quittung schreibt man von Hand auf den Quittungsblock, die App vermerkt nur die Zahlung
+-- seit 1.14: bar bezahlt – Quittung von Hand auf dem Quittungsblock; nur ein Vermerk für die Kundenakte, zählt nicht in der EÜR
 CREATE TABLE IF NOT EXISTS barzahlungen (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     datum TEXT NOT NULL,                         -- Tag, an dem das Geld kam
-    betrag REAL NOT NULL,                        -- erhaltener Betrag (brutto)
-    ust_satz REAL,                               -- NULL = Kleinunternehmer (keine Umsatzsteuer)
+    betrag REAL NOT NULL,                        -- erhaltener Betrag (nur für die Kundenakte, nicht in der EÜR)
     kunde_id INTEGER,
     kunde_json TEXT NOT NULL,
     angebot_id INTEGER,
@@ -315,7 +314,6 @@ def _sperr_trigger():
     plan = ("kosten", "nutzungsdauer", "anschaffung_am", "restwert_start", "start_jahr", "rest_nutzungsdauer")
     abgang = ("abgang_am", "abgang_erloes")
     ein = ("datum", "betrag", "ust_satz")
-    bar = ("datum", "betrag", "ust_satz")
     abg = lambda x: _ZU_AB.format(_J.format(x + ".abgang_am"))
     return [
         ("ausgaben_neu", "ausgaben", "INSERT", _ausgabe_zu("NEW")),
@@ -336,10 +334,6 @@ def _sperr_trigger():
         ("einnahmen_aendern", "einnahmen_sonstige", "UPDATE",
          f"{_geaendert(ein)} AND ({_ZU.format(_J.format('OLD.datum'))} OR {_ZU.format(_J.format('NEW.datum'))})"),
         ("einnahmen_loeschen", "einnahmen_sonstige", "DELETE", _ZU.format(_J.format("OLD.datum"))),
-        ("bar_neu", "barzahlungen", "INSERT", _ZU.format(_J.format("NEW.datum"))),
-        ("bar_aendern", "barzahlungen", "UPDATE",
-         f"{_geaendert(bar)} AND ({_ZU.format(_J.format('OLD.datum'))} OR {_ZU.format(_J.format('NEW.datum'))})"),
-        ("bar_loeschen", "barzahlungen", "DELETE", _ZU.format(_J.format("OLD.datum"))),
         ("jahre_neu", "jahr_einstellungen", "INSERT", _ZU.format("NEW.jahr")),
         ("jahre_aendern", "jahr_einstellungen", "UPDATE", f"({_ZU.format('OLD.jahr')} OR {_ZU.format('NEW.jahr')})"),
         ("jahre_loeschen", "jahr_einstellungen", "DELETE", _ZU.format("OLD.jahr")),

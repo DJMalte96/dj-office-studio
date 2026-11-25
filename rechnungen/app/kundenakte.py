@@ -1,8 +1,8 @@
 """Kundenakte (seit 1.14): „Bar bezahlt“ vermerken und die Jahres-Erinnerung für Stammkunden ausblenden.
 
 Bar bezahlt: Die Quittung schreibt man von Hand auf den Quittungsblock – die App erzeugt keine Quittung, sie vermerkt nur
-die Zahlung (Betrag, Tag, optional Nummer vom Block und ein Foto vom Durchschlag). Die Zahlung zählt als Einnahme in
-EÜR, Export und bei der Grenze der Kleinunternehmerregelung und erscheint in der Kundenakte.
+die Zahlung (Betrag, Tag, optional Nummer vom Block und ein Foto vom Durchschlag). Der Vermerk erscheint in der
+Kundenakte und erledigt die Erinnerung „Rechnung schreiben“; in EÜR, Export und Kleinunternehmer-Grenze zählt er nicht.
 
 Kennzahlen und Erinnerungen rechnet die Oberfläche aus Rechnungen, Angeboten, Verträgen und Barzahlungen; hier liegt
 nur, was gespeichert werden muss.
@@ -15,7 +15,6 @@ from datetime import date
 
 from flask import Blueprint, abort, jsonify, request, send_file
 
-import abschluss
 import db
 
 bp = Blueprint("kundenakte", __name__)
@@ -55,17 +54,12 @@ def _aus_zeile(r):
     d = dict(r)
     d["kunde"] = json.loads(d.pop("kunde_json") or "{}")
     d["hat_beleg"] = bool(d.pop("beleg_datei"))
-    d["gesperrt"] = int(d["datum"][:4]) in db.abgeschlossene_jahre() if d["datum"][:4].isdigit() else False
     return d
 
 
-def liste(jahr=None):
+def liste():
     with db.connect() as con:
-        if jahr:
-            zeilen = con.execute("SELECT * FROM barzahlungen WHERE datum LIKE ? ORDER BY datum, id", (f"{jahr}%",))
-        else:
-            zeilen = con.execute("SELECT * FROM barzahlungen ORDER BY datum DESC, id DESC")
-        return [_aus_zeile(r) for r in zeilen]
+        return [_aus_zeile(r) for r in con.execute("SELECT * FROM barzahlungen ORDER BY datum DESC, id DESC")]
 
 
 def _betrag(v):
@@ -104,7 +98,7 @@ def _herkunft(vertrag_id, angebot_id):
 
 @bp.get("/api/barzahlungen")
 def barzahlungen_liste():
-    return jsonify(liste(request.args.get("jahr") if (request.args.get("jahr") or "").isdigit() else None))
+    return jsonify(liste())
 
 
 @bp.post("/api/barzahlungen")
@@ -135,8 +129,6 @@ def barzahlung_anlegen():
         if not kunde.get("name"):
             return _fehler("Bitte den Kunden angeben")
         h.update(kunde=kunde, kunde_id=None, anlass=str(f.get("anlass") or "").strip()[:200], feier_datum="")
-    abschluss.pruefen(datum[:4])
-
     datei = request.files.get("beleg")
     gespeichert = name = None
     if datei and datei.filename:
@@ -154,15 +146,12 @@ def barzahlung_anlegen():
             out.write(inhalt)
         name = os.path.basename(datei.filename)[:200]
 
-    import finanzen
-    a = finanzen.einstellungen_im_jahr(datum[:4])
-    satz = None if a.get("kleinunternehmer") else float(a.get("ust_satz") or 19)
     try:
         with db.connect() as con:
             bid = con.execute(
-                "INSERT INTO barzahlungen (datum, betrag, ust_satz, kunde_id, kunde_json, angebot_id, vertrag_id, anlass,"
-                " feier_datum, quittung_nr, beleg_datei, beleg_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                (datum, betrag, satz, h.get("kunde_id"), json.dumps(h["kunde"]), h["angebot_id"], h["vertrag_id"],
+                "INSERT INTO barzahlungen (datum, betrag, kunde_id, kunde_json, angebot_id, vertrag_id, anlass,"
+                " feier_datum, quittung_nr, beleg_datei, beleg_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (datum, betrag, h.get("kunde_id"), json.dumps(h["kunde"]), h["angebot_id"], h["vertrag_id"],
                  h["anlass"], h["feier_datum"], str(f.get("quittung_nr") or "").strip()[:40], gespeichert, name)).lastrowid
     except Exception:
         if gespeichert:
@@ -179,9 +168,7 @@ def barzahlung_anlegen():
 @bp.delete("/api/barzahlungen/<int:bid>")
 def barzahlung_loeschen(bid):
     with db.connect() as con:
-        r = con.execute("SELECT datum, beleg_datei FROM barzahlungen WHERE id = ?", (bid,)).fetchone() or abort(404)
-    abschluss.pruefen(r["datum"][:4])
-    with db.connect() as con:
+        r = con.execute("SELECT beleg_datei FROM barzahlungen WHERE id = ?", (bid,)).fetchone() or abort(404)
         con.execute("DELETE FROM barzahlungen WHERE id = ?", (bid,))
     pfad = _sicherer_pfad(r["beleg_datei"])
     if pfad:
@@ -193,15 +180,11 @@ def barzahlung_loeschen(bid):
 def barzahlung_beleg(bid):
     with db.connect() as con:
         r = con.execute("SELECT beleg_datei, beleg_name, datum FROM barzahlungen WHERE id = ?", (bid,)).fetchone() or abort(404)
-    pfad = beleg_pfad(r["beleg_datei"]) or abort(404)
+    pfad = _sicherer_pfad(r["beleg_datei"]) or abort(404)
     endung = os.path.splitext(pfad)[1].lower()
     # immer als Download – eine hochgeladene Datei wird nie als Seite der App angezeigt
     return send_file(pfad, mimetype=ENDUNGEN.get(endung, "application/octet-stream"), as_attachment=True,
                      download_name=r["beleg_name"] or f"Quittung_{r['datum']}{endung}")
-
-
-def beleg_pfad(rel):
-    return _sicherer_pfad(rel)
 
 
 # ---------- Jahres-Erinnerung ----------
