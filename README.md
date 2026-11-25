@@ -8,14 +8,85 @@ DJ Office Studio ist eine App zum Schreiben von DJ-Rechnungen, -Angeboten und Bo
 
 ## Inhalt
 
-| Thema | Abschnitte |
-| --- | --- |
-| **Einstieg** | [Was die App kann](#funktionen) · [Installation](#installation) · [In Home Assistant](#in-home-assistant) · [Windows / Mac](#ohne-home-assistant-windows--mac) · [Rundgang](#rundgang) · [Schnellsuche](#schnellsuche) · [Startseite](#start) |
-| **Rechnungen** | [Neue Rechnung](#neue-rechnung) · [Preis-Spickzettel](#preis-spickzettel) · [Anzahlung & Schlussrechnung](#anzahlung) · [Offen & Archiv](#rechnungen) · [Versenden](#versenden) · [QR-Code](#qr-code-zum-bezahlen) · [Datum eingeben](#datum-eingeben) · [Rechnungsposten](#rechnungsposten) · [Absender ändern](#absender-ändern-umzug-neues-konto) · [Alte Belege importieren](#alte-rechnungen-und-angebote-importieren) |
-| **Angebote & Verträge** | [Angebote](#angebote) · [Nachfragen](#nachfragen) · [Verträge](#verträge) · [Vertragsvorlage](#vertragsvorlage) |
-| **Finanzen** | [Überblick](#finanzen) · [Jahresübersicht](#übersicht) · [Ausgaben](#ausgaben) · [Texterkennung](#texterkennung-für-fotos-und-scans) · [E-Rechnungen](#e-rechnungen) · [Abos](#abos-wiederkehrende-ausgaben) · [Papierkorb](#papierkorb) · [Fahrten](#fahrten) · [Anschaffungen](#anschaffungen) · [EÜR & Export](#eür--export) · [Jahr abschließen](#jahr-abschließen) · [Steuerstatus je Jahr](#kleinunternehmer-und-fahrzeug-je-jahr) · [Jahr wählen](#jahr-wählen) |
-| **Einstellungen & Daten** | [Einstellungen](#einstellungen) · [E-Mail-Versand](#e-mail-versand) · [Paperless-ngx](#paperless-ngx) · [Datensicherung](#daten--backup) · [Schutz vor fremden Webseiten](#schutz-vor-fremden-webseiten) · [Schutz vor präparierten Dateien](#schutz-vor-präparierten-dateien) |
-| **Über das Projekt** | [Changelog](#changelog) · [Hinweis und Lizenz](#hinweis-und-lizenz) · [Lokale Entwicklung](#lokale-entwicklung) · [Tests](#tests) · [Screenshots](#screenshots-für-die-readme) · [Aufbau](#aufbau) · [Neue Version](#neue-version-veröffentlichen) |
+<table>
+<tr>
+<td valign="top" width="33%">
+
+<b>Einstieg</b>
+
+- [Was die App kann](#funktionen)
+- [Installation: Home Assistant](#in-home-assistant)
+- [Installation: Windows / Mac](#ohne-home-assistant-windows--mac)
+- [Rundgang](#rundgang)
+- [Startseite](#start)
+- [Schnellsuche](#schnellsuche)
+
+</td>
+<td valign="top" width="33%">
+
+<b>Rechnungen</b>
+
+- [Rechnung schreiben](#neue-rechnung)
+- [Preis-Spickzettel](#preis-spickzettel)
+- [Anzahlung & Schlussrechnung](#anzahlung)
+- [Offene Rechnungen & Archiv](#rechnungen)
+- [Per Mail versenden](#versenden)
+- [QR-Code zum Bezahlen](#qr-code-zum-bezahlen)
+- [Absender ändern](#absender-ändern-umzug-neues-konto)
+
+</td>
+<td valign="top" width="33%">
+
+<b>Angebote & Verträge</b>
+
+- [Angebote](#angebote)
+- [Bei Angeboten nachfragen](#nachfragen)
+- [Booking-Verträge](#verträge)
+- [Vertragsvorlage](#vertragsvorlage)
+- [Alte PDFs importieren](#alte-rechnungen-und-angebote-importieren)
+
+</td>
+</tr>
+<tr>
+<td valign="top" width="33%">
+
+<b>Finanzen</b>
+
+- [Überblick](#finanzen)
+- [Ausgaben & Belege](#ausgaben)
+- [Abos](#abos-wiederkehrende-ausgaben)
+- [Fahrten](#fahrten)
+- [Anschaffungen & Abschreibung](#anschaffungen)
+- [EÜR & Export](#eür--export)
+- [Jahr abschließen](#jahr-abschließen)
+
+</td>
+<td valign="top" width="33%">
+
+<b>Einstellungen & Daten</b>
+
+- [Einstellungen](#einstellungen)
+- [E-Mail-Versand](#e-mail-versand)
+- [Paperless-ngx](#paperless-ngx)
+- [Datensicherung](#daten--backup)
+- [Sicherheit](#schutz-vor-fremden-webseiten)
+
+</td>
+<td valign="top" width="33%">
+
+<b>Über das Projekt</b>
+
+- [Changelog](#changelog)
+- [Hinweis & Lizenz](#hinweis-und-lizenz)
+- [Lokale Entwicklung](#lokale-entwicklung)
+- [Tests](#tests)
+- [Neue Version veröffentlichen](#neue-version-veröffentlichen)
+
+</td>
+</tr>
+</table>
+
+<sub>Alle Abschnitte auch über das Gliederungs-Symbol ☰ oben rechts auf GitHub.</sub>
 
 ## Funktionen
 

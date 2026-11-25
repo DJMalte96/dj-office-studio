@@ -16,7 +16,7 @@ Alle Änderungen an DJ Office Studio. Neueste Version oben.
 - Die mitgelieferten Vertragstexte sind ein Vorschlag und keine Rechtsberatung.
 
 ### Geändert
-- README: Inhaltsverzeichnis als Übersicht nach Themen.
+- README: übersichtliches Inhaltsverzeichnis – sechs Themenblöcke mit kurzen Listen.
 
 ## 1.12.0 – 2026-11-25
 
