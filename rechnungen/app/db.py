@@ -327,7 +327,9 @@ LEGACY_TEXTBAUSTEINE = {
 
 def connect():
     os.makedirs(DATA_DIR, exist_ok=True)
-    con = sqlite3.connect(DB_PATH)
+    # 30 s statt 5 s warten, wenn gerade geschrieben wird – auf langsamen Geräten (Raspberry Pi, Texterkennung
+    # im Hintergrund) dauert ein Schreibvorgang mal länger; sonst bricht eine Abfrage mit „database is locked“ ab
+    con = sqlite3.connect(DB_PATH, timeout=30)
     con.row_factory = sqlite3.Row
     con.execute("PRAGMA foreign_keys = ON")
     return con

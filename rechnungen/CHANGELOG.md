@@ -10,6 +10,9 @@ Alle Änderungen an DJ Office Studio. Neueste Version oben.
   - Bestehende Installationen bekommen den Rundgang nach dem Update nicht angeboten.
 - **Schnellsuche**: Lupe oben rechts oder **Strg + K** (Mac: **⌘ + K**). Sucht in Rechnungen, Angeboten, Kunden, Belegen und Seiten – nach Name, Ort, Nummer, Text, Datum oder Betrag, mehrere Wörter grenzen ein (z. B. „eva hochzeit“). Mit ↑ ↓ und Enter direkt öffnen: Rechnung oder Angebot im Editor, Kunde mit seinen Rechnungen, Beleg im Prüfen-Dialog oder die Seite.
 
+### Behoben
+- **„database is locked“ auf langsamen Geräten**: Lief im Hintergrund gerade die Texterkennung, konnte z. B. die Ausgabenliste auf einem Raspberry Pi mit einem Fehler abbrechen. Die App wartet jetzt bis zu 30 statt 5 Sekunden, bis der Schreibvorgang fertig ist.
+
 ## 1.11.0 – 2026-11-25
 
 ### Neu
