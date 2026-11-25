@@ -136,6 +136,7 @@ function showTab(name) {
   $("#einstellungen-btn").classList.toggle("active", name === "einstellungen");
   if (name === "start") renderStart();
   if (typeof finanzenTab === "function") finanzenTab(name);   // finanzen.js
+  if (typeof vertraegeTab === "function") vertraegeTab(name);  // vertraege.js
   const stamm = $(`#tab-${name}[data-stamm]`);
   if (stamm) renderStamm(stamm.dataset.stamm);
 }
@@ -143,6 +144,7 @@ $$("nav [data-tab]").forEach(b => b.addEventListener("click", () => {
   const tab = b.dataset.tab;
   if (tab === "neu") neueRechnung();
   else if (tab === "angebot-neu") neuesAngebot();
+  else if (tab === "vertrag-neu") { schliesseMenues(); neuerVertrag(); }
   else showTab(tab);
 }));
 
@@ -1761,6 +1763,7 @@ const kannTeilen = () => !!(navigator.canShare && window.isSecureContext
 function versandDokument() {
   const v = $("#versand-dokument").value;
   if (versand.art === "angebot") return { art: "angebot" };
+  if (versand.art === "vertrag") return { art: "vertrag" };
   const m = v && versand.beleg.mahnungen.find(x => String(x.id) === v);
   return m ? { art: "mahnung", mahnung: m } : { art: "rechnung" };
 }
@@ -1768,6 +1771,7 @@ function versandDokument() {
 /* PDF-Adressen des gewählten Dokuments (bei Mahnungen: Mahnung + Rechnung) */
 function versandPdfs() {
   const d = versandDokument();
+  if (versand.art === "vertrag") return [`api/vertraege/${versand.beleg.id}/pdf`];
   const beleg = versand.art === "angebot" ? `api/angebote/${versand.beleg.id}/pdf` : `api/rechnungen/${versand.beleg.id}/pdf`;
   return d.mahnung ? [`api/mahnungen/${d.mahnung.id}/pdf`, beleg] : [beleg];
 }
@@ -1775,7 +1779,8 @@ function versandPdfs() {
 async function oeffneVersand(art, beleg) {
   versand.art = art;
   versand.beleg = beleg;
-  $("#versand-titel").textContent = `${art === "angebot" ? "Angebot" : beleg.storno_von ? "Stornorechnung" : "Rechnung"} ${beleg.nummer} senden`;
+  $("#versand-titel").textContent = art === "vertrag" ? `${beleg.name} senden`
+    : `${art === "angebot" ? "Angebot" : beleg.storno_von ? "Stornorechnung" : "Rechnung"} ${beleg.nummer} senden`;
   const mahnungen = art === "rechnung" ? beleg.mahnungen || [] : [];
   $("#versand-dokument").innerHTML = `<option value="">${art === "angebot" ? "Angebot" : beleg.storno_von ? "Stornorechnung" : "Rechnung"}</option>`
     + mahnungen.map(m => `<option value="${m.id}">${MAHN_KURZ[m.stufe] === "Erinnerung" ? "Zahlungserinnerung" : MAHN_KURZ[m.stufe]} vom ${fmtDate(m.datum)} (mit Rechnung)</option>`).join("");
@@ -1855,7 +1860,8 @@ $("#versand-form").addEventListener("submit", async e => {
     toast(`✉ ${res.anhaenge.join(" + ")} an ${res.an.join(", ")} gesendet`);
     // Versendete Rechnungen sind festgeschrieben – Editor nicht mit veralteten Daten offen lassen
     if (versand.art === "rechnung" && !istAngebot() && state.editId === versand.beleg.id) await resetForm();
-    if (versand.art === "angebot") await loadAngebote(); else await loadListe();
+    if (versand.art === "vertrag") await vertragVerschickt(versand.beleg.id);
+    else if (versand.art === "angebot") await loadAngebote(); else await loadListe();
   } catch (err) { toast("Senden fehlgeschlagen: " + err.message, true); }
   finally { btn.disabled = false; btn.innerHTML = vorher; }
 });
@@ -2270,6 +2276,8 @@ async function renderStart() {
   if (ohneDatum) wichtig.push(["gelb", "📅 Bezahlt-Datum fehlt", `data-start="bezahlt-am"`]);
   const baldAb = angebote.filter(a => a.rest !== null && a.rest >= 0 && a.rest <= 3).length;
   if (baldAb) wichtig.push(["gelb", `✎ ${baldAb} Angebot${baldAb === 1 ? " läuft" : "e laufen"} bald ab`, `data-start="angebote"`]);
+  const vtOffen = (await api("vertraege").catch(() => [])).filter(v => v.status === "verschickt").length;
+  if (vtOffen) wichtig.push(["gelb", `✍ ${vtOffen} ${vtOffen === 1 ? "Vertrag" : "Verträge"} nicht unterschrieben zurück`, `data-start="vertraege"`]);
   const nachfassen = angebote.filter(nachfassenFaellig).length;
   if (nachfassen) wichtig.push(["gelb", `✉ ${nachfassen} Angebot${nachfassen === 1 ? "" : "e"} nachfragen`, `data-start="zu-karte" data-ziel=".start-karte.nachfassen"`]);
   for (const a of state.angebote.filter(a => schlussOffen(a) && veranstaltungAm(a) && veranstaltungAm(a) <= heute))
@@ -2387,7 +2395,7 @@ $("#start").addEventListener("click", async e => {
       case "neu": return neueRechnung();
       case "angebot-neu": return neuesAngebot();
       case "beleg": showTab("ausgaben"); return setTimeout(() => $("#beleg-dateien").click(), 300);
-      case "liste": case "angebote": case "ausgaben": case "finanzen": return showTab(was);
+      case "liste": case "angebote": case "ausgaben": case "finanzen": case "vertraege": return showTab(was);
       case "belege": showTab("ausgaben"); return setTimeout(() => $("#alle-pruefen")?.click(), 700);
       case "bezahlt-am": return oeffneBezahltAm();
       case "einstellungen": return $("#einstellungen-btn").click();

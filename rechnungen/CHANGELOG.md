@@ -2,6 +2,22 @@
 
 Alle Änderungen an DJ Office Studio. Neueste Version oben.
 
+## 1.13.0 – 2026-11-25
+
+### Neu
+- **Booking-Verträge** im neuen Menü **Dokumente**:
+  - **Neuer Vertrag** zu einem Angebot (Kunde, Termin, Ort, Spielzeit und Gage werden übernommen) oder **ohne Angebot** mit eigenen Angaben – bekannte Kunden werden mit Anschrift vorgeschlagen.
+  - Im Vertragsfenster links Aufbauzeit, Ansprechpartner vor Ort, Anzahlung (Rest per Rechnung oder bar), Verpflegung, GEMA und die Abschnitte – rechts der Vertrag genau so, wie er als PDF herauskommt.
+  - **Senden** per Mail mit PDF und Anlagen, oder **Als verschickt vermerken**. Ab dann steht der Text fest; **Wieder bearbeiten** öffnet ihn noch einmal.
+  - **Unterschrieben** vermerken – als Datei (PDF/Foto, wird abgelegt und gesichert), per Mail bestätigt oder vor Ort; auf Wunsch wird das Angebot angenommen. Die Startseite erinnert an Verträge, die noch nicht zurück sind.
+- **Vertragsvorlage**: Verpflegung, Ersatz-DJ, GEMA und Schäden durch Gäste sind eingeschaltet, 16 weitere übliche Bausteine zuschaltbar. Texte änderbar, Reihenfolge mit ↑ ↓, **eigene Abschnitte** mit Platzhaltern ({veranstalter}, {datum}, {ort}, {spielzeit}, {gage} …).
+- **Eigenen Vertrag hochladen** (PDF, Word .docx, Text): Die App erkennt die Abschnitte und übernimmt die ausgewählten in die Vorlage. Ein PDF (z. B. AGB) kann unverändert an jeden Vertrag angehängt werden.
+- Verträge stehen in der **Schnellsuche**, der **Rundgang** zeigt das Menü Dokumente.
+- Die mitgelieferten Vertragstexte sind ein Vorschlag und keine Rechtsberatung.
+
+### Geändert
+- README: Inhaltsverzeichnis als Übersicht nach Themen.
+
 ## 1.12.0 – 2026-11-25
 
 ### Neu

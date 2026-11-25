@@ -2,23 +2,20 @@
 
 # DJ Office Studio
 
-DJ Office Studio ist eine App zum Schreiben von DJ-Rechnungen und -Angeboten – als App für Home Assistant oder eigenständig unter Windows und macOS. Kunden auswählen, Rechnungsposten und Uhrzeiten eintragen, Preis festlegen – fertig ist das PDF. Dazu kommen die **Finanzen**: Ausgaben mit Belegen, gefahrene Kilometer, Abschreibungen und eine Einnahmen-Überschuss-Rechnung (EÜR) mit Export für den Steuerberater.
+DJ Office Studio ist eine App zum Schreiben von DJ-Rechnungen, -Angeboten und Booking-Verträgen – als App für Home Assistant oder eigenständig unter Windows und macOS. Kunden auswählen, Rechnungsposten und Uhrzeiten eintragen, Preis festlegen – fertig ist das PDF. Dazu kommen die **Finanzen**: Ausgaben mit Belegen, gefahrene Kilometer, Abschreibungen und eine Einnahmen-Überschuss-Rechnung (EÜR) mit Export für den Steuerberater.
 
 ![Screenshot: Rechnung erstellen](docs/bilder/rechnungseditor.png)
 
 ## Inhalt
 
-- [Funktionen](#funktionen)
-- [Bedienung](#bedienung)
-  - [Rundgang](#rundgang) · [Schnellsuche](#schnellsuche) · [Start](#start) · [Nachfragen](#nachfragen) · [Neue Rechnung](#neue-rechnung) · [Preis-Spickzettel](#preis-spickzettel) · [Anzahlung](#anzahlung) · [Datum eingeben](#datum-eingeben) · [Rechnungen](#rechnungen) · [Versenden](#versenden) · [QR-Code zum Bezahlen](#qr-code-zum-bezahlen) · [Angebote](#angebote) · [Rechnungsposten](#rechnungsposten) · [Alte Belege importieren](#alte-rechnungen-und-angebote-importieren)
-  - [Absender ändern](#absender-ändern-umzug-neues-konto)
-  - [Finanzen](#finanzen): [Jahr wählen](#jahr-wählen) · [Übersicht](#übersicht) · [Texterkennung](#texterkennung-für-fotos-und-scans) · [Ausgaben](#ausgaben) · [E-Rechnungen](#e-rechnungen) · [Abos](#abos-wiederkehrende-ausgaben) · [Schutz vor fremden Webseiten](#schutz-vor-fremden-webseiten) · [Schutz vor präparierten Dateien](#schutz-vor-präparierten-dateien) · [Papierkorb](#papierkorb) · [Fahrten](#fahrten) · [Anschaffungen](#anschaffungen) · [EÜR & Export](#eür--export) · [Jahr abschließen](#jahr-abschließen) · [Steuerstatus je Jahr](#kleinunternehmer-und-fahrzeug-je-jahr)
-- [Einstellungen](#einstellungen): [E-Mail-Versand](#e-mail-versand) · [Paperless-ngx](#paperless-ngx)
-- [Installation](#installation): [In Home Assistant](#in-home-assistant) · [Windows / Mac](#ohne-home-assistant-windows--mac)
-- [Daten & Backup](#daten--backup)
-- [Changelog](#changelog)
-- [Hinweis und Lizenz](#hinweis-und-lizenz)
-- [Lokale Entwicklung](#lokale-entwicklung): [Screenshots](#screenshots-für-die-readme) · [Tests](#tests) · [Aufbau](#aufbau) · [Neue Version](#neue-version-veröffentlichen)
+| Thema | Abschnitte |
+| --- | --- |
+| **Einstieg** | [Was die App kann](#funktionen) · [Installation](#installation) · [In Home Assistant](#in-home-assistant) · [Windows / Mac](#ohne-home-assistant-windows--mac) · [Rundgang](#rundgang) · [Schnellsuche](#schnellsuche) · [Startseite](#start) |
+| **Rechnungen** | [Neue Rechnung](#neue-rechnung) · [Preis-Spickzettel](#preis-spickzettel) · [Anzahlung & Schlussrechnung](#anzahlung) · [Offen & Archiv](#rechnungen) · [Versenden](#versenden) · [QR-Code](#qr-code-zum-bezahlen) · [Datum eingeben](#datum-eingeben) · [Rechnungsposten](#rechnungsposten) · [Absender ändern](#absender-ändern-umzug-neues-konto) · [Alte Belege importieren](#alte-rechnungen-und-angebote-importieren) |
+| **Angebote & Verträge** | [Angebote](#angebote) · [Nachfragen](#nachfragen) · [Verträge](#verträge) · [Vertragsvorlage](#vertragsvorlage) |
+| **Finanzen** | [Überblick](#finanzen) · [Jahresübersicht](#übersicht) · [Ausgaben](#ausgaben) · [Texterkennung](#texterkennung-für-fotos-und-scans) · [E-Rechnungen](#e-rechnungen) · [Abos](#abos-wiederkehrende-ausgaben) · [Papierkorb](#papierkorb) · [Fahrten](#fahrten) · [Anschaffungen](#anschaffungen) · [EÜR & Export](#eür--export) · [Jahr abschließen](#jahr-abschließen) · [Steuerstatus je Jahr](#kleinunternehmer-und-fahrzeug-je-jahr) · [Jahr wählen](#jahr-wählen) |
+| **Einstellungen & Daten** | [Einstellungen](#einstellungen) · [E-Mail-Versand](#e-mail-versand) · [Paperless-ngx](#paperless-ngx) · [Datensicherung](#daten--backup) · [Schutz vor fremden Webseiten](#schutz-vor-fremden-webseiten) · [Schutz vor präparierten Dateien](#schutz-vor-präparierten-dateien) |
+| **Über das Projekt** | [Changelog](#changelog) · [Hinweis und Lizenz](#hinweis-und-lizenz) · [Lokale Entwicklung](#lokale-entwicklung) · [Tests](#tests) · [Screenshots](#screenshots-für-die-readme) · [Aufbau](#aufbau) · [Neue Version](#neue-version-veröffentlichen) |
 
 ## Funktionen
 
@@ -43,6 +40,7 @@ DJ Office Studio ist eine App zum Schreiben von DJ-Rechnungen und -Angeboten –
 - **Kopieren**: Eine Rechnung oder ein Angebot mit einem Klick als neuen Beleg übernehmen (Kunde, Texte, Preise, Zahlungsbedingung) – praktisch für Stammkunden und jährlich wiederkehrende Feiern. Neue Nummer, heutiges Datum, das Datum der Veranstaltung trägt man neu ein.
 - **QR-Code zum Bezahlen (GiroCode)**: Auf Rechnungen, Zahlungserinnerungen und Mahnungen steht neben der Zahlungsbedingung ein QR-Code. Der Kunde scannt ihn mit seiner Banking-App, und Empfänger, IBAN, Betrag und Verwendungszweck („Rechnung 037“) sind schon ausgefüllt. Bei offenen Rechnungen zeigt die App den Code auch groß auf dem Bildschirm an, z. B. wenn direkt nach der Feier bezahlt wird. Nicht auf Angeboten, Stornorechnungen und bei „Bar erhalten“ / „Bereits bezahlt“; abschaltbar unter ⚙ Einstellungen.
 - **Datensicherung & Export**: Unter ⚙ Einstellungen alle Daten samt Ausgaben-Belegen als eine Sicherungsdatei herunterladen bzw. wieder einspielen. Die Startseite zeigt, wie lange die letzte Sicherung her ist, und erinnert nach einstellbarer Zeit (Standard 30 Tage) an eine neue. Dazu ein **Export für den Steuerberater**: alle Rechnungen eines Jahres als Excel-Tabelle (CSV, mit Bezahlt-Datum, Stornos und ggf. Umsatzsteuer) plus PDFs, dazu EÜR, Ausgaben, Fahrten, Anlagenverzeichnis und alle Belege – als ein ZIP. Die Desktop-Version sichert zusätzlich automatisch einmal pro Tag.
+- **Booking-Verträge** (Menü Dokumente): aus einem Angebot oder ohne Angebot, mit deiner Vorlage (Verpflegung, Ersatz-DJ, GEMA, Schäden durch Gäste und 16 weitere Bausteine, eigene Abschnitte, eigener Vertrag zum Hochladen), PDF, Versand per Mail und Unterschrift (Datei, Mail-Bestätigung oder vor Ort).
 - **Angebote**: Im selben Editor wie Rechnungen (Kunde, Rechnungsposten mit von/bis-Zeiten, Preise) – mit eigenem Nummernkreis, Angebotsdatum, **Gültig bis** (Bindefrist, Standard 30 Tage), optionaler Zahlungsbedingung und freien **Hinweisen** (z. B. Verlängerungsstunde, Leistungsumfang, GEMA). Das PDF hat dasselbe Layout wie die Rechnung (`Angebot_001_120627.pdf`). Oben in der Angebotsansicht und auf der Startseite: **Offene Angebote** mit Angebotsdatum und Restlaufzeit („noch 12 Tage“, „seit 3 Tagen abgelaufen“), auf der Startseite zusätzlich ein Hinweis, wenn ein Angebot in den nächsten 3 Tagen abläuft. In der Angebotsliste: mehrere markieren und als ZIP herunterladen oder an Paperless senden, Status (offen / angenommen / abgelehnt), Restlaufzeit bzw. „abgelaufen“ und **→ Rechnung**, das Kunde und Positionen in eine neue Rechnung übernimmt und das Angebot als angenommen markiert. Bleibt ein Angebot ein paar Tage ohne Antwort, erinnert die Startseite ans **Nachfragen** – mit fertiger Mail.
 - **Import alter Rechnungen und Angebote**: Bisherige PDFs hochladen (gemischt möglich – die App erkennt Rechnung oder Angebot selbst). Empfänger, Positionen und Vorschläge für Rechnungsposten werden erkannt und können übernommen werden, optional auch die Rechnungen selbst als Archiv und die Angebote (mit „gültig bis“ und Hinweisen) in die Angebotsliste.
 - **Finanzen**
@@ -61,12 +59,12 @@ DJ Office Studio ist eine App zum Schreiben von DJ-Rechnungen und -Angeboten –
 
 ## Bedienung
 
-Oben in der Kopfzeile gibt es auf jeder Seite das Menü: **Start**, **Rechnungen** (Neue Rechnung, Rechnungen), **Angebote** (Neues Angebot, Angebote), **Finanzen** (Übersicht, Ausgaben, Fahrten, Anschaffungen, EÜR & Export) und **Stammdaten** (Kunden, Rechnungsposten, Zahlungsbedingungen).
+Oben in der Kopfzeile gibt es auf jeder Seite das Menü: **Start**, **Rechnungen** (Neue Rechnung, Rechnungen), **Angebote** (Neues Angebot, Angebote), **Dokumente** (Neuer Vertrag, Verträge, Vertragsvorlage), **Finanzen** (Übersicht, Ausgaben, Fahrten, Anschaffungen, EÜR & Export) und **Stammdaten** (Kunden, Rechnungsposten, Zahlungsbedingungen).
 
 
 ### Rundgang
 
-Beim allerersten Start bietet die App einen kurzen Rundgang an (ca. zwei Minuten, zwölf Schritte). Der jeweilige Bereich wird hervorgehoben, die App wechselt selbst auf die passende Seite; Weiter/Zurück per Knopf oder Pfeiltasten, Esc beendet. Wiederholen: ⚙ Einstellungen → ganz unten **Rundgang starten**.
+Beim allerersten Start bietet die App einen kurzen Rundgang an (ca. zwei Minuten, 13 Schritte). Der jeweilige Bereich wird hervorgehoben, die App wechselt selbst auf die passende Seite; Weiter/Zurück per Knopf oder Pfeiltasten, Esc beendet. Wiederholen: ⚙ Einstellungen → ganz unten **Rundgang starten**.
 
 ![Screenshot: Rundgang](docs/bilder/rundgang.png)
 
@@ -137,6 +135,26 @@ Das QR-Symbol bei einer offenen Rechnung zeigt den GiroCode groß an – der Kun
 Über **Angebote → Neues Angebot** im selben Editor schreiben – zusätzlich mit **Gültig bis** und freien **Hinweisen** (z. B. Verlängerungsstunde, GEMA). In **Angebote → Angebote** stehen oben die offenen Angebote mit Restlaufzeit, darunter alle Angebote mit Status (offen / angenommen / abgelehnt). **→ Rechnung** macht aus einem Angebot eine neue Rechnung und markiert es als angenommen.
 
 ![Screenshot: Angebote](docs/bilder/angebote.png)
+
+### Verträge
+
+Unter **Dokumente → Neuer Vertrag** ein Angebot wählen – Kunde, Termin, Ort, Spielzeit und Gage übernimmt die App daraus – oder **Ohne Angebot** und die Angaben im Vertrag selbst eintragen (bekannte Kunden werden mit Anschrift vorgeschlagen). Links stellst du ein, was in diesen Vertrag gehört: Aufbauzeit, Ansprechpartner vor Ort, Anzahlung (Prozent, Rest per Rechnung oder bar), Verpflegung, wer die GEMA anmeldet, und welche Abschnitte drinstehen. Rechts steht der Vertrag so, wie er als PDF herauskommt.
+
+**✉ Senden** verschickt den Vertrag wie ein Angebot per Mail (mit PDF und den Anlagen der Vorlage); wer ihn ausdruckt oder per WhatsApp schickt, wählt in der Liste **Als verschickt vermerken**. Ab dann steht der Text fest – **Wieder bearbeiten** öffnet ihn noch einmal. Kommt er zurück, vermerkt **✓ Unterschrieben**, wie: als Datei (PDF oder Foto, wird beim Vertrag abgelegt und gesichert), per Mail bestätigt oder vor Ort unterschrieben – auf Wunsch wird das Angebot dabei angenommen. Die Startseite erinnert an Verträge, die noch nicht unterschrieben zurück sind.
+
+![Screenshot: Vertrag](docs/bilder/vertrag.png)
+
+![Screenshot: Verträge](docs/bilder/vertraege.png)
+
+### Vertragsvorlage
+
+Unter **Dokumente → Vertragsvorlage** stehen die Abschnitte für neue Verträge. Fest eingeschaltet sind Verpflegung, Ausfall des DJs/Ersatz-DJ, GEMA und Schäden durch Gäste; 16 weitere übliche Bausteine (z. B. Stornierung, Verlängerung, Strom und Zufahrt, Musikwünsche, Lautstärke und Sperrstunde, Nebel und Rauchmelder, Wetter, Höhere Gewalt, Datenschutz) lassen sich zuschalten. Jeder Text ist änderbar, die Reihenfolge mit ↑ ↓ einstellbar. **＋ Eigenen Abschnitt** legt neue Punkte an – Platzhalter wie `{veranstalter}`, `{datum}`, `{ort}`, `{spielzeit}` oder `{gage}` füllt die App im Vertrag aus.
+
+**Eigenen Vertrag hochladen:** Einen vorhandenen Vertrag als PDF, Word (.docx) oder Text hineinziehen – die App erkennt die Abschnitte (§ 1, § 2 … oder 1., 2. …) und übernimmt die ausgewählten in die Vorlage; Teile, die sie selbst ausfüllt (Vertragspartner, Gage …), sind nicht vorausgewählt. Ein PDF (z. B. AGB) kann auch unverändert als Anlage an jeden Vertrag gehen.
+
+Die mitgelieferten Texte sind ein Vorschlag und keine Rechtsberatung – bitte einmal prüfen lassen (z. B. Anwalt oder DJ-Verband).
+
+![Screenshot: Vertragsvorlage](docs/bilder/vertragsvorlage.png)
 
 ### Rechnungsposten
 
@@ -453,6 +471,7 @@ rechnungen/
     finanzen.py          Finanzen: Ausgaben, Fahrten, Anschaffungen/Abschreibung, EÜR, Export
     abschluss.py         Jahresabschluss: prüfen, Paket mit Prüfsumme, wieder öffnen; Kleinunternehmer/Fahrzeug je Jahr
     abos.py              Abos: wiederkehrende Ausgaben, fällige Abbuchungen, Belege erkennen
+    vertraege.py         Booking-Verträge: Vorlage mit Bausteinen, eigener Vertrag hochladen, Vertragstext, Unterschrift
     belege.py            Auslesen von Belegen (PDF, Fotos, Kauf-Mails .eml/.msg/.mbox)
     texterkennung.py     Texterkennung für Fotos und Scans (lokal, im eigenen Prozess)
     pdflesen.py          Lesen fremder PDFs im eigenen Prozess
@@ -461,7 +480,7 @@ rechnungen/
     erechnung.py         Lesen von E-Rechnungen (XRechnung, ZUGFeRD/Factur-X) samt Lesefassung
     paperless.py         Abholen von Ausgaben-Belegen aus Paperless-ngx (REST-Schnittstelle, nur lesend)
     strecken.py          Entfernungen über OpenStreetMap (Nominatim, OSRM) mit Zwischenspeicher
-    static/              Oberfläche (HTML, CSS, JavaScript)
+    static/              Oberfläche (HTML, CSS, JavaScript; vertraege.js = Dokumente, rundgang.js = Rundgang und Schnellsuche)
 desktop/
   start.py               Starter der Desktop-Version (Server + eigenes App-Fenster mit pywebview, Daten im Dokumente-Ordner)
   requirements.txt       Zusätzliche Pakete nur für die Desktop-Version (pywebview)
@@ -472,7 +491,7 @@ desktop/
 docs/
   screenshots.py         Erzeugt die README-Screenshots (docs/bilder/) mit Beispieldaten
 tests/                   Automatische Tests (pytest): API, PDFs, Pflichtangaben, Umsatzsteuer, QR-Code, Festschreiben/Storno,
-                         Mahnungen, E-Mail-Versand, Sicherung, Import, Belege, Fahrten, Abschreibung, EÜR, Jahresabschluss, Abos …
+                         Mahnungen, E-Mail-Versand, Sicherung, Import, Belege, Fahrten, Abschreibung, EÜR, Jahresabschluss, Abos, Verträge …
 ```
 
 ### Neue Version veröffentlichen

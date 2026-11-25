@@ -407,3 +407,59 @@ def pdf_filename(inv):
         suffix = ""
     art = "Angebot" if inv.get("art") == "angebot" else "Stornorechnung" if inv.get("storno_von") else "Rechnung"
     return f"{art}_{inv['nummer']}" + (f"_{suffix}" if suffix else "") + ".pdf"
+
+
+def build_vertrag_pdf(inhalt, absender):
+    """Booking-Vertrag (seit 1.13) aus der Struktur von vertraege.inhalt – Fußzeile wie Rechnung und Angebot."""
+    pdf = InvoicePDF(absender, date.today().isoformat())
+    pdf.add_page()
+    epw = 210 - LEFT - RIGHT
+    pdf.set_font("Body", "", 9)
+    pdf.set_text_color(90)
+    pdf.cell(epw * 0.65, 5, inhalt.get("kopf_links") or "")
+    pdf.cell(epw * 0.35, 5, inhalt.get("kopf_rechts") or "", align="R", new_x="LMARGIN", new_y="NEXT")
+    pdf.set_text_color(0)
+    pdf.ln(6)
+    pdf.set_font("Body", "B", 18)
+    pdf.cell(0, 9, inhalt.get("titel") or "DJ-Vertrag", new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(2)
+    for a in inhalt.get("abschnitte") or []:
+        if pdf.get_y() > FOOTER_TOP - 40:          # Überschrift nie allein am Seitenende
+            pdf.add_page()
+        pdf.ln(3)
+        pdf.set_font("Body", "B", BODY_PT)
+        pdf.multi_cell(0, 6, a["titel"], new_x="LMARGIN", new_y="NEXT")
+        pdf.set_font("Body", "", BODY_PT - 0.5)
+        if a.get("text"):
+            for absatz in a["text"].split("\n\n"):
+                pdf.multi_cell(0, 5, absatz, markdown=bool(a.get("fett")), align="L", new_x="LMARGIN", new_y="NEXT")
+                pdf.ln(1)
+        for links, rechts in a.get("tabelle") or []:
+            y = pdf.get_y()
+            pdf.set_xy(LEFT, y)
+            pdf.cell(34, 5, links)
+            pdf.set_xy(LEFT + 34, y)
+            pdf.multi_cell(epw - 34, 5, rechts, new_x="LMARGIN", new_y="NEXT")
+    if inhalt.get("anlagen"):
+        pdf.ln(3)
+        pdf.set_font("Body", "", BODY_PT - 1.5)
+        pdf.multi_cell(0, 5, "Anlage" + ("n" if len(inhalt["anlagen"]) > 1 else "") + ": " + ", ".join(inhalt["anlagen"])
+                       + " (Bestandteil dieses Vertrags)", new_x="LMARGIN", new_y="NEXT")
+    if pdf.get_y() > FOOTER_TOP - 38:
+        pdf.add_page()
+    pdf.ln(22)
+    y = pdf.get_y()
+    breite = (epw - 14) / 2
+    pdf.set_draw_color(60)
+    pdf.set_line_width(0.2)
+    pdf.set_font("Body", "", 9)
+    for i, text in enumerate((inhalt.get("unterschrift_links"), inhalt.get("unterschrift_rechts"))):
+        x = LEFT + i * (breite + 14)
+        pdf.line(x, y, x + breite, y)
+        pdf.set_xy(x, y + 1)
+        pdf.multi_cell(breite, 4.5, text or "")
+    pdf.set_xy(LEFT, y + 14)
+    pdf.set_text_color(90)
+    pdf.multi_cell(0, 4.5, inhalt.get("fuss") or "", new_x="LMARGIN", new_y="NEXT")
+    pdf.set_text_color(0)
+    return bytes(pdf.output())

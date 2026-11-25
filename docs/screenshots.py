@@ -96,6 +96,13 @@ angebot("014", "firma", d(-2), d(28), [pos("DJ – Tätigkeit Weihnachtsfeier �
 
 db.add_versand("angebot", a013, "eva.probe@example.de", "Ihr Angebot 013")
 
+# Verträge (seit 1.13): einer zum Angebot von Eva und Tom, einer ohne Angebot (verschickt)
+v1 = c.post("/api/vertraege", json={"angebot_id": a013}).get_json()["vertrag"]["id"]
+c.put(f"/api/vertraege/{v1}", json={"felder": {"aufbau": "15:30", "kontakt": "Trauzeugin Lisa, 0170 1234567", "verpflegung": "für 2 Personen"}})
+v2 = c.post("/api/vertraege", json={}).get_json()["vertrag"]["id"]
+c.put(f"/api/vertraege/{v2}", json={"kunde": K["dora"], "anlass": "Geburtstagsfeier", "datum": d(70), "von": "19:00", "bis": "01:00", "gage": 600})
+c.post(f"/api/vertraege/{v2}/status", json={"status": "verschickt"})
+
 # Rechnungen: bezahlt, überfällig mit Zahlungserinnerung, offen, storniert
 rechnung("030", "dora", f"{heute.year - 1}-11-15",
          [pos("DJ – Tätigkeit Geburtstagsfeier – 20:00 Uhr bis 2:00 Uhr", f"{heute.year - 1}-11-15", 800)], bezahlt=True)
@@ -319,6 +326,19 @@ with sync_playwright() as p:
     page.wait_for_timeout(300)
     page.locator("#oeffnen-dialog").screenshot(path=str(ZIEL / "jahr-oeffnen.png"))
     page.click("#oeffnen-abbrechen")
+
+    # Verträge (seit 1.13)
+    page.evaluate("showTab('vertraege')")
+    page.wait_for_timeout(900)
+    page.locator("#tab-vertraege .card").screenshot(path=str(ZIEL / "vertraege.png"))
+    page.evaluate(f"oeffneVertrag({v1})")
+    page.wait_for_timeout(1200)
+    page.locator("#vertrag").screenshot(path=str(ZIEL / "vertrag.png"))
+    page.click("#vertrag [data-vt=zu]")
+    page.evaluate("showTab('vertragsvorlage')")
+    page.wait_for_timeout(900)
+    page.evaluate("window.scrollTo(0, 0)")
+    page.screenshot(path=str(ZIEL / "vertragsvorlage.png"))
 
     # Rundgang und Schnellsuche (seit 1.12)
     page.evaluate("showTab('start')")

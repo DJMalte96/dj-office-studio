@@ -21,6 +21,8 @@
       text: "Oben die offenen Rechnungen mit Restzeit. Ist bezahlt, Haken setzen – dann wandert sie ins Archiv. Überfällig? Ein Klick erstellt Zahlungserinnerung oder Mahnung. Briefumschlag = per Mail senden, QR = GiroCode zum Bezahlen." },
     { ziel: "#angebote-offen", tab: "angebote", titel: "Angebote",
       text: "Angebote schreibst du im selben Editor. Sagt der Kunde zu, macht „→ Rechnung“ daraus die Rechnung. Kommt keine Antwort, erinnert die Startseite ans Nachfragen." },
+    { ziel: "#menu-dokumente", tab: "angebote", titel: "Dokumente: Verträge",
+      text: "Unter Dokumente schreibst du Booking-Verträge – zu einem Angebot oder ohne. Die Vorlage mit deinen Bedingungen (Verpflegung, GEMA, Ersatz-DJ …) stellst du unter „Vertragsvorlage“ ein; ein eigener Vertrag lässt sich hochladen." },
     { ziel: "#beleg-drop", tab: "ausgaben", titel: "Ausgaben und Belege",
       text: "Rechnungen, Fotos von Kassenbons oder Kauf-Mails einfach hierher ziehen – die App liest Lieferant, Datum und Betrag aus, du prüfst nur noch. Abos (Musikpool, Software) laufen über ↻ Abos." },
     { ziel: "#euer-body", karte: true, tab: "euer", titel: "EÜR und Steuerberater",
@@ -145,6 +147,7 @@
     ["Neue Rechnung", "neu", "＋"], ["Neues Angebot", "angebot-neu", "✎"], ["Rechnungen", "liste", "☰"], ["Angebote", "angebote", "❐"],
     ["Finanzen – Übersicht", "finanzen", "◔"], ["Ausgaben", "ausgaben", "↧"], ["Fahrten", "fahrten", "➜"], ["Anschaffungen", "anschaffungen", "▣"],
     ["EÜR & Export", "euer", "§"], ["Kunden", "kunden", "◉"], ["Rechnungsposten", "textbausteine", "♪"], ["Zahlungsbedingungen", "zahlungsbedingungen", "€"],
+    ["Neuer Vertrag", "vertrag-neu", "✍"], ["Verträge", "vertraege", "✍"], ["Vertragsvorlage", "vertragsvorlage", "§"],
     ["Einstellungen", "einstellungen", "⚙"], ["Datensicherung herunterladen", "sichern", "⇩"], ["Rundgang starten", "rundgang", "?"],
   ];
   let daten = null, treffer = [], aktiv = 0;
@@ -157,9 +160,9 @@
     return i < 0 ? esc(t) : esc(t.slice(0, i)) + "<mark>" + esc(t.slice(i, i + q.split(/\s+/)[0].length)) + "</mark>" + esc(t.slice(i + q.split(/\s+/)[0].length));
   }
   async function laden() {
-    const [rechnungen, angebote, kunden, ausgaben] = await Promise.all([api("rechnungen"), api("angebote"), api("kunden").catch(() => []),
-      api("ausgaben").catch(() => [])]);
-    daten = { rechnungen, angebote, kunden, ausgaben };
+    const [rechnungen, angebote, kunden, ausgaben, vertraege] = await Promise.all([api("rechnungen"), api("angebote"), api("kunden").catch(() => []),
+      api("ausgaben").catch(() => []), api("vertraege").catch(() => [])]);
+    daten = { rechnungen, angebote, kunden, ausgaben, vertraege };
   }
   function suchen(q) {
     const w = norm(q).split(/\s+/).filter(Boolean);
@@ -175,11 +178,14 @@
     const as = daten.angebote.filter(a => passt([a.nummer, a.name, a.kunde.name, a.kunde.ort, a.datum, fmtDate(a.datum), ...betragTexte(a.gesamt), ...a.positionen.map(p => p.beschreibung), a.status, "angebot"])).slice(0, 5);
     const ks = daten.kunden.filter(k => passt([k.name, k.zusatz, k.strasse, k.plz, k.ort, k.email])).slice(0, 4);
     const bs = daten.ausgaben.filter(b => b.status !== "papierkorb" && passt([b.lieferant, b.beschreibung, b.notiz, b.belegdatum, fmtDate(b.belegdatum), ...betragTexte(b.betrag || 0), b.kategorie_name || b.kategorie])).slice(0, 5);
+    const vs = daten.vertraege.filter(v => passt([v.name, v.nummer, v.kunde.name, v.kunde.ort, v.anlass, v.datum, fmtDate(v.datum),
+      ...betragTexte(v.gage), "vertrag", v.status])).slice(0, 4);
     const ss = SEITEN.filter(s => passt([s[0]])).slice(0, 4);
     const seiteZuerst = ss.some(x => norm(x[0]).split(/[\s–&-]+/).some(wort => wort.startsWith(w[0])));
     if (seiteZuerst) g.push(["Seiten", ss.map(s => ({ art: "seite", s }))]);
     if (rs.length) g.push(["Rechnungen", rs.map(r => ({ art: "rechnung", r }))]);
     if (as.length) g.push(["Angebote", as.map(a => ({ art: "angebot", a }))]);
+    if (vs.length) g.push(["Verträge", vs.map(v => ({ art: "vertrag", v }))]);
     if (ks.length) g.push(["Kunden", ks.map(k => ({ art: "kunde", k }))]);
     if (bs.length) g.push(["Belege & Ausgaben", bs.map(b => ({ art: "beleg", b }))]);
     if (ss.length && !seiteZuerst) g.push(["Seiten", ss.map(s => ({ art: "seite", s }))]);
@@ -196,6 +202,9 @@
     if (t.art === "kunde") { const k = t.k; const n = daten.rechnungen.filter(r => r.kunde.name === k.name).length;
       return `<span class="sym">◉</span><span class="txt"><b>${markiere(k.name, q)}</b><small>${esc([k.strasse, [k.plz, k.ort].filter(Boolean).join(" ")].filter(Boolean).join(", "))}</small></span>
         <span class="rechts">${n} Rechnung${n === 1 ? "" : "en"}</span>`; }
+    if (t.art === "vertrag") { const v = t.v;
+      return `<span class="sym">✍</span><span class="txt"><b>${markiere(`${v.name} · ${v.kunde.name || "ohne Kunde"}`, q)}</b>
+        <small>${v.datum ? fmtDate(v.datum) : "ohne Termin"} · ${esc(v.anlass || "")}</small></span><span class="rechts">${fmtEuro(v.gage)} · ${esc(v.status)}</span>`; }
     if (t.art === "beleg") { const b = t.b;
       return `<span class="sym">↧</span><span class="txt"><b>${markiere(b.lieferant || "Beleg", q)}</b><small>${fmtDate(b.belegdatum)} · ${esc(b.beschreibung || b.kategorie_name || "")}</small></span>
         <span class="rechts">${fmtEuro(b.betrag || 0)}${b.status === "neu" ? " · zu prüfen" : ""}</span>`; }
@@ -225,8 +234,10 @@
     if (t.art === "angebot") return loadAngebotIntoForm(t.a);
     if (t.art === "kunde") { showTab("liste"); $("#liste-suche").value = t.k.name; return setTimeout(() => renderListe(), 400); }
     if (t.art === "beleg") { showTab("ausgaben"); return setTimeout(() => oeffneBeleg(t.b.id), 300); }
+    if (t.art === "vertrag") return oeffneVertrag(t.v.id);
     const ziel = t.s[1];
     if (ziel === "neu") return neueRechnung();
+    if (ziel === "vertrag-neu") return neuerVertrag();
     if (ziel === "angebot-neu") return neuesAngebot();
     if (ziel === "sichern") return sicherungHerunterladen();
     if (ziel === "rundgang") return startTour();

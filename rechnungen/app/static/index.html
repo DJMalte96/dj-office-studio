@@ -48,6 +48,14 @@
           <button type="button" data-tab="angebote">❐ Angebote</button>
         </div>
       </div>
+      <div class="menu" id="menu-dokumente">
+        <button type="button" class="menu-kopf" aria-haspopup="true">Dokumente <span class="pfeil">▾</span></button>
+        <div class="menu-liste">
+          <button type="button" data-tab="vertrag-neu">＋ Neuer Vertrag</button>
+          <button type="button" data-tab="vertraege">✍ Verträge</button>
+          <button type="button" data-tab="vertragsvorlage">§ Vertragsvorlage</button>
+        </div>
+      </div>
       <div class="menu">
         <button type="button" class="menu-kopf" aria-haspopup="true">Finanzen <span class="pfeil">▾</span></button>
         <div class="menu-liste">
@@ -272,6 +280,44 @@
           <tbody id="angebote-body"></tbody>
         </table>
         <p id="angebote-summe" class="hint"></p>
+      </div>
+    </section>
+
+    <!-- ================= Dokumente: Verträge (seit 1.13) ================= -->
+    <section id="tab-vertraege" class="tab">
+      <div class="card">
+        <div class="row between"><div><h2>Verträge</h2><p class="hint">Booking-Verträge – zu einem Angebot oder ohne. Der Status zeigt, was noch nicht unterschrieben zurück ist.</p></div>
+          <button type="button" id="vt-neu-knopf">＋ Neuer Vertrag</button></div>
+        <table class="list"><thead><tr><th>Vertrag</th><th>Termin</th><th class="num">Gage</th><th>Status</th><th></th></tr></thead>
+          <tbody id="vt-body"></tbody></table>
+      </div>
+    </section>
+
+    <section id="tab-vertragsvorlage" class="tab">
+      <div class="card" id="vt-eigen-karte">
+        <h2>Eigenen Vertrag hochladen</h2>
+        <p class="hint">Du hast schon einen Vertrag? Als PDF, Word (.docx) oder Text hochladen. Die App erkennt die Abschnitte (§ 1, § 2 … oder 1., 2. …)
+          und übernimmt die gewünschten in deine Vorlage – Kunde, Termin, Ort und Gage füllt sie weiter selbst aus. Oder ein PDF geht unverändert als Anlage mit (z. B. AGB).</p>
+        <label class="dropzone" id="vt-eigen-drop"><input type="file" id="vt-eigen-datei" accept=".pdf,.docx,.txt,application/pdf">
+          <strong>Vertrag hierher ziehen oder auswählen</strong><span>PDF · Word (.docx) · Text (.txt)</span></label>
+        <div id="vt-eigen-ergebnis"></div>
+        <div id="vt-anlagen"></div>
+      </div>
+      <div class="card" id="vt-vorlage-karte">
+        <h2>Vertragsvorlage</h2>
+        <p class="hint">Abschnitte, die in neuen Verträgen stehen. Feste Teile (Vertragspartner, Leistung, Gage und Zahlung, Schlussbestimmungen, Unterschriften)
+          füllt die App selbst aus. Im einzelnen Vertrag lässt sich jeder Abschnitt ab- oder zuschalten.</p>
+        <p class="hinweis-box">⚖ Die Texte sind ein Vorschlag und keine Rechtsberatung – bitte einmal prüfen lassen (z. B. Anwalt oder DJ-Verband) und an deine Bedingungen anpassen.</p>
+        <div class="vt-vorlage-kopf"><b>Abschnitte</b><span class="hint">angehakt = in neuen Verträgen drin · ↑ ↓ = Reihenfolge</span></div>
+        <div id="vt-vorlage"></div>
+        <button type="button" class="secondary" id="vt-eigen-neu">＋ Eigenen Abschnitt</button>
+        <div id="vt-eigen-form" class="vt-eigen-box hidden">
+          <label>Überschrift<input id="vt-ea-titel" maxlength="120" placeholder="z. B. Dresscode des DJs"></label>
+          <label>Text<textarea id="vt-ea-text" rows="5" maxlength="6000" placeholder="z. B. Der DJ erscheint in dunkler, festlicher Kleidung."></textarea></label>
+          <p class="mini-hinweis">Platzhalter werden im Vertrag ersetzt: {veranstalter} {dj} {datum} {anlass} {ort} {spielzeit} {gage}</p>
+          <label class="inline"><input type="checkbox" id="vt-ea-an" checked> standardmäßig in neuen Verträgen</label>
+          <div class="actions"><button type="button" class="secondary" data-ea="abbrechen">Abbrechen</button><button type="button" data-ea="speichern">Abschnitt anlegen</button></div>
+        </div>
       </div>
     </section>
 
@@ -949,6 +995,71 @@
     </form>
   </dialog>
 
+  <dialog id="vertrag" class="dialog vertrag">
+    <form method="dialog" autocomplete="off">
+      <div class="vt-kopfzeile">
+        <h2 id="vt-titel"></h2>
+        <div class="vt-aktionen">
+          <button type="button" class="secondary" data-vt="pdf">PDF ansehen</button>
+          <button type="button" data-vt="senden">✉ Senden</button>
+          <button type="button" class="icon" data-vt="zu" title="Schließen" aria-label="Schließen">✕</button>
+        </div>
+      </div>
+      <div id="vt-gesperrt" class="vt-gesperrt hidden"></div>
+      <div class="vt-raster">
+        <div class="vt-einst" id="vt-einst">
+          <details class="vt-gruppe" id="vt-termin" open><summary><h3>Veranstalter &amp; Termin</h3><span id="vt-termin-hinweis" class="hint"></span></summary>
+            <label>Veranstalter (Kunde)<input id="vf-name" list="vf-kunden" placeholder="Name eintippen oder Kunden wählen"></label>
+            <datalist id="vf-kunden"></datalist>
+            <label>Straße und Hausnummer<input id="vf-strasse"></label>
+            <div class="vt-plz"><label>PLZ<input id="vf-plz"></label><label>Ort<input id="vf-ort"></label></div>
+            <label>Anlass<input id="vf-anlass" list="vf-anlaesse" placeholder="z. B. Hochzeit"></label>
+            <datalist id="vf-anlaesse"></datalist>
+            <div class="vt-zwei"><label>Datum<input id="vf-datum" type="date"></label><label>Gage (€)<input id="vf-gage" type="number" min="0" step="10"></label></div>
+            <div class="vt-zwei"><label>von<input id="vf-von" type="time"></label><label>bis<input id="vf-bis" type="time"></label></div>
+          </details>
+          <section class="vt-gruppe"><h3>Ablauf &amp; Zahlung</h3>
+            <div class="vt-zwei"><label>Aufbau ab<input id="vt-aufbau" type="time"></label>
+              <label id="vt-anz-label">Anzahlung (%)<input id="vt-anz" type="number" min="0" max="100" step="5"></label></div>
+            <label>Ansprechpartner vor Ort<input id="vt-kontakt" placeholder="Name, Telefon – z. B. Trauzeugin"></label>
+            <label>Zahlung<select id="vt-zahlung"><option value="rechnung">Anzahlung + Rest per Rechnung</option>
+              <option value="bar">Anzahlung + Rest bar am Abend</option><option value="ganz">Ohne Anzahlung, per Rechnung</option></select></label>
+          </section>
+          <section class="vt-gruppe"><h3>Abschnitte im Vertrag</h3><div id="vt-schalter"></div></section>
+          <p class="vt-hinweis">⚖ Die Texte sind ein Vorschlag und keine Rechtsberatung – bitte einmal prüfen lassen und an deine Bedingungen anpassen.</p>
+        </div>
+        <div class="vt-vorschau"><div class="vt-papier" id="vt-papier"></div></div>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="vt-wahl" class="dialog">
+    <form method="dialog">
+      <h2>Neuer Vertrag</h2>
+      <button type="button" class="secondary vt-frei-knopf" data-wahl="frei">＋ Ohne Angebot – Kunde, Termin und Gage selbst eintragen</button>
+      <p class="hint">Oder zu einem Angebot – Kunde, Termin, Ort und Gage übernimmt die App daraus:</p>
+      <input id="vt-wahl-suche" class="search" placeholder="Kunde, Nummer oder Anlass …" autocomplete="off" aria-label="Angebot suchen">
+      <div id="vt-wahl-liste" class="vt-wahl-liste"></div>
+      <div class="actions"><button type="button" class="secondary" data-wahl="zu">Abbrechen</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="vt-unterschrift" class="dialog">
+    <form method="dialog" id="vtu-form">
+      <h2 id="vtu-titel">Vertrag unterschrieben</h2>
+      <div class="vt-wege">
+        <label><input type="radio" name="vtu-weg" value="datei" checked><span>Unterschrieben zurück (PDF oder Foto)<small>Die Datei wird beim Vertrag abgelegt und kommt in die Datensicherung.</small>
+          <input type="file" id="vtu-datei" accept=".pdf,.jpg,.jpeg,.png,.heic,.heif,application/pdf,image/*"></span></label>
+        <label><input type="radio" name="vtu-weg" value="mail"><span>Per Mail bestätigt<small>z. B. „Wir sind einverstanden“ – Datum und ggf. Notiz eintragen.</small></span></label>
+        <label><input type="radio" name="vtu-weg" value="vorort"><span>Vor Ort unterschrieben<small>Das Original liegt bei dir in Papierform.</small></span></label>
+      </div>
+      <label>Datum<input id="vtu-am" type="date"></label>
+      <label>Notiz <span class="opt">(optional)</span><input id="vtu-notiz" maxlength="500"></label>
+      <label class="inline" id="vtu-annehmen-label"><input type="checkbox" id="vtu-annehmen" checked> Angebot als „angenommen“ markieren</label>
+      <div class="actions"><button type="button" class="secondary" data-vtu="zu">Abbrechen</button><button type="submit">Speichern</button></div>
+    </form>
+  </dialog>
+
   <dialog id="tour-frage" class="dialog tour-frage">
     <form method="dialog">
       <h2>Kurzer Rundgang?</h2>
@@ -986,6 +1097,7 @@
   <script src="static/datum.js"></script>
   <script src="static/app.js"></script>
   <script src="static/finanzen.js"></script>
+  <script src="static/vertraege.js"></script>
   <script src="static/rundgang.js"></script>
 </body>
 </html>

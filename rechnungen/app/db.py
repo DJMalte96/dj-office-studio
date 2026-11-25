@@ -212,6 +212,43 @@ CREATE TABLE IF NOT EXISTS abo_termine (
     ausgabe_id INTEGER,
     PRIMARY KEY (abo_id, datum)
 );
+-- seit 1.13: Booking-Verträge (aus einem Angebot oder frei), Vertragsvorlage und Anlagen
+CREATE TABLE IF NOT EXISTS vertraege (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nummer TEXT NOT NULL UNIQUE,                 -- V001, V002 …
+    angebot_id INTEGER,                          -- NULL = Vertrag ohne Angebot
+    angebot_nummer TEXT,
+    kunde_id INTEGER,
+    kunde_json TEXT NOT NULL,
+    ort_json TEXT,                               -- abweichender Veranstaltungsort
+    anlass TEXT NOT NULL DEFAULT '',
+    datum TEXT NOT NULL DEFAULT '',
+    von TEXT NOT NULL DEFAULT '',
+    bis TEXT NOT NULL DEFAULT '',
+    gage REAL NOT NULL DEFAULT 0,                -- Gesamtbetrag (brutto)
+    kleinunternehmer INTEGER,
+    felder_json TEXT NOT NULL DEFAULT '{}',      -- Aufbau, Ansprechpartner, Zahlung, Anzahlung, GEMA, Verpflegung …
+    abschnitte_json TEXT NOT NULL DEFAULT '[]',  -- IDs der eingeschalteten Vorlage-Abschnitte
+    status TEXT NOT NULL DEFAULT 'entwurf',      -- entwurf | verschickt | unterschrieben
+    inhalt_json TEXT,                            -- festgehaltener Text ab „verschickt“
+    verschickt_am TEXT,
+    unterschrieben_json TEXT,                    -- {weg, am, notiz, dateiname}
+    unterschrift_datei TEXT,                     -- relativ zu vertraege/unterschrieben
+    erstellt TEXT DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS vertrag_abschnitte (
+    id TEXT PRIMARY KEY,
+    titel TEXT NOT NULL,
+    text TEXT NOT NULL,
+    an INTEGER NOT NULL DEFAULT 0,               -- standardmäßig in neuen Verträgen
+    sortierung INTEGER NOT NULL DEFAULT 0,
+    herkunft TEXT NOT NULL DEFAULT 'standard'    -- standard | eigen | Dateiname eines hochgeladenen Vertrags
+);
+CREATE TABLE IF NOT EXISTS vertrag_anlagen (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    datei TEXT NOT NULL                          -- relativ zu vertraege/anlagen
+);
 -- seit 1.8: Kleinunternehmer und Fahrzeug je Jahr (fehlt ein Jahr: aktuelle Einstellungen)
 CREATE TABLE IF NOT EXISTS jahr_einstellungen (
     jahr INTEGER PRIMARY KEY,

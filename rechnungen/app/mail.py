@@ -32,6 +32,14 @@ VORLAGEN = {
         "Bitte überweisen Sie den Betrag bis zum {frist}.\n\n"
         "Sollte sich Ihre Zahlung mit dieser E-Mail überschnitten haben, betrachten Sie sie bitte als gegenstandslos.\n\n"
         "Viele Grüße\n{absender}\n{telefon}"),
+    "mail_betreff_vertrag": "Ihr DJ-Vertrag für den {leistungsdatum}",
+    "mail_text_vertrag": (
+        "Hallo {kunde},\n\n"
+        "wie besprochen erhalten Sie im Anhang den Vertrag für den {leistungsdatum}. "
+        "Bitte unterschreiben Sie ihn und senden ihn mir zurück – gern als Scan oder Foto. "
+        "Eine kurze Bestätigung per E-Mail genügt mir ebenfalls.\n\n"
+        "Bei Fragen melden Sie sich gerne jederzeit.\n\n"
+        "Viele Grüße\n{absender}\n{telefon}"),
     "mail_betreff_nachfrage": "Kurze Nachfrage zu meinem Angebot {nummer}",
     "mail_text_nachfrage": (
         "Hallo {kunde},\n\n"

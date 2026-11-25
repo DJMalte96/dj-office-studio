@@ -23,6 +23,7 @@ import sqlite3
 import abos
 import abschluss
 import db
+import vertraege
 import finanzen
 import importer
 import mail
@@ -38,6 +39,7 @@ app = Flask(__name__, static_folder=None)
 app.register_blueprint(finanzen.bp)   # Finanzen: Ausgaben, Belege (seit 1.1)
 app.register_blueprint(abschluss.bp)  # Jahresabschluss (seit 1.8)
 app.register_blueprint(abos.bp)       # Abos / wiederkehrende Ausgaben (seit 1.9)
+app.register_blueprint(vertraege.bp)  # Booking-Verträge (seit 1.13)
 
 
 @app.errorhandler(abschluss.Gesperrt)
@@ -233,7 +235,7 @@ def _asset_version(name):
 def index():
     with open(os.path.join(STATIC_DIR, "index.html"), encoding="utf-8") as f:
         html = f.read()
-    for name in ("style.css", "datum.js", "app.js", "finanzen.js", "rundgang.js"):
+    for name in ("style.css", "datum.js", "app.js", "finanzen.js", "rundgang.js", "vertraege.js"):
         html = html.replace(f'"static/{name}"', f'"static/{name}?v={_asset_version(name)}"')
     return Response(html, mimetype="text/html", headers={"Cache-Control": "no-cache"})
 
@@ -891,7 +893,7 @@ def backup_download():
         with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED, allowZip64=True) as zf:
             zf.write(pfad, "rechnungen.db")
             anzahl_belege = 0
-            for ordner in ("belege", abschluss.ORDNER):   # seit 1.8 auch die Pakete der Jahresabschlüsse
+            for ordner in ("belege", abschluss.ORDNER, vertraege.ORDNER):   # seit 1.8 Jahresabschlüsse, seit 1.13 Verträge
                 basis = os.path.join(db.DATA_DIR, ordner)
                 for wurzel, _, dateien in os.walk(basis):
                     for n in sorted(dateien):
@@ -925,6 +927,7 @@ def backup_restore():
                         _begrenzt_kopieren(src, dst, rest)
                     _belege_entpacken(zf, belege_tmp, rest)
                     _belege_entpacken(zf, os.path.join(tmp, abschluss.ORDNER), rest, abschluss.ORDNER)
+                    _belege_entpacken(zf, os.path.join(tmp, vertraege.ORDNER), rest, vertraege.ORDNER)
             except (KeyError, zipfile.BadZipFile):
                 return _fehler("Die ZIP-Datei enthält keine Sicherung von DJ Office Studio.")
             except _ZuGross:
@@ -949,6 +952,7 @@ def backup_restore():
         abschluss.jahre_festhalten()
         belege = _belege_uebernehmen(belege_tmp)
         _belege_uebernehmen(os.path.join(tmp, abschluss.ORDNER), abschluss.ORDNER)
+        _belege_uebernehmen(os.path.join(tmp, vertraege.ORDNER), vertraege.ORDNER)
         if letzte and letzte > (db.get_settings().get("_letzte_sicherung") or ""):
             db.save_settings({"_letzte_sicherung": letzte})   # Zeitpunkt der letzten Sicherung nicht zurückdrehen
     return jsonify({"anzahl": anzahl, "belege": belege, "vorher_gesichert": vorher})
@@ -1076,6 +1080,16 @@ def _de(iso):
 def _versand_beleg(art, beleg_id, mahnung_id=None, a=None):
     """Beleg, Anhänge und Platzhalter-Werte für eine E-Mail. art: rechnung | angebot | mahnung."""
     a = a or absender()
+    if art == "vertrag":
+        v = vertraege.lesen(beleg_id) or abort(404)
+        if not v["kunde_id"] and v["kunde"].get("name"):          # Vertrag ohne Angebot: Kunde über den Namen finden
+            k = next((x for x in db.list_items("kunden") if x["name"].strip().lower() == v["kunde"]["name"].strip().lower()), None)
+            v["kunde_id"] = k["id"] if k else None
+        werte = {"kunde": v["kunde"].get("name", ""), "nummer": v["nummer"], "datum": _de(date.today().isoformat()),
+                 "betrag": fmt_euro(v["gage"]), "faellig": "", "gueltig_bis": "", "leistungsdatum": _de(v["datum"]),
+                 "stufe": "", "frist": "", "absender": a.get("name", ""), "telefon": a.get("telefon", "")}
+        anhaenge = [(vertraege.dateiname(v), vertraege.pdf_bytes(v)), *vertraege.anlagen_dateien()]
+        return v | {"versand": [], "bezahlt": False, "storno_von": None}, None, anhaenge, werte
     if art in ("angebot", "nachfrage"):
         beleg = db.get_offer(beleg_id) or abort(404)
     elif art in ("rechnung", "mahnung"):
@@ -1137,6 +1151,10 @@ def mail_send():
     beleg, mahnung, anhaenge, _ = _versand_beleg(art, d.get("id"), d.get("mahnung_id"), a)
     if art == "nachfrage" and d.get("anhang") is False:
         anhaenge = []
+    if art == "vertrag" and vertraege.fehlende_angaben(beleg):
+        return _fehler(f"Bitte im Vertrag noch eintragen: {', '.join(vertraege.fehlende_angaben(beleg))}")
+    if art == "vertrag" and beleg["status"] == "unterschrieben":
+        return _fehler("Der Vertrag ist schon unterschrieben.", 409)
     try:
         an = mail.adressen(d.get("an"))
     except ValueError as e:
@@ -1153,6 +1171,8 @@ def mail_send():
     db.add_versand(art, beleg["id"], ", ".join(an), betreff, mahnung["id"] if mahnung else None)
     if art == "nachfrage":
         db.set_offer_nachgefragt(beleg["id"], date.today().isoformat(), f"per Mail an {', '.join(an)}")
+    if art == "vertrag" and beleg["status"] == "entwurf":
+        vertraege.festhalten(beleg["id"], "verschickt", ", verschickt_am = ?", (date.today().isoformat(),))
     if art in ("rechnung", "mahnung"):
         db.festschreiben(beleg["id"], absender_jetzt(a=a))   # verschickt = ausgestellt, genau mit diesem Absender
     if d.get("email_speichern") and len(an) == 1:
