@@ -140,6 +140,7 @@ function showTab(name) {
   if (typeof vertraegeTab === "function") vertraegeTab(name);  // vertraege.js
   const stamm = $(`#tab-${name}[data-stamm]`);
   if (stamm) renderStamm(stamm.dataset.stamm);
+  if (typeof handyMarkieren === "function") handyMarkieren();   // Menüleiste unten (handy.js)
 }
 $$("nav [data-tab]").forEach(b => b.addEventListener("click", () => {
   const tab = b.dataset.tab;
@@ -239,6 +240,7 @@ async function ladeEinstellungen() {
   }
   zeigePasswortStatus(werte.smtp_passwort_gesetzt);
   if (typeof plEinstellungen === "function") plEinstellungen(werte);
+  if (typeof sicherungStatusLaden === "function") sicherungStatusLaden();   // sicherung.js
   form.elements.km_satz.value = Number(werte.km_satz || 0.3).toFixed(2).replace(".", ",");
   zeigeUstFelder();
   waehleAnbieter(ANBIETER.find(a => a.server && a.server === werte.smtp_server)?.id
@@ -344,14 +346,9 @@ $("#mail-test").addEventListener("click", async e => {
   finally { btn.disabled = false; btn.innerHTML = vorher; }
 });
 
-/* Sicherung herunterladen; der Server merkt sich den Zeitpunkt → Startseite aktualisieren */
+/* Sicherung herunterladen – seit 1.15 über den Dialog mit Sicherungs-Passwort (sicherung.js) */
 function sicherungHerunterladen() {
-  ladeHerunter("api/backup");
-  toast("Sicherung wird heruntergeladen … Am besten an einem anderen Ort ablegen (Cloud, USB-Stick).");
-  setTimeout(async () => {
-    await ladeAbsender();
-    if ($("#tab-start").classList.contains("active")) renderStart();
-  }, 1500);
+  sicherungLaden();
 }
 $("#sicherung-btn").addEventListener("click", sicherungHerunterladen);
 $("#export-btn").addEventListener("click", () => {
@@ -365,17 +362,9 @@ $("#sicherung-datei").addEventListener("change", async e => {
   if (!datei || !confirm(`Sicherung „${datei.name}“ einspielen?\n\nAlle aktuellen Daten (Kunden, Rechnungen, `
       + "Angebote, Einstellungen) werden durch die Sicherung ersetzt. Der aktuelle Stand wird vorher automatisch "
       + "gesichert.")) return;
-  const fd = new FormData();
-  fd.append("datei", datei);
   try {
-    const res = await fetch("api/backup", { method: "POST", headers: SCHUTZ, body: fd });
-    const daten = await res.json();
-    if (!res.ok) throw new Error(daten.error || `Fehler ${res.status}`);
-    const n = daten.anzahl;
-    alert(`Sicherung eingespielt: ${n.rechnungen} Rechnungen, ${n.kunden} Kunden${n.angebote != null ? `, ${n.angebote} Angebote` : ""}`
-      + `${n.ausgaben != null ? `, ${n.ausgaben} Ausgaben` : ""}${daten.belege ? `, ${daten.belege} Belege` : ""}.`
-      + "\n\nDie App wird neu geladen.");
-    location.reload();
+    const daten = await sicherungEinspielen(datei);   // verschlüsselt → fragt nach dem Passwort (sicherung.js)
+    if (daten) eingespielt(daten);
   } catch (err) { toast("Einspielen fehlgeschlagen: " + err.message, true); }
 });
 
@@ -404,6 +393,7 @@ $("#einstellungen").addEventListener("submit", async e => {
     }
     zeigePasswortStatus(res.einstellungen.smtp_passwort_gesetzt);
     if (typeof plEinstellungen === "function") plEinstellungen(res.einstellungen);
+    if (typeof sicherungStatusLaden === "function") sicherungStatusLaden();   // Cloud-Ordner geändert
     await ladeAbsender();
     pruefeUpdate();
     toast(res.hinweise.length ? `Gespeichert. Hinweis: ${res.hinweise.join(" ")}` : "Einstellungen gespeichert", !!res.hinweise.length);
@@ -538,7 +528,22 @@ function fillKunde(k) {
   $("#k-ort").value = k.ort || "";
   setKundeHinweis();
   kundeGewaehlt();   // Spickzettel und ggf. Anzahlungen der Schlussrechnung zum neuen Kunden
+  kundenNotizZeigen(k);
+  if (state.eAuto && !istAngebot()) $("#r-erechnung").checked = /(gmbh|\bag\b|e\.\s?v\.?|\bkg\b|\bohg\b|\bug\b|gbr|verein|schule|gemeinde|firma)/i.test(`${k.name || ""} ${k.zusatz || ""}`);
 }
+
+/* Seit 1.15: eigene Notiz zum Kunden im Editor zeigen (nur hier, nie auf dem Beleg). */
+async function kundenNotizZeigen(k) {
+  const box = $("#k-notiz");
+  let notiz = k.notiz;
+  if (notiz === undefined && k.id) {
+    try { notiz = ((await api("kunden")).find(x => x.id === k.id) || {}).notiz; } catch (e) { notiz = ""; }
+    if (state.kundeId !== k.id) return;   // inzwischen anderer Kunde
+  }
+  box.textContent = notiz ? `📝 ${notiz}` : "";
+  box.classList.toggle("hidden", !notiz);
+}
+$("#r-erechnung").addEventListener("change", () => { state.eAuto = false; });
 
 function closeAc() { acList.classList.add("hidden"); acIndex = -1; }
 
@@ -902,6 +907,7 @@ function readForm() {
     hinweise: istAngebot() ? $("#a-hinweise").value : undefined,
     angebot_id: !istAngebot() && state.ausAngebot ? state.ausAngebot : undefined,
     vertrag_id: !istAngebot() && state.ausVertrag ? state.ausVertrag : undefined,
+    erechnung: istAngebot() ? undefined : $("#r-erechnung").checked,
     veranstaltungsort: $("#v-wie-kunde").checked ? null
       : { name: $("#v-name").value, strasse: $("#v-strasse").value, plz: $("#v-plz").value, ort: $("#v-ort").value },
     fahrt_erfassen: istAngebot() ? undefined : $("#r-fahrt").checked,
@@ -927,6 +933,8 @@ function checkPlaceholders(data) {
 
 async function resetForm() {
   state.editId = null;
+  $("#r-erechnung").checked = false;
+  state.eAuto = true;   // E-Rechnung folgt dem Kunden (Firma/Verein), bis der Haken von Hand gesetzt wird
   setAusAngebot(null);
   fillKunde({});
   $("#r-datum").value = today();
@@ -1015,6 +1023,8 @@ function loadIntoForm(inv) {
   setModus("rechnung");
   setAusAngebot(null);
   state.editId = inv.id;
+  $("#r-erechnung").checked = !!inv.erechnung;
+  state.eAuto = false;
   fillKunde({ ...inv.kunde, id: inv.kunde_id });
   $("#r-nummer").value = inv.nummer;
   $("#r-datum").value = inv.datum;
@@ -1055,6 +1065,7 @@ async function kopiere(art, beleg) {
   setModus(art);
   await resetForm();
   fillKunde({ ...beleg.kunde, id: beleg.kunde_id });
+  if (art === "rechnung" && beleg.erechnung) $("#r-erechnung").checked = true;
   if (beleg.zahlungsbedingung) setZahlung(beleg.zahlungsbedingung);
   if (art === "angebot") $("#a-hinweise").value = beleg.hinweise || "";
   $("#positionen").innerHTML = "";
@@ -1523,8 +1534,9 @@ const nachgefragtChip = a => a.nachgefragt_am
   ? ` <span class="versand-chip" title="${esc(a.nachgefragt_wie || "")}">nachgefragt ${fmtDate(a.nachgefragt_am).slice(0, 6)}</span>` : "";
 /* Angenommenes Angebot mit Anzahlung, aber noch ohne Schlussrechnung */
 const schlussOffen = a => a.status === "angenommen" && anzahlungenZu(a).some(r => !verrechnetIn(r));
-const artChip = r => r.rechnungsart === "anzahlung" ? ` <span class="art-chip">Anzahlung</span>`
-  : r.rechnungsart === "schluss" ? ` <span class="art-chip">Schlussrechnung</span>` : "";
+const artChip = r => (r.rechnungsart === "anzahlung" ? ` <span class="art-chip">Anzahlung</span>`
+  : r.rechnungsart === "schluss" ? ` <span class="art-chip">Schlussrechnung</span>` : "")
+  + (r.erechnung ? ` <span class="e-chip" title="E-Rechnung (ZUGFeRD) – mit Daten für die Buchhaltung">E</span>` : "");
 const auswahlA = new Set();   // IDs der markierten Angebote
 const angebotName = a => a.name || `Angebot_${a.nummer}`;
 

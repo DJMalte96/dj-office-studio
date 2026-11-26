@@ -1070,3 +1070,64 @@ dialog.kundenakte { width: min(900px, calc(100vw - 24px)); }
   .ka-liste td { padding: 8px 4px; font-size: 13.5px; }
   .ka-kopf .row { flex-wrap: wrap; }
 }
+
+/* ---------- seit 1.15: Sicherungs-Passwort, Cloud-Kopie ---------- */
+.sp-box { border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; margin: 12px 0; display: grid; gap: 6px; }
+.sp-box.an { background: var(--primary-soft); border-color: var(--primary-d); }
+.sp-kopf { display: flex; gap: 10px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+.sp-kopf b { font-size: 15px; }
+.sp-box small { color: var(--muted); }
+dialog.sp { width: min(520px, calc(100vw - 24px)); }
+.sp-warn { border: 1px solid var(--gelb); background: var(--gelb-soft); border-radius: 10px; padding: 10px 12px; font-size: 13.5px; margin: 10px 0; }
+.sp-staerke { height: 6px; border-radius: 999px; background: var(--input-bg); overflow: hidden; margin: 6px 0 2px; }
+.sp-staerke i { display: block; height: 100%; width: 0; background: var(--danger); transition: width .2s, background .2s; }
+.sp-staerke-text { font-size: 12.5px; color: var(--muted); }
+.sp-check { display: flex; gap: 8px; align-items: flex-start; font-size: 13.5px; margin: 8px 0; }
+.sp-check input { width: auto; margin-top: 3px; }
+.sp-datei { font-family: ui-monospace, monospace; font-size: 12.5px; background: var(--input-bg); border-radius: 8px; padding: 2px 8px; overflow-wrap: anywhere; }
+.kopie-box { border-top: 1px solid var(--border); margin-top: 14px; padding-top: 12px; }
+.kopie-box .row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
+.kopie-box .grow { flex: 1 1 220px; }
+
+/* ---------- seit 1.15: E-Rechnung im Editor, Notiz zum Kunden ---------- */
+.erechnung-wahl { display: flex; gap: 10px; align-items: flex-start; margin: 12px 0 0; font-weight: 400; cursor: pointer; }
+.erechnung-wahl input { width: auto; margin-top: 3px; }
+.erechnung-wahl small { display: block; color: var(--muted); font-size: 12.5px; }
+.k-notiz { margin: 6px 0 0; padding: 8px 12px; border-radius: 10px; background: var(--gelb-soft); border: 1px solid var(--gelb); font-size: 13.5px; white-space: pre-wrap; }
+.ka-notiz textarea { width: 100%; min-height: 64px; }
+.ka-notiz { margin: 14px 0; }
+.ka-notiz .row { display: flex; gap: 8px; align-items: center; margin-top: 6px; }
+.e-chip { display: inline-block; font-size: 11px; font-weight: 700; border: 1px solid var(--primary-d); border-radius: 999px; padding: 0 6px; margin-left: 4px; }
+
+/* ---------- seit 1.15: Handy – Menüleiste unten ---------- */
+.unten-leiste, .unten-blatt, .unten-schleier { display: none; }
+@media (max-width: 760px) {
+  header { flex-wrap: nowrap !important; }
+  header nav, header #theme-toggle { display: none !important; }
+  header h1 { margin-right: auto; }
+  .unten-leiste { display: grid; grid-template-columns: repeat(5, 1fr); position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
+    padding: 6px 6px calc(6px + env(safe-area-inset-bottom)); background: color-mix(in srgb, var(--card) 92%, transparent);
+    backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border-top: 1px solid var(--border); }
+  .unten-leiste button { display: flex; flex-direction: column; align-items: center; gap: 3px; background: none; border: 0; box-shadow: none;
+    color: var(--muted); font: inherit; font-size: 11px; font-weight: 600; padding: 6px 2px; min-height: 0; border-radius: 12px; }
+  .unten-leiste button svg { width: 22px; height: 22px; }
+  .unten-leiste button.aktiv { color: var(--text); background: var(--primary-soft); }
+  .unten-schleier.offen { display: block; position: fixed; inset: 0; z-index: 31; background: rgba(0, 0, 0, .35); }
+  .unten-blatt.offen { display: block; position: fixed; left: 8px; right: 8px; bottom: calc(70px + env(safe-area-inset-bottom)); z-index: 32;
+    background: var(--card); border: 1px solid var(--border); border-radius: 18px; box-shadow: var(--shadow-lg); padding: 8px;
+    max-height: 70vh; overflow: auto; animation: blatt-rein .18s ease; }
+  @keyframes blatt-rein { from { transform: translateY(16px); opacity: 0; } }
+  .unten-blatt h4 { margin: 10px 12px 4px; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+  .unten-blatt button { display: flex; width: 100%; gap: 12px; align-items: center; text-align: left; background: none; border: 0; box-shadow: none;
+    color: var(--text); font: inherit; font-size: 16px; padding: 13px 14px; border-radius: 12px; min-height: 0; }
+  .unten-blatt button:active, .unten-blatt button.aktiv { background: var(--primary-soft); }
+  .unten-blatt .sym { width: 22px; text-align: center; }
+  main { padding-bottom: 150px !important; }
+  #tab-neu .actions { bottom: calc(74px + env(safe-area-inset-bottom)) !important; padding: 8px !important; gap: 6px !important;
+    width: calc(100% - 16px) !important; border-radius: 14px !important; }
+  #tab-neu .actions button { flex: 1 1 0; padding: 9px 8px; font-size: 13.5px; min-height: 0; white-space: nowrap; }
+  #tab-neu .actions button[type=submit] { flex: 1 1 100%; order: -1; font-size: 15px; padding: 11px 8px; }
+  .toast { top: auto !important; bottom: calc(84px + env(safe-area-inset-bottom)); width: max-content; max-width: calc(100vw - 32px); }
+  .tour-karte { bottom: calc(76px + env(safe-area-inset-bottom)) !important; }
+  .ja-zurueck { bottom: calc(84px + env(safe-area-inset-bottom)); }
+}

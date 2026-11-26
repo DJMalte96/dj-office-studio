@@ -2,6 +2,22 @@
 
 Alle Änderungen an DJ Office Studio. Neueste Version oben.
 
+## 1.15.0 – 2026-11-26
+
+### Neu
+- **Sicherungs-Passwort**: Unter ⚙ Einstellungen → Datensicherung einmal festlegen – danach ist jede Sicherung verschlüsselt (`.djos`).
+  - Herunterladen und Einspielen fragen jedes Mal nach dem Passwort; eine Sicherung öffnet sich auch auf einem neuen Rechner allein mit dem Passwort.
+  - Die automatische Tagessicherung am Desktop wird ebenfalls verschlüsselt – ohne Eingabe (öffentlicher Schlüssel zum Verschlüsseln, Passwort nur zum Öffnen).
+  - Das Passwort wird nirgends gespeichert; vergessen heißt: Sicherungen lassen sich nicht mehr öffnen. Ältere Sicherungen ohne Passwort gehen weiter.
+- **Kopie in die Cloud (Desktop)**: Ordner wählen (Nextcloud, iCloud Drive, OneDrive, NAS) – einmal am Tag eine verschlüsselte Komplettsicherung mit allen Belegen, die letzten 7 bleiben.
+- **E-Rechnung (ZUGFeRD)** für Firmen und Vereine: Haken im Editor (bei Firmen und Vereinen schon gesetzt) – das PDF enthält zusätzlich die maschinenlesbare Rechnung nach EN 16931 (Factur-X). Geprüft gegen das offizielle Schema und die EN-16931-Regeln; Anzahlungs-, Schluss- und Stornorechnung, Kleinunternehmer und Umsatzsteuer. In den Listen mit **E** gekennzeichnet.
+- **Notizen zum Kunden** in der Kundenakte – erscheinen beim Schreiben eines Angebots oder einer Rechnung, nie auf dem Beleg.
+- **Handy: Menüleiste unten** (Start, Rechnungen, Angebote, Finanzen, Mehr) statt des großen Menüs oben; die Speichern-Leiste im Editor sitzt kompakt darüber.
+
+### Intern
+- **Browser-Tests im Projekt** (`tests/browser`): alle Klick-Abläufe seit 1.11 in Chrome und WebKit, mit CSP-Prüfung und einem Durchlauf mit Schadcode in jedem Textfeld – laufen in GitHub Actions bei jedem Push.
+- Neue Bibliotheken: cryptography 48.0.1 (letzte Version mit fertigem Paket für Intel-Macs), factur-x 7.10, lxml.
+
 ## 1.14.1 – 2026-11-26
 
 ### Neu

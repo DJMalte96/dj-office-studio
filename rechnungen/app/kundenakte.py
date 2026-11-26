@@ -190,6 +190,24 @@ def barzahlung_beleg(bid):
                      download_name=r["beleg_name"] or f"Quittung_{r['datum']}{endung}")
 
 
+# ---------- Notizen zum Kunden (seit 1.15) ----------
+
+NOTIZ_MAX = 5000
+
+
+@bp.put("/api/kunden/<int:kid>/notiz")
+def notiz_speichern(kid):
+    """Eigene Notiz zum Kunden – nur in der App (Kundenakte, Editor), nie auf Rechnung, Angebot oder E-Rechnung."""
+    d = request.get_json(silent=True)
+    text = str((d or {}).get("notiz") or "").strip() if isinstance(d, dict) else ""
+    if len(text) > NOTIZ_MAX:
+        return _fehler(f"Die Notiz ist zu lang (höchstens {NOTIZ_MAX} Zeichen).")
+    with db.connect() as con:
+        if not con.execute("UPDATE kunden SET notiz = ? WHERE id = ?", (text, kid)).rowcount:
+            abort(404)
+    return jsonify({"id": kid, "notiz": text})
+
+
 # ---------- Jahres-Erinnerung ----------
 
 def _schluessel(name):

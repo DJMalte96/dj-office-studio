@@ -390,6 +390,9 @@ async function oeffneAkte(name) {
       <div class="row"><button type="button" class="small" data-ka="angebot">＋ Angebot</button>
         <button type="button" class="small secondary" data-ka="vertrag">＋ Vertrag</button>
         <button type="button" class="small secondary" data-ka="rechnung">＋ Rechnung</button></div></div>
+    ${stamm.id ? `<div class="ka-notiz"><label>Notiz <span class="opt">(nur für dich – steht nie auf Angebot oder Rechnung)</span>
+      <textarea id="ka-notiz" maxlength="5000" placeholder="z. B. mag keinen Schlager · Parken hinterm Haus · Ansprechpartnerin Frau Beispiel">${esc(stamm.notiz || "")}</textarea></label>
+      <div class="row"><button type="button" class="small secondary" data-ka="notiz">Notiz speichern</button><span class="mini-hinweis" id="ka-notiz-stand"></span></div></div>` : ""}
     ${erinnerung ? `<div class="ka-hinweis">↻ Letztes Jahr am ${fmtDate(erinnerung.letzte.am)}${letzteR ? `: ${esc(anlassVon(letzteR))}` : ""} für ${euroCent(erinnerung.letzte.preis)} – Angebot schicken?
       <div class="ka-knoepfe">${letzteR ? `<button type="button" class="small" data-ka="wieder">Angebot wie letztes Jahr</button>` : `<button type="button" class="small" data-ka="angebot">＋ Angebot</button>`}
       <button type="button" class="small secondary" data-ka="diesmal" title="Kommt nächstes Jahr wieder">Diesmal nicht</button>
@@ -435,6 +438,13 @@ $("#kundenakte").addEventListener("click", async e => {
       return oeffneAkte(akte.name);
     }
     if (was === "zu") return $("#kundenakte").close();
+    if (was === "notiz") {
+      const d = await api(`kunden/${k.id}/notiz`, { method: "PUT", body: { notiz: $("#ka-notiz").value } });
+      k.notiz = d.notiz;
+      $("#ka-notiz-stand").textContent = "✓ gespeichert";
+      if (state.kundeId === k.id) kundenNotizZeigen(k);
+      return;
+    }
     $("#kundenakte").close();
     if (was === "angebot") { await neuesAngebot(); fillKunde({ ...k, id: k.id || null }); }
     if (was === "rechnung") { await neueRechnung(); fillKunde({ ...k, id: k.id || null }); }

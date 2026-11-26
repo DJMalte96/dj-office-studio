@@ -117,6 +117,7 @@
               <label class="grow">Ort <input id="k-ort"></label>
             </div>
             <p id="k-hinweis" class="hint"></p>
+            <p id="k-notiz" class="k-notiz hidden"></p>
           </div>
 
           <div class="card">
@@ -133,6 +134,8 @@
             </label>
             <p id="r-zahlung-text" class="hint"></p>
             <p id="aus-angebot" class="aus-angebot hidden"></p>
+            <label class="erechnung-wahl nur-rechnung"><input type="checkbox" id="r-erechnung">
+              <span><b>E-Rechnung (ZUGFeRD)</b><small>Für Firmen und Vereine: Das PDF enthält zusätzlich die Daten für deren Buchhaltung. Für Privatkunden nicht nötig.</small></span></label>
           </div>
         </div>
 
@@ -502,10 +505,18 @@
             <div>
               <strong>Sicherung</strong>
               <p class="hint">Alle Daten – Kunden, Rechnungen, Angebote, Mahnungen, Finanzen mit allen Belegen, Einstellungen – in einer Datei. Am besten regelmäßig herunterladen und z. B. in der Cloud ablegen. Das E-Mail-Passwort ist nicht enthalten.</p>
+              <div id="sp-box" class="sp-box"></div>
               <div class="row">
                 <button type="button" id="sicherung-btn" class="secondary">⇩ Sicherung herunterladen</button>
                 <button type="button" id="wiederherstellen-btn" class="secondary">⇪ Sicherung einspielen</button>
-                <input type="file" id="sicherung-datei" accept=".zip,.db" hidden>
+                <input type="file" id="sicherung-datei" accept=".zip,.db,.djos" hidden>
+              </div>
+              <div id="kopie-box" class="kopie-box nur-desktop">
+                <label>Jeden Tag automatisch verschlüsselt kopieren nach <span class="opt">(z. B. Nextcloud-, iCloud- oder OneDrive-Ordner, NAS)</span>
+                  <span class="row"><input name="sicherung_kopie_ordner" id="kopie-ordner" placeholder="leer = aus" class="grow">
+                  <button type="button" id="kopie-waehlen" class="secondary">Ordner wählen …</button></span></label>
+                <p class="mini-hinweis" id="kopie-status"></p>
+                <button type="button" id="kopie-jetzt" class="small secondary">Jetzt kopieren</button>
               </div>
               <label class="erinnerung">Auf der Startseite an eine Sicherung erinnern nach <span class="opt">(Tagen, 0 = nie)</span>
                 <input name="sicherung_erinnerung_tage" type="number" min="0" step="1"></label>
@@ -1085,6 +1096,29 @@
     <div class="actions"><button type="button" class="secondary" data-ka="zu">Schließen</button></div>
   </dialog>
 
+  <!-- seit 1.15: Sicherungs-Passwort -->
+  <dialog id="sp-dialog" class="dialog sp">
+    <form method="dialog" autocomplete="off">
+      <h2 id="sp-titel">Sicherungs-Passwort festlegen</h2>
+      <p class="hint">Damit werden alle Sicherungen verschlüsselt – die heruntergeladenen<span class="nur-desktop">, die automatische Tagessicherung und die Kopie in den Cloud-Ordner</span>.</p>
+      <label id="sp-alt-label" class="hidden">Bisheriges Passwort<input id="sp-alt" type="password" autocomplete="current-password"></label>
+      <label>Neues Passwort<input id="sp-neu" type="password" autocomplete="new-password"></label>
+      <div class="sp-staerke"><i id="sp-balken"></i></div><div class="sp-staerke-text" id="sp-staerke">mindestens 10 Zeichen</div>
+      <label>Noch einmal<input id="sp-neu2" type="password" autocomplete="new-password"></label>
+      <div class="sp-warn"><b>Wichtig:</b> Das Passwort wird nirgends gespeichert. Ist es vergessen, lässt sich <b>keine</b> verschlüsselte Sicherung mehr öffnen – auch nicht vom Entwickler.
+        <span id="sp-alt-hinweis" class="hidden"><br>Ältere Sicherungen öffnen sich weiterhin nur mit dem bisherigen Passwort.</span></div>
+      <label class="sp-check"><input type="checkbox" id="sp-notiert"><span>Ich habe das Passwort sicher notiert (z. B. im Passwort-Manager).</span></label>
+      <div class="actions"><button type="button" class="secondary" data-sp="zu">Abbrechen</button><button type="button" data-sp="speichern">Festlegen</button></div>
+    </form>
+  </dialog>
+  <dialog id="sp-laden" class="dialog sp">
+    <form method="dialog" autocomplete="off">
+      <h2 id="sp-laden-titel">Sicherung herunterladen</h2>
+      <div id="sp-laden-inhalt"></div>
+      <div class="actions" id="sp-laden-knoepfe"></div>
+    </form>
+  </dialog>
+
   <dialog id="tour-frage" class="dialog tour-frage">
     <form method="dialog">
       <h2>Kurzer Rundgang?</h2>
@@ -1124,6 +1158,8 @@
   <script src="static/finanzen.js"></script>
   <script src="static/vertraege.js"></script>
   <script src="static/kundenakte.js"></script>
+  <script src="static/sicherung.js"></script>
+  <script src="static/handy.js"></script>
   <script src="static/rundgang.js"></script>
 </body>
 </html>

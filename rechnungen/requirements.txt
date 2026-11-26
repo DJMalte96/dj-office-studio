@@ -14,3 +14,10 @@ onnxruntime==1.23.2
 opencv-python-headless==4.11.0.86
 numpy==2.2.6
 pypdfium2==5.15.2
+# Seit 1.15: verschlüsselte Sicherungen (cryptography) und E-Rechnungen schreiben (factur-x, lxml).
+# cryptography 48.0.1 ist die letzte Version mit fertigem Paket für Intel-Macs (universal2, ab macOS 10.9) –
+# nie selbst bauen lassen (sonst verlangt die Desktop-App das macOS des Build-Rechners)
+--only-binary=cryptography,lxml
+cryptography==48.0.1
+factur-x==7.10
+lxml==6.1.3

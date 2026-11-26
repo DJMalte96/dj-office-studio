@@ -15,7 +15,8 @@ CREATE TABLE IF NOT EXISTS kunden (
     strasse TEXT DEFAULT '',
     plz TEXT DEFAULT '',
     ort TEXT DEFAULT '',
-    email TEXT DEFAULT ''
+    email TEXT DEFAULT '',
+    notiz TEXT DEFAULT ''                        -- seit 1.15: eigene Notizen (nur in der App, nie auf Belegen)
 );
 CREATE TABLE IF NOT EXISTS textbausteine (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -424,7 +425,8 @@ def init():
         # seit 1.11: Anzahlungs-/Schlussrechnung, Herkunft aus einem Angebot, Nachfrage zum Angebot
         for tabelle, felder in (("rechnungen", (("veranstaltungsort_json", "TEXT"), ("fahrt_erfassen", "INTEGER DEFAULT 1"),
                                                 ("rechnungsart", "TEXT DEFAULT 'normal'"), ("angebot_id", "INTEGER"),
-                                                ("vertrag_id", "INTEGER"))),   # seit 1.14: Rechnung aus einem Vertrag
+                                                ("vertrag_id", "INTEGER"),     # seit 1.14: Rechnung aus einem Vertrag
+                                                ("erechnung", "INTEGER DEFAULT 0"))),   # seit 1.15: ZUGFeRD eingebettet
                                 ("angebote", (("veranstaltungsort_json", "TEXT"), ("nachgefragt_am", "TEXT"), ("nachgefragt_wie", "TEXT")))):
             vorhanden = {r["name"] for r in con.execute(f"PRAGMA table_info({tabelle})")}
             for spalte, typ in felder:
@@ -457,6 +459,9 @@ def init():
         # seit 1.8: Jahr der EÜR abweichend vom Bezahlt-Datum (10-Tage-Regel für regelmäßige Zahlungen um Silvester)
         if "euer_jahr" not in {r["name"] for r in con.execute("PRAGMA table_info(ausgaben)")}:
             con.execute("ALTER TABLE ausgaben ADD COLUMN euer_jahr TEXT")
+        # seit 1.15: Notizen zum Kunden (bewusst nicht in TABLES – Rechnungen speichern den Kunden mit, ohne Notiz)
+        if "notiz" not in {r["name"] for r in con.execute("PRAGMA table_info(kunden)")}:
+            con.execute("ALTER TABLE kunden ADD COLUMN notiz TEXT DEFAULT ''")
         # seit 1.9: Ausgabe aus einem Abo
         if "abo_id" not in {r["name"] for r in con.execute("PRAGMA table_info(ausgaben)")}:
             con.execute("ALTER TABLE ausgaben ADD COLUMN abo_id INTEGER")
@@ -618,20 +623,20 @@ def save_invoice(inv, inv_id=None):
         steuer = (_ku(inv.get("kleinunternehmer")), inv.get("ust_satz"))
         ort = (json.dumps(inv["veranstaltungsort"]) if inv.get("veranstaltungsort") else None,
                int(inv.get("fahrt_erfassen", True) is not False))
-        art = (inv.get("rechnungsart") or "normal", inv.get("angebot_id"), inv.get("vertrag_id"))
+        art = (inv.get("rechnungsart") or "normal", inv.get("angebot_id"), inv.get("vertrag_id"), int(bool(inv.get("erechnung"))))
         if inv_id:
             con.execute(
                 "UPDATE rechnungen SET nummer=?, datum=?, kunde_id=?, kunde_json=?,"
                 " positionen_json=?, zahlungsbedingung=?, gesamt=?, bezahlt=?, kleinunternehmer=?, ust_satz=?,"
                 " veranstaltungsort_json=?, fahrt_erfassen=?, rechnungsart=?, angebot_id=COALESCE(?, angebot_id),"
-                " vertrag_id=COALESCE(?, vertrag_id) WHERE id=?",
+                " vertrag_id=COALESCE(?, vertrag_id), erechnung=? WHERE id=?",
                 vals + steuer + ort + art + (inv_id,))
             return inv_id
         return con.execute(
             "INSERT INTO rechnungen (nummer, datum, kunde_id, kunde_json, positionen_json,"
             " zahlungsbedingung, gesamt, bezahlt, festgeschrieben, storno_von, bezahlt_am, kleinunternehmer, ust_satz,"
-            " veranstaltungsort_json, fahrt_erfassen, absender_json, rechnungsart, angebot_id, vertrag_id)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            " veranstaltungsort_json, fahrt_erfassen, absender_json, rechnungsart, angebot_id, vertrag_id, erechnung)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             vals + (int(bool(inv.get("festgeschrieben"))), inv.get("storno_von"), inv.get("bezahlt_am")) + steuer + ort
             + (_absender_text(inv.get("absender")) if inv.get("festgeschrieben") else None,) + art).lastrowid
 

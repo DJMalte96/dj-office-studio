@@ -148,3 +148,25 @@ def test_erinnerung_ausblenden(client):
     assert client.get("/api/kunden/erinnerung").get_json() == {"anna muster": "nie"}
     for falsch in ({"name": "", "ruhe": "nie"}, {"name": "X", "ruhe": "morgen"}, {"name": "X", "ruhe": "2027-13-01"}):
         assert client.put("/api/kunden/erinnerung", json=falsch).status_code == 400
+
+
+# ---------- Notizen zum Kunden (seit 1.15) ----------
+
+def test_notiz_zum_kunden(client):
+    from conftest import neue_rechnung, pdf_text
+    rid = neue_rechnung(client)
+    kunde = client.get("/api/kunden").get_json()[0]
+    assert kunde["notiz"] == ""
+    r = client.put(f"/api/kunden/{kunde['id']}/notiz", json={"notiz": "  mag keinen Schlager · Parken hinterm Haus  "})
+    assert r.status_code == 200 and r.get_json()["notiz"] == "mag keinen Schlager · Parken hinterm Haus"
+    neue_rechnung(client, nummer="038")                     # neue Rechnung für denselben Kunden löscht die Notiz nicht
+    kunde = client.get("/api/kunden").get_json()[0]
+    assert kunde["notiz"] == "mag keinen Schlager · Parken hinterm Haus"
+    assert client.get(f"/api/kunden?q=Anna").get_json()[0]["notiz"]          # Vorschlag im Editor bringt sie mit
+    inv = client.get(f"/api/rechnungen/{rid}").get_json()
+    assert "notiz" not in inv["kunde"]                                       # nie auf dem Beleg
+    assert "Schlager" not in pdf_text(client.get(f"/api/rechnungen/{rid}/pdf").data)
+    client.put(f"/api/kunden/{kunde['id']}", json={**{k: kunde[k] for k in ("name", "zusatz", "strasse", "plz", "ort", "email")}})
+    assert client.get("/api/kunden").get_json()[0]["notiz"]                  # Stammdaten bearbeiten lässt sie stehen
+    assert client.put(f"/api/kunden/{kunde['id']}/notiz", json={"notiz": "x" * 5001}).status_code == 400
+    assert client.put("/api/kunden/999/notiz", json={"notiz": "x"}).status_code == 404

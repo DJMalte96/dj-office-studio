@@ -128,6 +128,9 @@ r019 = rechnung("019", "musik", d(-710), [pos("DJ – Tätigkeit Sommerfest – 
 c.put(f"/api/rechnungen/{r019}/bezahlt_am", json={"bezahlt_am": d(-706)})
 c.post("/api/barzahlungen", data={"betrag": "700", "datum": d(-345), "quittung_nr": "0347", "anlass": "Sommerfest",
                                   "kunde": json.dumps(K["musik"])}, content_type="multipart/form-data")
+# seit 1.15: Notiz zum Kunden
+kid_musik = next(k["id"] for k in db.list_items("kunden") if k["name"] == "Musikverein Beispiel")
+c.put(f"/api/kunden/{kid_musik}/notiz", json={"notiz": "Sommerfest im Vereinsheim · Ansprechpartnerin Frau Beispiel · Parken hinterm Haus"})
 r038 = next(r["id"] for r in db.list_invoices() if r["nummer"] == "038")
 c.post(f"/api/rechnungen/{r038}/stornieren")                                    # 038 → Stornorechnung 042
 
@@ -370,6 +373,43 @@ with sync_playwright() as p:
     page.locator("#kundenakte").screenshot(path=str(ZIEL / "kundenakte.png"))
     page.click("#kundenakte [data-ka=zu]")
 
+    # Sicherungs-Passwort (seit 1.15): Dialog zum Festlegen, danach die Karte in den Einstellungen
+    page.click("#einstellungen-btn")
+    page.wait_for_timeout(900)
+    page.locator("#sp-box [data-sp-box]").click()
+    page.wait_for_timeout(300)
+    page.fill("#sp-neu", "Plattenkiste-1987!")
+    page.fill("#sp-neu2", "Plattenkiste-1987!")
+    page.click("#sp-notiert")
+    page.evaluate("document.activeElement && document.activeElement.blur()")
+    page.locator("#sp-dialog").screenshot(path=str(ZIEL / "sicherung-passwort.png"))
+    page.click("#sp-dialog [data-sp=speichern]")
+    page.wait_for_timeout(1500)
+    page.locator("#sicherung-btn").click()
+    page.wait_for_timeout(500)
+    page.fill("#sp-eingabe", "Plattenkiste-1987!")
+    page.evaluate("document.activeElement && document.activeElement.blur()")
+    page.locator("#sp-laden").screenshot(path=str(ZIEL / "sicherung-laden.png"))
+    page.keyboard.press("Escape")
+    page.locator("#sp-box").evaluate("e => e.scrollIntoView({block: 'center'})")
+    page.wait_for_timeout(300)
+    page.locator("#sicherung-btn").locator("xpath=ancestor::div[contains(@class,'card')]").screenshot(path=str(ZIEL / "sicherung.png"))
+    with db.connect() as con:   # für die übrigen Bilder wieder ohne Passwort
+        con.execute("DELETE FROM einstellungen WHERE schluessel LIKE '_sicherung%'")
+
+    # Handy (seit 1.15): Menüleiste unten
+    handy = browser.new_context(viewport={"width": 390, "height": 844}, device_scale_factor=2, locale="de-DE")
+    handy.add_init_script("try { localStorage.setItem('theme','light') } catch (e) {}")
+    hp = handy.new_page()
+    hp.on("pageerror", lambda e: fehler.append(str(e)))
+    hp.goto(URL)
+    hp.wait_for_timeout(1500)
+    hp.screenshot(path=str(ZIEL / "handy-start.png"))
+    hp.click("[data-unten=finanzen]")
+    hp.wait_for_timeout(500)
+    hp.screenshot(path=str(ZIEL / "handy-menue.png"))
+    handy.close()
+
     # Rundgang und Schnellsuche (seit 1.12)
     page.evaluate("showTab('start')")
     page.wait_for_timeout(800)
@@ -434,6 +474,16 @@ with sync_playwright() as p:
     page.wait_for_timeout(400)
     page.evaluate("document.activeElement && document.activeElement.blur()")
     page.locator("#positionen").locator("xpath=ancestor::div[contains(@class,'card')]").screenshot(path=str(ZIEL / "anzahlung.png"))
+    # E-Rechnung (seit 1.15): Verein als Kunde → Haken automatisch gesetzt
+    page.evaluate("neueRechnung()")
+    page.wait_for_timeout(900)
+    page.fill("#k-name", "Sportverein")
+    page.wait_for_timeout(600)
+    page.keyboard.press("ArrowDown")
+    page.keyboard.press("Enter")
+    page.wait_for_timeout(500)
+    page.evaluate("document.activeElement && document.activeElement.blur(); window.scrollTo(0, 0)")
+    page.locator("#tab-neu .grid2").first.screenshot(path=str(ZIEL / "erechnung.png"))
     browser.close()
 
 print("Bilder in", ZIEL, "– JavaScript-Fehler:", fehler or "keine")

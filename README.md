@@ -32,6 +32,7 @@ DJ Office Studio ist eine App zum Schreiben von DJ-Rechnungen, -Angeboten und Bo
 - [Offene Rechnungen & Archiv](#rechnungen)
 - [Per Mail versenden](#versenden)
 - [QR-Code zum Bezahlen](#qr-code-zum-bezahlen)
+- [E-Rechnung (ZUGFeRD)](#e-rechnung-schreiben)
 - [Absender ändern](#absender-ändern-umzug-neues-konto)
 
 </td>
@@ -71,6 +72,7 @@ DJ Office Studio ist eine App zum Schreiben von DJ-Rechnungen, -Angeboten und Bo
 - [E-Mail-Versand](#e-mail-versand)
 - [Paperless-ngx](#paperless-ngx)
 - [Datensicherung](#daten--backup)
+- [Sicherungs-Passwort & Cloud-Kopie](#sicherungs-passwort)
 - [Sicherheit](#schutz-vor-fremden-webseiten)
 
 </td>
@@ -103,6 +105,7 @@ DJ Office Studio ist eine App zum Schreiben von DJ-Rechnungen, -Angeboten und Bo
   - Prüft die Pflichtangaben einer Rechnung (vollständige Anschrift des Kunden, Lieferdatum je Position)
   - **Preis-Spickzettel**: unter jeder Position, was du für diesen Rechnungsposten bisher genommen hast (zuletzt, Schnitt, pro Stunde) und was der Kunde zuletzt gezahlt hat – ein Klick übernimmt den Betrag
   - **Anzahlungs- und Schlussrechnung**: bei Bedarf erst eine Anzahlung (z. B. 30 %) abrechnen, nach der Feier zieht die Schlussrechnung sie ab
+  - **E-Rechnung (ZUGFeRD)** für Firmen und Vereine: das PDF enthält zusätzlich die maschinenlesbare Rechnung (EN 16931) für deren Buchhaltung – bei Firmen und Vereinen schon vorausgewählt
 - **PDF** im A4-Layout mit Absenderzeile, Adressfeld, Positionstabelle, QR-Code zum Bezahlen und Fußzeile (Bankverbindung, Steuernummer, Kleinunternehmer-Hinweis nach § 19 UStG bzw. Umsatzsteuer). Vorschau vor dem Speichern; beim Speichern wird eine Kopie im PDF-Ordner abgelegt (Home Assistant: `/share/rechnungen`, Desktop: `Dokumente/DJ Office Studio/PDFs`).
 - **Offene Rechnungen** auf einen Blick: eine Summenzeile mit Anzahl, Gesamtbetrag und nächster Frist; darunter je Rechnung Rechnungsname (z. B. `Rechnung_037_311026`), Betrag, verbleibende Zeit („noch 5 Tage“, „3 Tage überfällig“), ein Haken zum Abhaken, wenn bezahlt wurde, und Buttons für **Zahlungserinnerung / Mahnung**, QR-Code zum Bezahlen, Senden per E-Mail, Kopieren, Festschreiben (🔒) und Löschen bzw. Stornieren (✕). Das Zahlungsziel wird aus der Zahlungsbedingung gelesen (z. B. „innerhalb der nächsten 8 Tage“) und ab dem Rechnungsdatum gerechnet.
 - **Archiv** für bezahlte und stornierte Rechnungen: Wird eine offene Rechnung abgehakt, wandert sie ins Archiv – mit Suche und Sortierung nach Nummer, Datum, Betrag oder Kunde. Bezahlte Rechnungen lassen sich wieder auf „offen“ setzen. Mehrere Rechnungen markieren und **als ZIP herunterladen** oder **an Paperless-ngx senden**.
@@ -115,7 +118,7 @@ DJ Office Studio ist eine App zum Schreiben von DJ-Rechnungen, -Angeboten und Bo
 - **Datensicherung & Export**: Unter ⚙ Einstellungen alle Daten samt Ausgaben-Belegen als eine Sicherungsdatei herunterladen bzw. wieder einspielen. Die Startseite zeigt, wie lange die letzte Sicherung her ist, und erinnert nach einstellbarer Zeit (Standard 30 Tage) an eine neue. Dazu ein **Export für den Steuerberater**: alle Rechnungen eines Jahres als Excel-Tabelle (CSV, mit Bezahlt-Datum, Stornos und ggf. Umsatzsteuer) plus PDFs, dazu EÜR, Ausgaben, Fahrten, Anlagenverzeichnis und alle Belege – als ein ZIP. Die Desktop-Version sichert zusätzlich automatisch einmal pro Tag.
 - **Booking-Verträge** (Menü Dokumente): aus einem Angebot oder ohne Angebot, mit deiner Vorlage (Verpflegung, Ersatz-DJ, GEMA, Schäden durch Gäste und 16 weitere Bausteine, eigene Abschnitte, eigener Vertrag zum Hochladen), PDF, Versand per Mail und Unterschrift (Datei, Mail-Bestätigung oder vor Ort).
 - **Vom Vertrag zur Rechnung**: Vor der Feier erinnert die Startseite an die vereinbarte Anzahlung, danach an die Rechnung – ein Klick übernimmt Kunde, Termin, Ort und Gage (mit Anzahlung als Schlussrechnung), Verlängerung oder weitere Posten lassen sich vor dem Speichern ergänzen. **Bar bezahlt** (Quittung von Hand auf dem Quittungsblock) wird nur für die Kundenakte vermerkt – Betrag, Tag, Nummer vom Block, auf Wunsch ein Foto vom Durchschlag; in EÜR, Export und Kleinunternehmer-Grenze zählt es nicht.
-- **Kundenakte** (Stammdaten → Kunden): je Kunde Umsatz, Feiern, üblicher Preis, letzte und nächste Feier und alle Angebote, Verträge, Rechnungen und Barzahlungen. Stammkunden bekommen knapp ein Jahr nach ihrer letzten Feier eine Erinnerung auf der Startseite – „Diesmal nicht“ oder „Nicht mehr erinnern“ blenden sie aus.
+- **Kundenakte** (Stammdaten → Kunden): je Kunde Umsatz, Feiern, üblicher Preis, letzte und nächste Feier und alle Angebote, Verträge, Rechnungen und Barzahlungen, dazu eigene **Notizen** (erscheinen beim Schreiben eines Angebots oder einer Rechnung, nie auf dem Beleg). Stammkunden bekommen knapp ein Jahr nach ihrer letzten Feier eine Erinnerung auf der Startseite – „Diesmal nicht“ oder „Nicht mehr erinnern“ blenden sie aus.
 - **Angebote**: Im selben Editor wie Rechnungen (Kunde, Rechnungsposten mit von/bis-Zeiten, Preise) – mit eigenem Nummernkreis, Angebotsdatum, **Gültig bis** (Bindefrist, Standard 30 Tage), optionaler Zahlungsbedingung und freien **Hinweisen** (z. B. Verlängerungsstunde, Leistungsumfang, GEMA). Das PDF hat dasselbe Layout wie die Rechnung (`Angebot_001_120627.pdf`). Oben in der Angebotsansicht und auf der Startseite: **Offene Angebote** mit Angebotsdatum und Restlaufzeit („noch 12 Tage“, „seit 3 Tagen abgelaufen“), auf der Startseite zusätzlich ein Hinweis, wenn ein Angebot in den nächsten 3 Tagen abläuft. In der Angebotsliste: mehrere markieren und als ZIP herunterladen oder an Paperless senden, Status (offen / angenommen / abgelehnt), Restlaufzeit bzw. „abgelaufen“ und **→ Rechnung**, das Kunde und Positionen in eine neue Rechnung übernimmt und das Angebot als angenommen markiert. Bleibt ein Angebot ein paar Tage ohne Antwort, erinnert die Startseite ans **Nachfragen** – mit fertiger Mail.
 - **Import alter Rechnungen und Angebote**: Bisherige PDFs hochladen (gemischt möglich – die App erkennt Rechnung oder Angebot selbst). Empfänger, Positionen und Vorschläge für Rechnungsposten werden erkannt und können übernommen werden, optional auch die Rechnungen selbst als Archiv und die Angebote (mit „gültig bis“ und Hinweisen) in die Angebotsliste.
 - **Finanzen**
@@ -130,11 +133,16 @@ DJ Office Studio ist eine App zum Schreiben von DJ-Rechnungen, -Angeboten und Bo
   - **Jahr abschließen**: Ein fertiges Jahr in drei Schritten prüfen, kontrollieren und abschließen. Die App legt ein Paket mit Abschlussblatt und Prüfsumme ab und sperrt das Jahr gegen Änderungen – ansehen, herunterladen und erneut verschicken geht weiter. Ein Jahr wird nie von selbst gesperrt; wieder öffnen geht mit Begründung. Kleinunternehmer und Fahrzeug gelten je Jahr.
 - **Stammdaten** für Kunden, Rechnungsposten und Zahlungsbedingungen.
 - **Schnellsuche** (Lupe oder Strg/⌘ + K) über Rechnungen, Angebote, Kunden, Belege und Seiten – und ein **Rundgang** durch die App für den Einstieg (beim ersten Start, jederzeit wiederholbar).
-- Helles und dunkles Design (folgt der Geräteeinstellung, umschaltbar oben rechts), nutzbar am Computer, Tablet und Handy.
+- **Verschlüsselte Sicherungen**: Mit einem Sicherungs-Passwort sind alle Sicherungen verschlüsselt – auch die automatische Tagessicherung der Desktop-Version, ohne dass man dafür etwas eingibt. Auf Wunsch landet jeden Tag eine verschlüsselte Komplettsicherung in einem Cloud-Ordner (Nextcloud, iCloud Drive, OneDrive, NAS).
+- Helles und dunkles Design (folgt der Geräteeinstellung, umschaltbar oben rechts), nutzbar am Computer, Tablet und Handy – auf dem Handy mit Menüleiste unten in Daumenreichweite.
 
 ## Bedienung
 
 Oben in der Kopfzeile gibt es auf jeder Seite das Menü: **Start**, **Rechnungen** (Neue Rechnung, Rechnungen), **Angebote** (Neues Angebot, Angebote), **Dokumente** (Neuer Vertrag, Verträge, Vertragsvorlage), **Finanzen** (Übersicht, Ausgaben, Fahrten, Anschaffungen, EÜR & Export) und **Stammdaten** (Kunden, Rechnungsposten, Zahlungsbedingungen).
+
+Auf dem **Handy** wandert das Menü nach unten in Daumenreichweite: **Start, Rechnungen, Angebote, Finanzen, Mehr** – ein Tipp öffnet die Unterpunkte (unter „Mehr“ Dokumente, Stammdaten und Hell/Dunkel). Oben bleiben Suche und ⚙ Einstellungen.
+
+<p><img src="docs/bilder/handy-start.png" alt="Screenshot: Startseite auf dem Handy" width="260"> <img src="docs/bilder/handy-menue.png" alt="Screenshot: Menü auf dem Handy" width="260"></p>
 
 
 ### Rundgang
@@ -192,6 +200,14 @@ Alle Datumsfelder nehmen das Datum einfach getippt an – `7.10.2019`, `07.10.19
 Oben die offenen Rechnungen mit Restzeit. Ist eine Rechnung bezahlt, Haken setzen – sie wandert ins Archiv. Bei überfälligen Rechnungen erzeugt der grüne Button die nächste Stufe (Zahlungserinnerung → 1. Mahnung → 2. Mahnung) als PDF. 🔒 schreibt eine Rechnung fest, ✕ löscht sie bzw. storniert sie, wenn sie schon festgeschrieben ist. Im Archiv stehen bezahlte und stornierte Rechnungen; dort lassen sich Rechnungen auch stornieren.
 
 ![Screenshot: Rechnungen](docs/bilder/rechnungen.png)
+
+### E-Rechnung schreiben
+
+Firmen und Vereine brauchen für ihre Buchhaltung zunehmend **E-Rechnungen**. Mit dem Haken **E-Rechnung (ZUGFeRD)** im Editor bekommt das Rechnungs-PDF zusätzlich die maschinenlesbare Rechnung (Factur-X/ZUGFeRD, Profil EN 16931) eingebettet – das PDF sieht aus wie immer, Buchhaltungsprogramme lesen die Daten direkt ein. Bei Kunden, deren Name nach Firma oder Verein aussieht (GmbH, e. V., Verein, Schule …), ist der Haken schon gesetzt; für Privatkunden ist er nicht nötig. Anzahlungs-, Schluss- und Stornorechnungen werden passend gekennzeichnet; als Kleinunternehmer steht der Hinweis auf § 19 UStG auch in den Daten.
+
+Für eine E-Rechnung braucht es die **Steuernummer** (oder USt-IdNr.) unter ⚙ Einstellungen – fehlt etwas, sagt die App beim Speichern, was. In den Listen sind E-Rechnungen mit einem kleinen **E** gekennzeichnet.
+
+![Screenshot: E-Rechnung im Editor](docs/bilder/erechnung.png)
 
 ### Versenden
 
@@ -495,6 +511,21 @@ Alles ist in den normalen Home-Assistant-Backups enthalten. Die Startseite zeigt
 
 In der **Desktop-Version** liegt alles im Dokumente-Ordner unter `DJ Office Studio`; die App legt dort in `Daten/Sicherungen` einmal pro Tag automatisch eine Kopie der Datenbank ab (die letzten 14 bleiben erhalten).
 
+### Sicherungs-Passwort
+
+Unter **⚙ Einstellungen → Datensicherung & Export → Passwort festlegen** wird ein Sicherungs-Passwort vergeben (mindestens 10 Zeichen). Danach ist **jede Sicherung verschlüsselt** (Datei `…Sicherung_JJJJ-MM-TT.djos`) – wer sie in der Cloud, auf einem USB-Stick oder per Mail in die Hände bekommt, sieht ohne Passwort nichts:
+
+- **Herunterladen** und **Einspielen** fragen jedes Mal nach dem Passwort. Eine verschlüsselte Sicherung lässt sich auch auf einem neuen Rechner einspielen – dafür genügt das Passwort.
+- Die **automatische Tagessicherung** der Desktop-Version wird ebenfalls verschlüsselt, ohne dass man etwas eingeben muss: Zum Verschlüsseln braucht die App nur einen öffentlichen Schlüssel, öffnen lässt sich die Sicherung nur mit dem Passwort.
+- Das Passwort wird **nirgends gespeichert**. Ist es vergessen, lässt sich keine verschlüsselte Sicherung mehr öffnen – am besten im Passwort-Manager notieren. Nach **Passwort ändern** nutzen neue Sicherungen das neue Passwort; ältere öffnen sich weiter mit dem bisherigen.
+- Ältere Sicherungen ohne Passwort (`.zip`, `.db`) lassen sich wie bisher einspielen.
+
+**Kopie in die Cloud (Desktop):** Unter demselben Punkt einen Ordner wählen, z. B. den Nextcloud-, iCloud-Drive- oder OneDrive-Ordner oder ein NAS. Die App legt dort einmal am Tag beim Start eine verschlüsselte **Komplettsicherung** mit allen Belegen ab; die letzten 7 bleiben liegen. **Jetzt kopieren** probiert es sofort aus.
+
+![Screenshot: Sicherungs-Passwort festlegen](docs/bilder/sicherung-passwort.png)
+
+![Screenshot: Datensicherung mit Passwort](docs/bilder/sicherung.png)
+
 ## Changelog
 
 Alle Änderungen je Version stehen in [rechnungen/CHANGELOG.md](rechnungen/CHANGELOG.md) – Home Assistant zeigt sie auch beim Update an.
@@ -552,6 +583,13 @@ pytest tests
 
 Die Tests laufen auch automatisch bei jedem Push (GitHub Actions, `.github/workflows/tests.yml`) und vor jedem Bau der Desktop-Version.
 
+**Browser-Tests** (`tests/browser`): Klick-Abläufe in Chrome und Safari (WebKit) – Anzahlungen, Rundgang und Suche, Verträge, Kundenakte, Sicherungs-Passwort, E-Rechnung, Handy-Menü – mit Prüfung der Sicherheitsregeln (CSP) und einem Durchlauf, bei dem jedes Textfeld Schadcode enthält. Sie laufen in GitHub Actions bei jedem Push; lokal:
+
+```bash
+pip install playwright && python -m playwright install chromium webkit
+DJOS_BROWSERTESTS=1 pytest tests/browser          # nur einen Browser: DJOS_BROWSER=chromium
+```
+
 ### Aufbau
 
 ```
@@ -572,7 +610,10 @@ rechnungen/
     abschluss.py         Jahresabschluss: prüfen, Paket mit Prüfsumme, wieder öffnen; Kleinunternehmer/Fahrzeug je Jahr
     abos.py              Abos: wiederkehrende Ausgaben, fällige Abbuchungen, Belege erkennen
     vertraege.py         Booking-Verträge: Vorlage mit Bausteinen, eigener Vertrag hochladen, Vertragstext, Unterschrift
-    kundenakte.py        Bar bezahlt (Quittung von Hand, Foto vom Durchschlag) und Jahres-Erinnerung für Stammkunden
+    kundenakte.py        Bar bezahlt (Quittung von Hand, Foto vom Durchschlag), Notizen und Jahres-Erinnerung für Stammkunden
+    sicherung.py         Sicherungs-Passwort, verschlüsselte Sicherung herunterladen, Tageskopie in einen Cloud-Ordner
+    verschluesselung.py  Verschlüsselung der Sicherungen (X25519 + AES-256-GCM, Passwort über scrypt)
+    zugferd.py           E-Rechnung schreiben (Factur-X/ZUGFeRD, EN 16931) und ins PDF einbetten
     belege.py            Auslesen von Belegen (PDF, Fotos, Kauf-Mails .eml/.msg/.mbox)
     texterkennung.py     Texterkennung für Fotos und Scans (lokal, im eigenen Prozess)
     pdflesen.py          Lesen fremder PDFs im eigenen Prozess
@@ -582,7 +623,7 @@ rechnungen/
     paperless.py         Abholen von Ausgaben-Belegen aus Paperless-ngx (REST-Schnittstelle, nur lesend)
     strecken.py          Entfernungen über OpenStreetMap (Nominatim, OSRM) mit Zwischenspeicher
     static/              Oberfläche (HTML, CSS, JavaScript; vertraege.js = Dokumente, kundenakte.js = Kundenakte und Vertrag → Rechnung,
-                         rundgang.js = Rundgang und Schnellsuche)
+                         rundgang.js = Rundgang und Schnellsuche, sicherung.js = Sicherungs-Passwort, handy.js = Menüleiste unten)
 desktop/
   start.py               Starter der Desktop-Version (Server + eigenes App-Fenster mit pywebview, Daten im Dokumente-Ordner)
   requirements.txt       Zusätzliche Pakete nur für die Desktop-Version (pywebview)
@@ -593,7 +634,8 @@ desktop/
 docs/
   screenshots.py         Erzeugt die README-Screenshots (docs/bilder/) mit Beispieldaten
 tests/                   Automatische Tests (pytest): API, PDFs, Pflichtangaben, Umsatzsteuer, QR-Code, Festschreiben/Storno,
-                         Mahnungen, E-Mail-Versand, Sicherung, Import, Belege, Fahrten, Abschreibung, EÜR, Jahresabschluss, Abos, Verträge, Kundenakte …
+                         Mahnungen, E-Mail-Versand, Sicherung, Import, Belege, Fahrten, Abschreibung, EÜR, Jahresabschluss, Abos, Verträge, Kundenakte, Verschlüsselung, E-Rechnung …
+  browser/               Browser-Tests (Playwright, Chrome + WebKit) mit eigenem Testserver und erfundenen Daten
 ```
 
 ### Neue Version veröffentlichen

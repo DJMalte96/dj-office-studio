@@ -73,15 +73,32 @@ def freier_port():
 
 
 def automatische_sicherung(db, behalten=14):
-    """Einmal pro Tag beim Start eine Kopie der Datenbank in Daten/Sicherungen ablegen (die letzten 14 bleiben)."""
+    """Einmal pro Tag beim Start eine Kopie der Datenbank in Daten/Sicherungen ablegen (die letzten 14 bleiben).
+    Seit 1.15 verschlüsselt (.db.djos), sobald ein Sicherungs-Passwort festgelegt ist – ohne Eingabe, mit dem
+    öffentlichen Schlüssel; öffnen lässt sie sich nur mit dem Passwort."""
     from datetime import date
+    import verschluesselung
     ordner = DATEN / "Sicherungen"
     ordner.mkdir(exist_ok=True)
-    ziel = ordner / f"rechnungen_{date.today().isoformat()}.db"
+    einst = db.get_settings()
+    pub, priv = einst.get("_sicherung_pub"), einst.get("_sicherung_priv")
+    heute = date.today().isoformat()
+    ziel = ordner / f"rechnungen_{heute}.db"
+    ziel_v = ordner / f"rechnungen_{heute}.db.djos"
     try:
-        if not ziel.exists():
-            db.sichern(str(ziel))
-        for alt in sorted(ordner.glob("rechnungen_*.db"))[:-behalten]:
+        if not ziel.exists() and not ziel_v.exists():
+            if pub:
+                tmp = ordner / f".rechnungen_{heute}.tmp"
+                db.sichern(str(tmp))
+                try:
+                    with open(tmp, "rb") as q, open(ziel_v, "wb") as z:
+                        verschluesselung.verschluesseln(q, z, pub, priv)
+                finally:
+                    tmp.unlink(missing_ok=True)
+            else:
+                db.sichern(str(ziel))
+        alle = sorted(list(ordner.glob("rechnungen_*.db")) + list(ordner.glob("rechnungen_*.db.djos")), key=lambda p: p.name)
+        for alt in alle[:-behalten]:
             alt.unlink()
     except OSError as e:
         print(f"Automatische Sicherung fehlgeschlagen: {e}")
@@ -164,6 +181,8 @@ def main():
 
     db.init()
     automatische_sicherung(db)
+    import sicherung
+    sicherung.tageskopie_im_hintergrund()   # seit 1.15: verschlüsselte Komplettsicherung in den Cloud-Ordner
     webapp.absender_festhalten()        # erst nach der Tageskopie
     webapp.abschluss.jahre_festhalten()  # seit 1.8: Kleinunternehmer/Fahrzeug je Jahr
     port = freier_port()
@@ -243,6 +262,15 @@ class DesktopApi:
         if url.startswith(("https://", "http://", "mailto:")):
             webbrowser.open(url)
         return True
+
+    def ordner_waehlen(self, start=""):
+        """Ordner auswählen (z. B. Cloud-Ordner für die Tageskopie). Rückgabe: Pfad oder None."""
+        import webview
+        anfang = Path(start) if start and Path(start).is_dir() else Path.home()
+        auswahl = self._fenster.create_file_dialog(webview.FileDialog.FOLDER, directory=str(anfang))
+        if not auswahl:
+            return None
+        return str(auswahl if isinstance(auswahl, str) else auswahl[0])
 
     def daten_ordner(self):
         ordner_oeffnen(BASIS)

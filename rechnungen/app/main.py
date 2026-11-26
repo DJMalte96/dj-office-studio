@@ -24,6 +24,9 @@ import abos
 import abschluss
 import db
 import kundenakte
+import sicherung
+import zugferd
+import verschluesselung
 import vertraege
 import finanzen
 import importer
@@ -42,6 +45,7 @@ app.register_blueprint(abschluss.bp)  # Jahresabschluss (seit 1.8)
 app.register_blueprint(abos.bp)       # Abos / wiederkehrende Ausgaben (seit 1.9)
 app.register_blueprint(vertraege.bp)  # Booking-Verträge (seit 1.13)
 app.register_blueprint(kundenakte.bp)  # Kundenakte, bar bezahlt (seit 1.14)
+app.register_blueprint(sicherung.bp)   # Sicherungs-Passwort, Tageskopie (seit 1.15)
 
 
 @app.errorhandler(abschluss.Gesperrt)
@@ -156,6 +160,7 @@ FELDER = {
     "update_pruefen": (bool, True),   # nur Desktop-Version: beim Start nach neuer Version suchen
     "mahnfrist_tage": (int, 7),       # Frist in Zahlungserinnerung/Mahnung (Tage ab Datum)
     "sicherung_erinnerung_tage": (int, 30),
+    "sicherung_kopie_ordner": (str, ""),   # nur Desktop: tägliche verschlüsselte Sicherung in diesen Ordner (Cloud, NAS)
     "nachfassen_tage": (int, 7),      # Startseite erinnert an Angebote ohne Antwort nach so vielen Tagen (0 = nie)   # Startseite erinnert an eine Sicherung nach so vielen Tagen (0 = nie)
     # E-Mail-Versand über das eigene Postfach (beliebiger Anbieter / eigener Server)
     "absender_email": (str, ""), "smtp_server": (str, ""), "smtp_port": (int, 587),
@@ -260,7 +265,7 @@ def _asset_version(name):
 def index():
     with open(os.path.join(STATIC_DIR, "index.html"), encoding="utf-8") as f:
         html = f.read()
-    for name in ("theme.js", "style.css", "datum.js", "app.js", "finanzen.js", "rundgang.js", "vertraege.js", "kundenakte.js"):
+    for name in ("theme.js", "style.css", "datum.js", "app.js", "finanzen.js", "rundgang.js", "vertraege.js", "kundenakte.js", "sicherung.js", "handy.js"):
         html = html.replace(f'"static/{name}"', f'"static/{name}?v={_asset_version(name)}"')
     return Response(html, mimetype="text/html", headers={"Cache-Control": "no-cache"})
 
@@ -607,6 +612,12 @@ def _validate_invoice(data, inv_id=None, check_number=True, art="rechnung", pfli
     else:
         doc["bezahlt"] = bool(data.get("bezahlt"))
         _rechnungsart(doc, data, positionen, inv_id)
+        doc["erechnung"] = bool(data.get("erechnung"))
+        if doc["erechnung"] and pflicht:   # seit 1.15: E-Rechnung braucht ein paar Angaben mehr
+            fehlt = zugferd.fehlende_angaben(doc, absender())
+            if fehlt:
+                abort(Response(json.dumps({"error": "Für die E-Rechnung fehlt noch: " + ", ".join(fehlt)
+                                           + " (⚙ Einstellungen bzw. Kunde)."}), 400, mimetype="application/json"))
     return doc
 
 
@@ -688,6 +699,19 @@ def _steuer(netto, a=None):
     return {"kleinunternehmer": False, "ust_satz": satz, "gesamt": round(netto + round(netto * satz / 100, 2), 2)}
 
 
+def beleg_pdf(b, a):
+    """PDF einer Rechnung bzw. eines Angebots; bei einer E-Rechnung (seit 1.15) mit eingebettetem ZUGFeRD-XML."""
+    pdf = build_invoice_pdf(b, a)
+    if not b.get("erechnung") or b.get("art") == "angebot":
+        return pdf
+    try:
+        return zugferd.einbetten(pdf, zugferd.xml(b, a, _faellig_am(b) if not b.get("storno_von") else None,
+                                                  b.get("storno_zu")), b, a)
+    except Exception as e:   # noqa: BLE001 – das PDF selbst muss immer kommen
+        print(f"E-Rechnung {b.get('nummer')}: XML nicht eingebettet ({e})", flush=True)
+        return pdf
+
+
 def _write_pdf_file(inv):
     """Legt eine Kopie des PDFs im konfigurierten Ordner ab (z. B. /share/rechnungen)."""
     try:
@@ -695,7 +719,7 @@ def _write_pdf_file(inv):
         os.makedirs(target, exist_ok=True)
         path = os.path.join(target, pdf_filename(inv))
         with open(path, "wb") as f:
-            f.write(build_invoice_pdf(inv, absender_fuer(inv)))
+            f.write(beleg_pdf(inv, absender_fuer(inv)))
         return path
     except OSError as e:
         app.logger.warning("PDF konnte nicht gespeichert werden: %s", e)
@@ -759,8 +783,8 @@ def invoices_create():
     return jsonify({"id": inv_id, "datei": _write_pdf_file(inv)}), 201
 
 
-def _fehler(text, code=400):
-    return jsonify({"error": text}), code
+def _fehler(text, code=400, **extra):
+    return jsonify({"error": text, **extra}), code
 
 
 FESTGESCHRIEBEN = ("Die Rechnung ist festgeschrieben und kann nicht mehr geändert oder gelöscht werden – "
@@ -843,7 +867,7 @@ def invoices_cancel(inv_id):
         "zahlungsbedingung": "", "gesamt": -inv["gesamt"],
         "kleinunternehmer": inv.get("kleinunternehmer"), "ust_satz": inv.get("ust_satz"),
         "veranstaltungsort": inv.get("veranstaltungsort"), "fahrt_erfassen": False,
-        "bezahlt": True, "festgeschrieben": True, "storno_von": inv_id,
+        "bezahlt": True, "festgeschrieben": True, "storno_von": inv_id, "erechnung": inv.get("erechnung"),
         "absender": absender_jetzt(),       # neues Dokument von heute
     }
     storno_id = db.save_invoice(storno)
@@ -906,7 +930,7 @@ def _letzte_auto_sicherung():
         return None
     try:
         namen = [n for n in os.listdir(os.path.join(db.DATA_DIR, "Sicherungen"))
-                 if re.fullmatch(r"rechnungen_\d{4}-\d{2}-\d{2}\.db", n)]
+                 if re.fullmatch(r"rechnungen_\d{4}-\d{2}-\d{2}\.db(\.djos)?", n)]
     except OSError:
         return None
     return max(namen)[11:21] if namen else None
@@ -918,15 +942,14 @@ def _sicherung_status(a):
             "automatisch": _letzte_auto_sicherung()}
 
 
-@app.get("/api/backup")
-def backup_download():
-    """Komplette Sicherung als ZIP: Datenbank (Kunden, Rechnungen, Angebote, Finanzen, Einstellungen) und alle Belege."""
+def sicherung_schreiben(ziel):
+    """Komplette Sicherung als ZIP in das Datei-Objekt ziel: Datenbank (ohne Mail-Passwort) und alle Belege,
+    Jahresabschlüsse, Verträge und Fotos von Barzahlungen. Rückgabe: Anzahl der Belege."""
     with tempfile.TemporaryDirectory() as tmp:
         pfad = os.path.join(tmp, "rechnungen.db")
         db.sichern(pfad)
         db.geheimnisse_entfernen(pfad)   # Mail-Passwort nicht in die herunterladbare Datei
-        buf = tempfile.TemporaryFile()   # mit allen Belegen schnell einige 100 MB: über eine Datei, nicht im Arbeitsspeicher
-        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED, allowZip64=True) as zf:
+        with zipfile.ZipFile(ziel, "w", zipfile.ZIP_DEFLATED, allowZip64=True) as zf:
             zf.write(pfad, "rechnungen.db")
             anzahl_belege = 0
             for ordner in ("belege", abschluss.ORDNER, vertraege.ORDNER, kundenakte.ORDNER):   # seit 1.8 Abschlüsse, 1.13 Verträge, 1.14 Bar
@@ -939,6 +962,17 @@ def backup_download():
             zf.writestr("info.json", json.dumps({"app": "DJ Office Studio", "version": APP_VERSION,
                                                  "erstellt": datetime.now().isoformat(timespec="seconds"),
                                                  "belege": anzahl_belege}))
+    return anzahl_belege
+
+
+@app.get("/api/backup")
+def backup_download():
+    """Unverschlüsselte Sicherung als ZIP – nur, solange kein Sicherungs-Passwort festgelegt ist (sonst
+    /api/sicherung/vorbereiten mit Passwort)."""
+    if sicherung.schluessel()[0]:
+        return _fehler("Sicherungen sind verschlüsselt – bitte mit dem Sicherungs-Passwort herunterladen.", 409)
+    buf = tempfile.TemporaryFile()   # mit allen Belegen schnell einige 100 MB: über eine Datei, nicht im Arbeitsspeicher
+    sicherung_schreiben(buf)
     db.save_settings({"_letzte_sicherung": datetime.now().isoformat(timespec="seconds")})   # für die Erinnerung
     name = f"DJ-Office-Studio-Sicherung_{date.today():%Y-%m-%d}.zip"
     buf.seek(0)
@@ -952,6 +986,15 @@ def backup_restore():
     with tempfile.TemporaryDirectory() as tmp:
         pfad = os.path.join(tmp, "upload.db")
         inhalt = datei.read()
+        if verschluesselung.ist_verschluesselt(inhalt):   # seit 1.15: verschlüsselte Sicherung (.djos)
+            if not request.form.get("passwort"):
+                return _fehler("Diese Sicherung ist verschlüsselt – bitte das Sicherungs-Passwort eingeben.", passwort=True)
+            try:
+                inhalt = sicherung.entschluesseln_falls_noetig(inhalt, request.form["passwort"])
+            except verschluesselung.FalschesPasswort:
+                return _fehler("Das Passwort passt nicht zu dieser Sicherung.", passwort=True)
+            except verschluesselung.KeineSicherung as e:
+                return _fehler(f"Die Sicherung lässt sich nicht öffnen: {e}")
         belege_tmp = os.path.join(tmp, "belege")
         if inhalt[:2] == b"PK":   # ZIP
             rest = [SICHERUNG_FAKTOR * len(inhalt) + SICHERUNG_ZUSCHLAG]   # entpackt höchstens so viel (Zip-Bombe)
@@ -1094,7 +1137,7 @@ def export_zip(jahr, a=None, ziel=None):
             w.writerow([r["nummer"], r["datum"], leistung, r["kunde"].get("name", ""), r["kunde"].get("ort", ""),
                         _betrag(netto), f"{satz:g} %" if satz else "", _betrag(r["gesamt"] - netto) if satz else "",
                         _betrag(r["gesamt"]), status, r.get("bezahlt_am") or "", bezug, name])
-            zf.writestr(f"PDFs/{name}", build_invoice_pdf(r, absender_fuer(r, a)))
+            zf.writestr(f"PDFs/{name}", beleg_pdf(r, absender_fuer(r, a)))
         summe = sum(r["gesamt"] for r in rechnungen)
         bezahlt = sum(r["gesamt"] for r in rechnungen if r["bezahlt"] and not r["storno_von"])
         w.writerow([])
@@ -1137,7 +1180,7 @@ def _versand_beleg(art, beleg_id, mahnung_id=None, a=None):
     mahnung = None
     if art == "mahnung":
         mahnung = next((m for m in beleg["mahnungen"] if m["id"] == mahnung_id), None) or abort(404)
-    anhaenge = [(pdf_filename(beleg), build_invoice_pdf(beleg, absender_fuer(beleg, a)))]
+    anhaenge = [(pdf_filename(beleg), beleg_pdf(beleg, absender_fuer(beleg, a)))]
     if mahnung:
         anhaenge.insert(0, (mahnung_filename(beleg, mahnung),
                             build_mahnung_pdf(beleg, mahnung, absender_fuer(mahnung, a), _faellig_am(beleg))))
@@ -1247,7 +1290,7 @@ def mail_test():
 
 def _pdf_response(inv, download=False):
     disposition = "attachment" if download or request.args.get("download") else "inline"
-    return Response(build_invoice_pdf(inv, absender_fuer(inv)), mimetype="application/pdf",
+    return Response(beleg_pdf(inv, absender_fuer(inv)), mimetype="application/pdf",
                     headers={"Content-Disposition": f'{disposition}; filename="{pdf_filename(inv)}"'})
 
 
@@ -1294,7 +1337,7 @@ def _download(laden, zip_praefix):
             while name in used:          # gleiche Dateinamen nicht überschreiben
                 name, n = f"{stem}_{n}.pdf", n + 1
             used.add(name)
-            zf.writestr(name, build_invoice_pdf(inv, absender_fuer(inv)))
+            zf.writestr(name, beleg_pdf(inv, absender_fuer(inv)))
     zip_name = f"{zip_praefix}_{date.today():%Y-%m-%d}.zip"
     return Response(buf.getvalue(), mimetype="application/zip",
                     headers={"Content-Disposition": f'attachment; filename="{zip_name}"'})
@@ -1358,7 +1401,7 @@ def invoices_to_paperless():
             continue
         name = pdf_filename(inv)
         try:
-            _in_eingangsordner(ordner, name, build_invoice_pdf(inv, absender_fuer(inv, a)))
+            _in_eingangsordner(ordner, name, beleg_pdf(inv, absender_fuer(inv, a)))
         except OSError as e:
             fehler.append({"id": inv_id, "name": name, "error": f"{name} konnte nicht abgelegt werden: {e}"})
             continue
