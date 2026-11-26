@@ -6,6 +6,7 @@ Aufruf: python tests/sicherung_erechnung_rauchtest.py http://127.0.0.1:8765
 import io
 import json
 import sys
+import urllib.error
 import urllib.request
 import zipfile
 from pathlib import Path
@@ -22,12 +23,17 @@ def anfrage(pfad, daten=None, methode=None):
     req = urllib.request.Request(URL + pfad, data=json.dumps(daten).encode() if daten is not None else None,
                                  method=methode or ("POST" if daten is not None else "GET"),
                                  headers={"X-DJOS": "1", "Content-Type": "application/json"})
-    with urllib.request.urlopen(req, timeout=120) as r:
+    try:
+        r = urllib.request.urlopen(req, timeout=120)
+    except urllib.error.HTTPError as e:
+        raise SystemExit(f"{pfad}: {e.code} {e.read().decode('utf-8', 'replace')[:300]}") from None
+    with r:
         inhalt = r.read()
         return json.loads(inhalt) if r.headers.get("Content-Type", "").startswith("application/json") else inhalt
 
 
-anfrage("api/einstellungen", {"steuernummer": "12/345/67890", "schon_verschickt": []}, "PUT")
+anfrage("api/einstellungen", {"name": "Max Rauchtest", "strasse": "Testweg 1", "plz_ort": "12345 Teststadt",
+                              "steuernummer": "12/345/67890", "schon_verschickt": []}, "PUT")
 r = anfrage("api/rechnungen", {"nummer": "901", "datum": "2026-01-02", "erechnung": True, "zahlungsbedingung": "8 Tage",
                                "kunde": {"name": "Sportverein Rauchtest e. V.", "strasse": "Sportplatz 1", "plz": "12345", "ort": "Teststadt"},
                                "positionen": [{"beschreibung": "DJ", "lieferdatum": "2026-01-02", "preis": 700}]})
