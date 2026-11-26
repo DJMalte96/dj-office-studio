@@ -28,6 +28,19 @@ const vertragRechnung = v => (state.rechnungen || []).find(r => kaGueltig(r) && 
   && (r.vertrag_id === v.id || (v.angebot_id && r.angebot_id === v.angebot_id)));
 const vertragBar = v => ka.bar.find(b => b.vertrag_id === v.id || (v.angebot_id && b.angebot_id === v.angebot_id));
 const angebotBar = a => ka.bar.find(b => b.angebot_id === a.id);
+/* Angenommenes Angebot ohne Vertrag: nach der Feier (bis 60 Tage danach) an Rechnung bzw. „Bar bezahlt“ erinnern,
+   solange es dazu weder eine Rechnung (außer Anzahlung) noch eine Barzahlung gibt. Ältere Angebote bleiben still –
+   sonst meldeten sich längst erledigte oder importierte Angebote. */
+const ANGEBOT_ERINNERN_TAGE = 60;
+function angebotBraucht(a, heute = kaHeute()) {
+  const feier = veranstaltungAm(a);
+  if (a.status !== "angenommen" || !feier || feier > heute) return false;
+  const grenze = new Date(heute + "T12:00");
+  grenze.setDate(grenze.getDate() - ANGEBOT_ERINNERN_TAGE);
+  if (feier < isoLokal(grenze)) return false;
+  if (ka.vertraege.some(v => v.angebot_id === a.id) || angebotBar(a)) return false;
+  return !(state.rechnungen || []).some(r => kaGueltig(r) && r.rechnungsart !== "anzahlung" && (r.angebot_id === a.id || r.id === a.rechnung_id));
+}
 const mitAnzahlung = v => v.felder.zahlung !== "ganz" && Number(v.felder.anzahlung) > 0;
 
 /* Was steht beim Vertrag an? „rechnung“ nach der Feier, „anzahlung“ vorher (falls vereinbart und unterschrieben), sonst null. */
@@ -233,6 +246,8 @@ function kaStartChips(heute) {
     if (b === "rechnung") chips.push(`<button type="button" class="start-chip gelb" data-ka-start="rechnung" data-vertrag="${v.id}">✎ Rechnung schreiben: Feier ${wer} war am ${fmtDate(v.datum).slice(0, 6)}</button>`);
     if (b === "anzahlung") chips.push(`<button type="button" class="start-chip gelb" data-ka-start="anzahlung" data-vertrag="${v.id}">€ Anzahlung anfordern: ${wer}</button>`);
   }
+  for (const a of (state.angebote || []).filter(a => angebotBraucht(a, heute)))
+    chips.push(`<button type="button" class="start-chip gelb" data-ka-start="angebot-rechnung" data-aid="${a.id}" title="Angebot ${esc(a.nummer)}">✎ Rechnung schreiben: Feier ${vorname(a.kunde.name)} war am ${fmtDate(veranstaltungAm(a)).slice(0, 6)}</button>`);
   for (const e of erinnerungen(heute))
     chips.push(`<span class="start-chip stamm-chip"><button type="button" class="link" data-akte="${esc(e.name)}" title="Kundenakte öffnen">↻ Stammkunde ${vorname(e.name)}: letztes Jahr am ${fmtDate(e.letzte.am).slice(0, 6)} – Angebot schicken?</button>
       <button type="button" class="link aus" data-ka-start="ruhe" data-name="${esc(e.name)}" data-am="${e.am}" title="Diesmal nicht – kommt nächstes Jahr wieder" aria-label="Diesmal nicht">✕</button></span>`);
@@ -248,6 +263,7 @@ $("#start").addEventListener("click", async e => {
   try {
     switch (b.dataset.kaStart) {
       case "rechnung": return zahlwegFragen({ vertrag: v });
+      case "angebot-rechnung": return zahlwegFragen({ angebot: state.angebote.find(x => x.id === Number(b.dataset.aid)) });
       case "anzahlung": return rechnungAusVertrag(v, "anzahlung");
       case "bar": return oeffneBar({ angebot: a });
       case "ruhe":

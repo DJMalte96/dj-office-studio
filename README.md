@@ -238,6 +238,8 @@ Ist bei einem unterschriebenen Vertrag eine Anzahlung vereinbart, zeigt die Star
 - **Rechnung schreiben** – Kunde, Termin, Spielzeit, Ort und Gage kommen aus dem Vertrag; gibt es eine Anzahlung, wird es die Schlussrechnung und zieht sie ab. **＋ Verlängerung** und **＋ weitere Position** ergänzen, was dazugekommen ist. Gespeichert gehört die Rechnung zum Vertrag.
 - **Bar bezahlt** – die Quittung schreibst du wie gewohnt von Hand auf den Quittungsblock, die App erzeugt keine. Sie vermerkt nur Betrag (nach einer bezahlten Anzahlung ist der Rest vorausgefüllt), Tag, auf Wunsch die Nummer vom Block und ein Foto vom Durchschlag. Der Vermerk steht in der Kundenakte, erledigt die Erinnerung und markiert das Angebot als angenommen – in EÜR, Export und Kleinunternehmer-Grenze zählt er nicht. Bei Firmen und Vereinen weist die App darauf hin, dass sie meist eine richtige Rechnung brauchen.
 
+Dasselbe gilt für ein **angenommenes Angebot ohne Vertrag**: Nach der Feier (bis 60 Tage danach) erinnert die Startseite, bis es eine Rechnung oder eine Barzahlung dazu gibt.
+
 Dieselben Knöpfe gibt es in **Dokumente → Verträge** (mit dem Stand: „Anzahlung 025 ✓ bezahlt · Rechnung 026 offen“), im Vertragsfenster (**→ Rechnung**) und bei den Angeboten (**Bar bezahlt** neben **→ Rechnung**).
 
 ![Screenshot: Wie wurde bezahlt?](docs/bilder/zahlweg.png)

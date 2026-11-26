@@ -2287,10 +2287,7 @@ async function renderStart() {
   if (vtOffen) wichtig.push(["gelb", `✍ ${vtOffen} ${vtOffen === 1 ? "Vertrag" : "Verträge"} nicht unterschrieben zurück`, `data-start="vertraege"`]);
   const nachfassen = angebote.filter(nachfassenFaellig).length;
   if (nachfassen) wichtig.push(["gelb", `✉ ${nachfassen} Angebot${nachfassen === 1 ? "" : "e"} nachfragen`, `data-start="zu-karte" data-ziel=".start-karte.nachfassen"`]);
-  // Gibt es zum Angebot einen Vertrag, erinnert der Vertrag an die Rechnung (kaStartChips) – nicht doppelt
-  for (const a of state.angebote.filter(a => schlussOffen(a) && veranstaltungAm(a) && veranstaltungAm(a) <= heute
-    && !ka.vertraege.some(v => v.angebot_id === a.id)))
-    wichtig.push(["gelb", `✎ Schlussrechnung ${esc(a.kunde.name.split(" ")[0])}`, `data-start="schluss" data-angebot="${a.id}" title="Feier am ${fmtDate(veranstaltungAm(a))} – Anzahlung wird abgezogen"`]);
+  // Nach der Feier erinnern Vertrag bzw. angenommenes Angebot an die Rechnung – siehe kaStartChips (kundenakte.js)
   for (const g of (eu?.grenzen?.hinweise || []).filter(g => g.stufe === "rot")) wichtig.push(["rot", "! Kleinunternehmer-Grenze", `data-start="finanzen" title="${esc(g.text)}"`]);
   if (sich.faellig) wichtig.push(["rot", "⇩ Sicherung fällig", `data-start="sichern"`]);
   const kaChips = kaStartChips(heute);   // Vertrag → Rechnung, Stammkunden (kundenakte.js)
