@@ -38,7 +38,13 @@ args += ["--hidden-import", "texterkennung", "--collect-data", "rapidocr", "--co
 # (siehe requirements.txt; selbst gebaut verlangte die App das macOS des Build-Rechners). msoffcrypto bleibt draußen.
 args += ["--exclude-module", "msoffcrypto", "--hidden-import", "sicherung", "--hidden-import", "verschluesselung",
          "--hidden-import", "kundenakte", "--hidden-import", "vertraege", "--hidden-import", "zugferd",
-         "--collect-data", "facturx", "--hidden-import", "facturx"]
+         "--hidden-import", "facturx"]
+# factur-x: nur das Schema für EN 16931 und die XMP-Vorlagen mitnehmen – die übrigen Schemata haben so lange Dateinamen,
+# dass Windows die Pfade (über 260 Zeichen) beim Entpacken nicht mehr schafft
+import facturx  # noqa: E402
+FX = Path(facturx.__file__).resolve().parent
+args += ["--add-data", f"{FX / 'xsd_and_schematron' / 'facturx-en16931'}{SEP}facturx/xsd_and_schematron/facturx-en16931",
+         "--add-data", f"{FX / 'xmp'}{SEP}facturx/xmp"]
 # Eigenes App-Fenster (pywebview): JavaScript-Teile mitnehmen und die Plattform-Anbindung sicher einbinden
 args += ["--collect-data", "webview", "--hidden-import", "webview"]
 if sys.platform == "darwin":
