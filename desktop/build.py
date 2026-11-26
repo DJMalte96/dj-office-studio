@@ -26,6 +26,7 @@ args = [
     "--hidden-import", "finanzen", "--hidden-import", "belege", "--hidden-import", "erechnung", "--hidden-import", "pdflesen", "--hidden-import", "dateilesen", "--hidden-import", "abschluss", "--hidden-import", "abos", "--hidden-import", "grenzen", "--hidden-import", "pypdf", "--hidden-import", "xml.parsers.expat", "--hidden-import", "strecken", "--hidden-import", "paperless", "--hidden-import", "extract_msg", "--hidden-import", "pillow_heif",
     "--collect-data", "extract_msg",
     "--add-data", f"{APP / 'static'}{SEP}static",
+    "--add-data", f"{APP / 'handbuch'}{SEP}handbuch",   # seit 1.16: Handbuch (README + Bilder)
     "--add-data", f"{ROOT / 'rechnungen' / 'config.yaml'}{SEP}.",
     "--icon", str(ROOT / "rechnungen" / "icon.png"),
     "--distpath", str(OUT / "dist"), "--workpath", str(OUT / "build"), "--specpath", str(OUT / "build"),
@@ -36,7 +37,7 @@ args += ["--hidden-import", "texterkennung", "--collect-data", "rapidocr", "--co
          "--collect-all", "pypdfium2_raw", "--collect-all", "pypdfium2"]
 # Seit 1.15 gebraucht: cryptography (verschlüsselte Sicherungen) – fest auf 48.0.1 mit fertigem universal2-Paket
 # (siehe requirements.txt; selbst gebaut verlangte die App das macOS des Build-Rechners). msoffcrypto bleibt draußen.
-args += ["--exclude-module", "msoffcrypto", "--hidden-import", "sicherung", "--hidden-import", "verschluesselung",
+args += ["--exclude-module", "msoffcrypto", "--hidden-import", "sicherung", "--hidden-import", "verschluesselung", "--hidden-import", "postfach", "--hidden-import", "handbuch", "--hidden-import", "markdown",
          "--hidden-import", "kundenakte", "--hidden-import", "vertraege", "--hidden-import", "zugferd",
          "--hidden-import", "facturx"]
 # factur-x: nur das Schema für EN 16931 und die XMP-Vorlagen mitnehmen – die übrigen Schemata haben so lange Dateinamen,

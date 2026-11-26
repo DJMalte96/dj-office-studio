@@ -131,6 +131,13 @@ c.post("/api/barzahlungen", data={"betrag": "700", "datum": d(-345), "quittung_n
 # seit 1.15: Notiz zum Kunden
 kid_musik = next(k["id"] for k in db.list_items("kunden") if k["name"] == "Musikverein Beispiel")
 c.put(f"/api/kunden/{kid_musik}/notiz", json={"notiz": "Sommerfest im Vereinsheim · Ansprechpartnerin Frau Beispiel · Parken hinterm Haus"})
+# seit 1.16: ein doppelt angelegter Kunde (Tippfehler), Abholregeln fürs Postfach
+K["ana"] = {"name": "Ana und Jonas Muster", "strasse": "Lindenweg 12", "plz": "12345", "ort": "Musterstadt"}
+rechnung("018", "ana", d(-400), [pos("DJ – Tätigkeit Geburtstagsfeier – 20:00 Uhr bis 1:00 Uhr", d(-400), 550)], bezahlt=True)
+db.save_settings({"postfach_an": True, "postfach_ab": d(-30), "smtp_server": "smtp.web.de", "postfach_regeln": json.dumps([
+    {"an": True, "ordner": "Geschäftlich/Belege/Musik", "von": "", "betreff": ""},
+    {"an": True, "ordner": "Geschäftlich/Belege/Technik", "von": "", "betreff": ""},
+    {"an": False, "ordner": "Posteingang", "von": "rechnung@musikpool-beispiel.de", "betreff": "Rechnung"}])})
 r038 = next(r["id"] for r in db.list_invoices() if r["nummer"] == "038")
 c.post(f"/api/rechnungen/{r038}/stornieren")                                    # 038 → Stornorechnung 042
 
@@ -213,6 +220,7 @@ with sync_playwright() as p:
     browser = p.chromium.launch(args=["--lang=de-DE"])
     ctx = browser.new_context(viewport={"width": 1240, "height": 900}, device_scale_factor=2, locale="de-DE")
     ctx.add_init_script("try { localStorage.setItem('theme','light') } catch (e) {}")
+    ctx.add_init_script("document.addEventListener('DOMContentLoaded', () => document.head.insertAdjacentHTML('beforeend', '<style>.eins-aktionen { position: static !important; }</style>'))")
     page = ctx.new_page()
     page.on("pageerror", lambda e: fehler.append(str(e)))
 
@@ -228,7 +236,7 @@ with sync_playwright() as p:
 
     page.click("#einstellungen-btn")
     page.wait_for_timeout(800)
-    page.fill("[name=pdf_ordner]", "/share/rechnungen")   # üblicher Pfad statt Temp-Ordner (nicht gespeichert)
+    page.evaluate("document.querySelector('[name=pdf_ordner]').value = '/share/rechnungen'")   # üblicher Pfad statt Temp-Ordner
     page.mouse.move(5, 890)
     page.screenshot(path=str(ZIEL / "einstellungen.png"), full_page=True)
 
@@ -373,9 +381,49 @@ with sync_playwright() as p:
     page.locator("#kundenakte").screenshot(path=str(ZIEL / "kundenakte.png"))
     page.click("#kundenakte [data-ka=zu]")
 
+    # seit 1.16: Kunden zusammenführen, Postfach, Handbuch, Unterschrift vor Ort
+    page.evaluate("showTab('kunden')")
+    page.wait_for_timeout(1200)
+    page.click("#dup-oeffnen")
+    page.wait_for_timeout(800)
+    page.locator("#dup").screenshot(path=str(ZIEL / "zusammenfuehren.png"))
+    page.click("#dup [data-dup=zu]")
+    page.click("#einstellungen-btn")
+    page.wait_for_timeout(900)
+    page.click(".eins-nav [data-thema=mail]")
+    page.wait_for_timeout(400)
+    page.locator("#pf-karte").screenshot(path=str(ZIEL / "postfach.png"))
+    page.click(".eins-nav [data-thema=app]")
+    page.click("#handbuch-oeffnen")
+    page.wait_for_timeout(1500)
+    page.evaluate("document.querySelectorAll('#hb-text img').forEach(i => i.loading = 'eager')")
+    page.wait_for_timeout(800)
+    page.locator("#hb-nav a[href='#kundenakte']").click()
+    page.wait_for_timeout(600)
+    page.locator("#handbuch").screenshot(path=str(ZIEL / "handbuch.png"))
+    page.click("#handbuch [data-hb=zu]")
+    page.evaluate("showTab('vertraege')")
+    page.wait_for_timeout(1000)
+    page.evaluate(f"oeffneUnterschrift(vtState.liste.find(v => v.id === {v2}))")
+    page.wait_for_timeout(400)
+    page.check("#vt-unterschrift [value=hier]")
+    page.click("#vtu-form button[type=submit]")
+    page.wait_for_timeout(600)
+    for feld, versatz in (("0", 0), ("1", 12)):
+        box = page.locator(f"#sign canvas[data-pad='{feld}']").bounding_box()
+        x, y = box["x"] + 40, box["y"] + 112
+        page.mouse.move(x, y)
+        page.mouse.down()
+        for i in range(1, 46):
+            page.mouse.move(x + i * 6.5, y - 26 * abs(((i + versatz) % 10) - 5) / 5 + (i % 4) * 3)
+        page.mouse.up()
+    page.locator("#sign").screenshot(path=str(ZIEL / "unterschrift.png"))
+    page.click("#sign [data-sign=zu]")
+
     # Sicherungs-Passwort (seit 1.15): Dialog zum Festlegen, danach die Karte in den Einstellungen
     page.click("#einstellungen-btn")
     page.wait_for_timeout(900)
+    page.click(".eins-nav [data-thema=sicherung]")
     page.locator("#sp-box [data-sp-box]").click()
     page.wait_for_timeout(300)
     page.fill("#sp-neu", "Plattenkiste-1987!")
@@ -442,6 +490,7 @@ with sync_playwright() as p:
     # Rechnungseditor mit Bestandskunde und zwei Positionen
     ctx2 = browser.new_context(viewport={"width": 1240, "height": 1180}, device_scale_factor=2, locale="de-DE")
     ctx2.add_init_script("try { localStorage.setItem('theme','light') } catch (e) {}")
+    ctx2.add_init_script("document.addEventListener('DOMContentLoaded', () => document.head.insertAdjacentHTML('beforeend', '<style>.eins-aktionen { position: static !important; }</style>'))")
     page = ctx2.new_page()
     page.on("pageerror", lambda e: fehler.append(str(e)))
     page.goto(URL)
@@ -474,6 +523,13 @@ with sync_playwright() as p:
     page.wait_for_timeout(400)
     page.evaluate("document.activeElement && document.activeElement.blur()")
     page.locator("#positionen").locator("xpath=ancestor::div[contains(@class,'card')]").screenshot(path=str(ZIEL / "anzahlung.png"))
+    page.locator("#rechnungsart-box label", has_text="Normale Rechnung").click()
+    page.wait_for_timeout(300)
+    page.click("#nl-add")
+    page.fill("#nl-text", "Stammkundenrabatt")
+    page.evaluate("document.activeElement && document.activeElement.blur()")
+    page.wait_for_timeout(300)
+    page.locator("#positionen").locator("xpath=ancestor::div[contains(@class,'card')]").screenshot(path=str(ZIEL / "nachlass.png"))
     # E-Rechnung (seit 1.15): Verein als Kunde → Haken automatisch gesetzt
     page.evaluate("neueRechnung()")
     page.wait_for_timeout(900)
@@ -487,4 +543,10 @@ with sync_playwright() as p:
     browser.close()
 
 print("Bilder in", ZIEL, "– JavaScript-Fehler:", fehler or "keine")
+# seit 1.16: Handbuch in der App aus README und Bildern (docs/handbuch.py – nicht das gleichnamige Modul der App)
+import importlib.util  # noqa: E402
+_spec = importlib.util.spec_from_file_location("handbuch_erzeugen", Path(__file__).resolve().parent / "handbuch.py")
+_hb = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_hb)
+_hb.erzeugen()
 sys.exit(1 if fehler else 0)

@@ -219,7 +219,11 @@ $("#logo").addEventListener("click", () => showTab("start"));
 
 $("#einstellungen-btn").addEventListener("click", () => showTab("einstellungen"));
 document.addEventListener("click", e => {
-  if (e.target.closest(".zu-einstellungen")) { e.preventDefault(); showTab("einstellungen"); }
+  if (e.target.closest(".zu-einstellungen")) {
+    e.preventDefault();
+    if (typeof einstellungenThema === "function") einstellungenThema(e.target.closest("#versand-zu-einstellungen") ? "mail" : "absender");
+    showTab("einstellungen");
+  }
 });
 
 // Alle Jahresmenüs: Jahre aus dem ganzen Bestand (api/finanzen/jahre), nie aus einer schon gefilterten Liste
@@ -241,6 +245,7 @@ async function ladeEinstellungen() {
   zeigePasswortStatus(werte.smtp_passwort_gesetzt);
   if (typeof plEinstellungen === "function") plEinstellungen(werte);
   if (typeof sicherungStatusLaden === "function") sicherungStatusLaden();   // sicherung.js
+  if (typeof postfachLaden === "function") { postfachLaden(); einstellungenMarkieren(); }   // einstellungen.js
   form.elements.km_satz.value = Number(werte.km_satz || 0.3).toFixed(2).replace(".", ",");
   zeigeUstFelder();
   waehleAnbieter(ANBIETER.find(a => a.server && a.server === werte.smtp_server)?.id
@@ -394,6 +399,7 @@ $("#einstellungen").addEventListener("submit", async e => {
     zeigePasswortStatus(res.einstellungen.smtp_passwort_gesetzt);
     if (typeof plEinstellungen === "function") plEinstellungen(res.einstellungen);
     if (typeof sicherungStatusLaden === "function") sicherungStatusLaden();   // Cloud-Ordner geändert
+    if (typeof postfachLaden === "function") { postfachLaden(); setTimeout(einstellungenMarkieren, 300); }
     await ladeAbsender();
     pruefeUpdate();
     toast(res.hinweise.length ? `Gespeichert. Hinweis: ${res.hinweise.join(" ")}` : "Einstellungen gespeichert", !!res.hinweise.length);
@@ -638,6 +644,13 @@ function addPosition(p = {}) {
   $(".beschreibung", pos).value = p.beschreibung || "";
   $(".lieferdatum", pos).value = p.lieferdatum ?? (prev ? $(".lieferdatum", prev).value : "");
   $(".preis", pos).value = p.preis ?? "";
+  if (p.nachlass) {                 // seit 1.16: Nachlass – angezeigt als eigene Zeile unter den Positionen
+    pos.classList.add("nachlass");
+    pos.dataset.nlArt = p.nachlass.art;
+    pos.dataset.nlWert = p.nachlass.wert;
+    pos.dataset.nlText = (p.beschreibung || "Nachlass").replace(/\s*\d+(?:[.,]\d+)?\s*%$/, "") || "Nachlass";
+    $(".preis", pos).readOnly = true;
+  }
   if (p.anzahlung_id) {             // Abzug einer Anzahlung (Schlussrechnung) – Betrag kommt aus der Anzahlungsrechnung
     pos.dataset.anzahlung = p.anzahlung_id;
     pos.classList.add("abzug");
@@ -675,16 +688,75 @@ function addPosition(p = {}) {
     updateTotal();
   });
 
-  $("#positionen").append(pos);
+  if (p.nachlass) $("#positionen .pos.abzug")?.before(pos);
+  if (!pos.isConnected) $("#positionen").append(pos);
+  if (p.nachlass) nlZeigen();
   updateTotal();
-  spickzettel(pos);
+  if (!p.nachlass) spickzettel(pos);
   return pos;
 }
+
+// ---------- Nachlass (seit 1.16): Prozent oder Betrag auf die übrigen Positionen – der Server rechnet nach ----------
+const nlPos = () => $("#positionen .pos.nachlass");
+function nlRechnen() {
+  const p = nlPos();
+  if (!p) return;
+  const andere = $$("#positionen .pos").filter(x => x !== p && !x.dataset.anzahlung);
+  const basis = andere.reduce((s, x) => s + (Number($(".preis", x).value) || 0), 0);
+  const wert = Number(p.dataset.nlWert) || 0;
+  const betrag = p.dataset.nlArt === "prozent" ? Math.round(basis * wert) / 100 : Math.min(Math.max(basis, 0), wert);
+  $(".beschreibung", p).value = `${p.dataset.nlText || "Nachlass"}${p.dataset.nlArt === "prozent" ? ` ${String(wert).replace(".", ",")} %` : ""}`;
+  $(".preis", p).value = betrag ? (-betrag).toFixed(2) : "0";
+  if (!$(".lieferdatum", p).value) $(".lieferdatum", p).value = andere.map(x => $(".lieferdatum", x).value).filter(Boolean).sort().at(-1) || "";
+  const b = $("#nl-betrag");
+  if (b) b.textContent = `− ${euroCent(betrag)}`;
+}
+function nlZeigen() {
+  const p = nlPos(), box = $("#nachlass-box");
+  if (!p) {
+    box.innerHTML = `<button type="button" class="secondary small" id="nl-add">＋ Nachlass</button>
+      <span class="mini-hinweis">z. B. Stammkunden- oder Freitagsrabatt – als eigene Zeile auf Angebot und Rechnung</span>`;
+    return;
+  }
+  box.innerHTML = `<div class="nachlass-zeile"><b>Nachlass</b>
+    <input class="nl-wert" id="nl-wert" type="number" min="0" step="0.5" value="${esc(p.dataset.nlWert)}" aria-label="Wert des Nachlasses">
+    <select id="nl-art" aria-label="Prozent oder Euro"><option value="prozent"${p.dataset.nlArt === "prozent" ? " selected" : ""}>%</option>
+      <option value="betrag"${p.dataset.nlArt === "betrag" ? " selected" : ""}>€</option></select>
+    <input class="nl-text" id="nl-text" maxlength="80" value="${esc(p.dataset.nlText)}" placeholder="Bezeichnung, z. B. Stammkundenrabatt" aria-label="Bezeichnung">
+    <b id="nl-betrag"></b><button type="button" class="icon" id="nl-weg" title="Nachlass entfernen" aria-label="Nachlass entfernen">✕</button></div>`;
+  nlRechnen();
+}
+$("#nachlass-box").addEventListener("click", e => {
+  if (e.target.closest("#nl-add")) {
+    addPosition({ beschreibung: "Nachlass", preis: 0, nachlass: { art: "prozent", wert: 10 } });
+    $("#nl-wert").focus();
+  }
+  if (e.target.closest("#nl-weg")) {
+    const p = nlPos();
+    if (p) p.parentNode.removeChild(p);
+    nlZeigen();
+    updateTotal();
+  }
+});
+$("#nachlass-box").addEventListener("input", e => {
+  const p = nlPos();
+  if (!p) return;
+  if (e.target.id === "nl-wert") p.dataset.nlWert = e.target.value;
+  if (e.target.id === "nl-text") p.dataset.nlText = e.target.value;
+  updateTotal();
+});
+$("#nachlass-box").addEventListener("change", e => {
+  if (e.target.id === "nl-art" && nlPos()) { nlPos().dataset.nlArt = e.target.value; updateTotal(); }
+});
+// Positionen neu gesetzt (Formular leeren, Anzahlung …): Nachlass-Zeile passend zeigen
+new MutationObserver(() => { if (!nlPos() !== !$("#nl-wert")) nlZeigen(); }).observe($("#positionen"), { childList: true });
+
 $("#pos-add").addEventListener("click", () => addPosition());
 new MutationObserver(pflichtfelder).observe($("#positionen"), { childList: true });   // neue Positionen
 
 /* Summe im Editor – ohne Kleinunternehmerregelung mit Nettobetrag, Umsatzsteuer und Bruttobetrag */
 function updateTotal() {
+  nlRechnen();
   const netto = $$("#positionen .preis").reduce((s, i) => s + (Number(i.value) || 0), 0);
   const ust = istUst() ? Math.round(netto * ustSatz()) / 100 : 0;
   $("#ust-zeilen").classList.toggle("hidden", !istUst());
@@ -922,6 +994,7 @@ function readForm() {
       lieferdatum: $(".lieferdatum", pos).value,
       preis: $(".preis", pos).value,
       anzahlung_id: pos.dataset.anzahlung ? Number(pos.dataset.anzahlung) : undefined,
+      nachlass: pos.dataset.nlArt ? { art: pos.dataset.nlArt, wert: Number(pos.dataset.nlWert) || 0 } : undefined,
     })),
   };
 }
@@ -1069,7 +1142,7 @@ async function kopiere(art, beleg) {
   if (beleg.zahlungsbedingung) setZahlung(beleg.zahlungsbedingung);
   if (art === "angebot") $("#a-hinweise").value = beleg.hinweise || "";
   $("#positionen").innerHTML = "";
-  beleg.positionen.filter(p => !p.anzahlung_id).forEach(p => addPosition({ beschreibung: p.beschreibung, preis: p.preis }));
+  beleg.positionen.filter(p => !p.anzahlung_id).forEach(p => addPosition({ beschreibung: p.beschreibung, preis: p.preis, nachlass: p.nachlass }));
   setVeranstaltung(beleg.veranstaltungsort);
   updateTotal();
   showTab("neu");
@@ -2301,8 +2374,8 @@ async function renderStart() {
   if (ohneDatum) wichtig.push(["gelb", "📅 Bezahlt-Datum fehlt", `data-start="bezahlt-am"`]);
   const baldAb = angebote.filter(a => a.rest !== null && a.rest >= 0 && a.rest <= 3).length;
   if (baldAb) wichtig.push(["gelb", `✎ ${baldAb} Angebot${baldAb === 1 ? " läuft" : "e laufen"} bald ab`, `data-start="angebote"`]);
-  [ka.vertraege, ka.bar, ka.ruhe] = await Promise.all([api("vertraege").catch(() => []), api("barzahlungen").catch(() => []),
-    api("kunden/erinnerung").catch(() => ({}))]);
+  [ka.vertraege, ka.bar, ka.ruhe, ka.kunden] = await Promise.all([api("vertraege").catch(() => []), api("barzahlungen").catch(() => []),
+    api("kunden/erinnerung").catch(() => ({})), api("kunden").catch(() => [])]);
   const vtOffen = ka.vertraege.filter(v => v.status === "verschickt").length;
   if (vtOffen) wichtig.push(["gelb", `✍ ${vtOffen} ${vtOffen === 1 ? "Vertrag" : "Verträge"} nicht unterschrieben zurück`, `data-start="vertraege"`]);
   const nachfassen = angebote.filter(nachfassenFaellig).length;

@@ -409,7 +409,7 @@ def pdf_filename(inv):
     return f"{art}_{inv['nummer']}" + (f"_{suffix}" if suffix else "") + ".pdf"
 
 
-def build_vertrag_pdf(inhalt, absender):
+def build_vertrag_pdf(inhalt, absender, unterschriften=None):
     """Booking-Vertrag (seit 1.13) aus der Struktur von vertraege.inhalt – Fußzeile wie Rechnung und Angebot."""
     pdf = InvoicePDF(absender, date.today().isoformat())
     pdf.add_page()
@@ -453,8 +453,22 @@ def build_vertrag_pdf(inhalt, absender):
     pdf.set_draw_color(60)
     pdf.set_line_width(0.2)
     pdf.set_font("Body", "", 9)
-    for i, text in enumerate((inhalt.get("unterschrift_links"), inhalt.get("unterschrift_rechts"))):
+    texte = [inhalt.get("unterschrift_links"), inhalt.get("unterschrift_rechts")]
+    if unterschriften:   # seit 1.16: vor Ort auf dem Gerät unterschrieben – beide Unterschriften über den Linien
+        texte = [f"{unterschriften['datum']} · Unterschrift Veranstalter", f"{unterschriften['datum']} · Unterschrift DJ"]
+    for i, text in enumerate(texte):
         x = LEFT + i * (breite + 14)
+        if unterschriften:
+            pfad = unterschriften["kunde" if i == 0 else "dj"]
+            try:
+                from PIL import Image
+                with Image.open(pfad) as b:
+                    hoehe = 16
+                    w = min(breite - 4, hoehe * b.width / max(b.height, 1))
+                    hoehe = w * b.height / max(b.width, 1)
+                pdf.image(pfad, x=x + 2, y=y - hoehe - 1, w=w, h=hoehe)
+            except OSError:
+                pass
         pdf.line(x, y, x + breite, y)
         pdf.set_xy(x, y + 1)
         pdf.multi_cell(breite, 4.5, text or "")

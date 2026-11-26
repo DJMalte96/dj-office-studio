@@ -188,6 +188,7 @@ def main():
     port = freier_port()
     server = create_server(webapp.app, host="127.0.0.1", port=port, threads=8)
     webapp.finanzen.ordner_waechter_starten()   # Belege-Ordner regelmäßig einlesen
+    webapp.postfach.waechter_starten()          # seit 1.16: Belege aus dem Postfach
     webapp.finanzen.texterkennung_starten()     # Fotos und Scans im Hintergrund lesen
     threading.Thread(target=server.run, daemon=True).start()
     url = f"http://127.0.0.1:{port}/"

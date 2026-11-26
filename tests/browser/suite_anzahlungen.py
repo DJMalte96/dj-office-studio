@@ -105,6 +105,7 @@ def lauf(pg, URL, ok, ENGINE, B, DATEIEN):
     ok("Spickzettel im Angebot sichtbar", pos.locator(".spick").is_visible())
     # Einstellungen
     pg.click("#einstellungen-btn"); pg.wait_for_timeout(800)
+    pg.click(".eins-nav [data-thema=belege-re]"); pg.wait_for_timeout(300)   # seit 1.16: Einstellungen nach Themen
     ok("Einstellung Nachfassen = 7", pg.input_value("#einstellungen [name=nachfassen_tage]") == "7")
     ok("Vorlage Nachfrage gefüllt", "Nachfrage" in pg.input_value("#einstellungen [name=mail_betreff_nachfrage]"))
     pg.fill("#einstellungen [name=nachfassen_tage]", "0")

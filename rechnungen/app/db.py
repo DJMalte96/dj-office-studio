@@ -16,7 +16,20 @@ CREATE TABLE IF NOT EXISTS kunden (
     plz TEXT DEFAULT '',
     ort TEXT DEFAULT '',
     email TEXT DEFAULT '',
-    notiz TEXT DEFAULT ''                        -- seit 1.15: eigene Notizen (nur in der App, nie auf Belegen)
+    notiz TEXT DEFAULT '',                       -- seit 1.15: eigene Notizen (nur in der App, nie auf Belegen)
+    weitere_namen TEXT DEFAULT '[]'              -- seit 1.16: Namen zusammengeführter Einträge (Rechnungen behalten ihren Namen)
+);
+-- seit 1.16: Paare, die laut Nutzer keine Duplikate sind
+CREATE TABLE IF NOT EXISTS kunden_kein_duplikat (
+    a INTEGER NOT NULL,
+    b INTEGER NOT NULL,
+    PRIMARY KEY (a, b)
+);
+-- seit 1.16: schon aus dem Postfach abgeholte Mails (Message-ID bzw. Ordner/UIDVALIDITY/UID) – nichts kommt doppelt
+CREATE TABLE IF NOT EXISTS postfach_abgeholt (
+    schluessel TEXT PRIMARY KEY,
+    ordner TEXT,
+    abgeholt TEXT DEFAULT CURRENT_TIMESTAMP
 );
 CREATE TABLE IF NOT EXISTS textbausteine (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -462,6 +475,8 @@ def init():
         # seit 1.15: Notizen zum Kunden (bewusst nicht in TABLES – Rechnungen speichern den Kunden mit, ohne Notiz)
         if "notiz" not in {r["name"] for r in con.execute("PRAGMA table_info(kunden)")}:
             con.execute("ALTER TABLE kunden ADD COLUMN notiz TEXT DEFAULT ''")
+        if "weitere_namen" not in {r["name"] for r in con.execute("PRAGMA table_info(kunden)")}:   # seit 1.16
+            con.execute("ALTER TABLE kunden ADD COLUMN weitere_namen TEXT DEFAULT '[]'")
         # seit 1.9: Ausgabe aus einem Abo
         if "abo_id" not in {r["name"] for r in con.execute("PRAGMA table_info(ausgaben)")}:
             con.execute("ALTER TABLE ausgaben ADD COLUMN abo_id INTEGER")

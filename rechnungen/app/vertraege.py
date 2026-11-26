@@ -19,7 +19,9 @@ import db
 bp = Blueprint("vertraege", __name__)
 ORDNER = "vertraege"                 # unter DATA_DIR: anlagen/, unterschrieben/ (kommt in die Datensicherung)
 STATUS = ("entwurf", "verschickt", "unterschrieben")
-WEGE = {"datei": "unterschrieben zurück", "mail": "per Mail bestätigt", "vorort": "vor Ort unterschrieben"}
+WEGE = {"datei": "unterschrieben zurück", "mail": "per Mail bestätigt", "vorort": "vor Ort unterschrieben",
+        "hier": "vor Ort auf dem Gerät unterschrieben"}   # seit 1.16: mit Finger/Stift, beide Unterschriften im PDF
+MAX_UNTERSCHRIFT = 2 * 1024 * 1024
 ZAHLUNG = ("rechnung", "bar", "ganz")
 MAX_DATEI = 20 * 1024 * 1024
 UNTERSCHRIFT_ENDUNGEN = {".pdf": "application/pdf", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png",
@@ -435,7 +437,10 @@ def vertrag_anlegen():
 @bp.get("/api/vertraege/<int:vid>")
 def vertrag_holen(vid):
     v = lesen(vid) or abort(404)
-    return jsonify({"vertrag": v, "inhalt": inhalt(v)})
+    b = unterschrift_bilder(v)
+    return jsonify({"vertrag": v, "inhalt": inhalt(v),
+                    "unterschriften": {"kunde": f"api/vertraege/{vid}/unterschrift/kunde", "dj": f"api/vertraege/{vid}/unterschrift/dj",
+                                       "datum": b["datum"]} if b else None})
 
 
 @bp.put("/api/vertraege/<int:vid>")
@@ -554,7 +559,18 @@ def vertrag_unterschrieben(vid):
         return _fehler("Bitte angeben, wie unterschrieben wurde.")
     if not _ist_datum(am):
         return _fehler("Ungültiges Datum")
-    datei, dateiname = None, ""
+    datei, dateiname, bilder, ort = None, "", None, ""
+    if weg == "hier":
+        try:   # erst beide prüfen, dann speichern – sonst bliebe eine halbe Unterschrift liegen
+            pngs = {wer: _unterschrift_png(request.form.get(f"sig_{wer}") or "") for wer in ("kunde", "dj")}
+        except ValueError as e:
+            return _fehler(str(e))
+        bilder = {}
+        for wer, png in pngs.items():
+            bilder[wer] = f"{vid}_{uuid.uuid4().hex[:12]}_{wer}.png"
+            with open(os.path.join(_ordner("unterschrieben"), bilder[wer]), "wb") as out:
+                out.write(png)
+        ort = _text(request.form.get("ort"), 80)
     if weg == "datei":
         f = request.files.get("datei")
         if not f:
@@ -569,7 +585,7 @@ def vertrag_unterschrieben(vid):
         datei = f"{vid}_{uuid.uuid4().hex[:12]}{endung}"
         with open(os.path.join(_ordner("unterschrieben"), datei), "wb") as out:
             out.write(daten)
-    info = {"weg": weg, "am": am, "notiz": notiz, "dateiname": dateiname}
+    info = {"weg": weg, "am": am, "notiz": notiz, "dateiname": dateiname} | ({"bilder": bilder, "ort": ort} if bilder else {})
     festhalten(vid, "unterschrieben", ", unterschrieben_json = ?, unterschrift_datei = ?", (json.dumps(info), datei))
     if v["angebot_id"] and request.form.get("angebot_annehmen") == "1":
         a = db.get_offer(v["angebot_id"])
@@ -590,6 +606,54 @@ def unterschrift_ansehen(vid):
     return send_file(pfad, mimetype=UNTERSCHRIFT_ENDUNGEN.get(endung, "application/octet-stream"), as_attachment=True, download_name=name)
 
 
+def _unterschrift_png(daten_url):
+    """Gezeichnete Unterschrift (data:image/png;base64,…) prüfen, auf die Striche zuschneiden und neu als PNG speichern."""
+    import base64
+    from PIL import Image
+    m = re.fullmatch(r"data:image/png;base64,([A-Za-z0-9+/=\s]+)", daten_url.strip())
+    if not m:
+        raise ValueError("Bitte beide Unterschriften leisten.")
+    roh = base64.b64decode(m.group(1))
+    if len(roh) > MAX_UNTERSCHRIFT or roh[:8] != b"\x89PNG\r\n\x1a\n":
+        raise ValueError("Die Unterschrift ist ungültig.")
+    try:
+        bild = Image.open(io.BytesIO(roh))
+        if bild.width * bild.height > 8_000_000:
+            raise ValueError("Die Unterschrift ist ungültig.")
+        bild = bild.convert("RGBA")
+    except (OSError, Image.DecompressionBombError):
+        raise ValueError("Die Unterschrift ist ungültig.") from None
+    rahmen = bild.getchannel("A").getbbox()
+    if not rahmen or (rahmen[2] - rahmen[0]) < 20:
+        raise ValueError("Bitte beide Unterschriften leisten.")
+    links, oben, rechts, unten = rahmen
+    bild = bild.crop((max(0, links - 8), max(0, oben - 8), min(bild.width, rechts + 8), min(bild.height, unten + 8)))
+    out = io.BytesIO()
+    bild.save(out, "PNG", optimize=True)
+    return out.getvalue()
+
+
+def unterschrift_bilder(v):
+    """Bei „auf dem Gerät unterschrieben“: {"kunde": pfad, "dj": pfad, "text": …} für PDF und Vorschau, sonst None."""
+    u = v.get("unterschrieben") or {}
+    if u.get("weg") != "hier" or not u.get("bilder"):
+        return None
+    pfade = {wer: _sicherer_pfad("unterschrieben", u["bilder"].get(wer)) for wer in ("kunde", "dj")}
+    if not all(pfade.values()):
+        return None
+    am = _de(u.get("am"))
+    return pfade | {"datum": ", ".join(x for x in (u.get("ort"), am) if x)}
+
+
+@bp.get("/api/vertraege/<int:vid>/unterschrift/<wer>")
+def unterschrift_bild(vid, wer):
+    v = lesen(vid) or abort(404)
+    if wer not in ("kunde", "dj"):
+        abort(404)
+    b = unterschrift_bilder(v) or abort(404)
+    return send_file(b[wer], mimetype="image/png", max_age=0)   # von der App selbst neu erzeugtes PNG
+
+
 @bp.delete("/api/vertraege/<int:vid>")
 def vertrag_loeschen(vid):
     with db.connect() as con:
@@ -605,7 +669,7 @@ def vertrag_pdf(vid):
     v = lesen(vid) or abort(404)
     from pdf import build_vertrag_pdf
     m = _main()
-    return send_file(io.BytesIO(build_vertrag_pdf(inhalt(v), m.absender())), mimetype="application/pdf",
+    return send_file(io.BytesIO(build_vertrag_pdf(inhalt(v), m.absender(), unterschrift_bilder(v))), mimetype="application/pdf",
                      download_name=dateiname(v))
 
 
@@ -617,7 +681,7 @@ def dateiname(v):
 
 def pdf_bytes(v):
     from pdf import build_vertrag_pdf
-    return build_vertrag_pdf(inhalt(v), _main().absender())
+    return build_vertrag_pdf(inhalt(v), _main().absender(), unterschrift_bilder(v))
 
 
 # ---------- Vertragstext ----------

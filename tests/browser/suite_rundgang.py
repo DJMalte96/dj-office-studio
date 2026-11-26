@@ -27,6 +27,7 @@ def lauf(pg, URL, ok, ENGINE, B, DATEIEN):
     ok("nach Reload keine Frage mehr", not pg.locator("#tour-frage").is_visible())
     # Einstellungen → Rundgang starten, Esc beendet
     pg.click("#einstellungen-btn"); pg.wait_for_timeout(700)
+    pg.click(".eins-nav [data-thema=app]"); pg.wait_for_timeout(300)   # seit 1.16: Einstellungen nach Themen
     pg.click("#rundgang-starten"); pg.wait_for_timeout(600)
     ok("aus Einstellungen gestartet", pg.locator(".tour-karte").is_visible())
     pg.keyboard.press("ArrowRight"); pg.wait_for_timeout(500)

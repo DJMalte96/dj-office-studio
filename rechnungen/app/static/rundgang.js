@@ -29,7 +29,7 @@
       text: "Hier entsteht die Einnahmen-Überschuss-Rechnung. Die Prüfliste zeigt, was noch fehlt; der Export packt alles für den Steuerberater in ein ZIP. Nach Jahresende kannst du das Jahr abschließen." },
     { ziel: "#suche-knopf", tab: "start", titel: "Schnell finden",
       text: "Die Lupe – oder Strg + K (am Mac ⌘ + K) – sucht in Rechnungen, Angeboten, Kunden und Belegen und springt direkt hin." },
-    { ziel: "#sicherung-btn", karte: true, tab: "einstellungen", titel: "Datensicherung – und fertig!",
+    { ziel: "#sicherung-btn", karte: true, tab: "einstellungen", thema: "sicherung", titel: "Datensicherung – und fertig!",
       text: "Lade ab und zu eine Sicherung herunter; die Startseite erinnert dich daran. Den Rundgang findest du jederzeit wieder hier in den Einstellungen unter „Rundgang starten“. Viel Spaß!" },
   ];
   let schritt = -1;
@@ -44,6 +44,7 @@
     if (s.tab) {
       if (s.tab === "neu") { if (istAngebot()) await neueRechnung(); else showTab("neu"); }
       else showTab(s.tab);
+      if (s.thema && typeof einstellungenThema === "function") einstellungenThema(s.thema);   // seit 1.16: Einstellungen nach Themen
       await new Promise(r => setTimeout(r, 350));
     }
     let el = s.ziel ? $(s.ziel) : null;
@@ -149,6 +150,7 @@
     ["EÜR & Export", "euer", "§"], ["Kunden", "kunden", "◉"], ["Rechnungsposten", "textbausteine", "♪"], ["Zahlungsbedingungen", "zahlungsbedingungen", "€"],
     ["Neuer Vertrag", "vertrag-neu", "✍"], ["Verträge", "vertraege", "✍"], ["Vertragsvorlage", "vertragsvorlage", "§"],
     ["Einstellungen", "einstellungen", "⚙"], ["Datensicherung herunterladen", "sichern", "⇩"], ["Rundgang starten", "rundgang", "?"],
+    ["Handbuch (Anleitung)", "handbuch", "📖"], ["Belege aus dem Postfach", "postfach", "✉"],
   ];
   let daten = null, treffer = [], aktiv = 0;
   const norm = t => String(t ?? "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
@@ -242,6 +244,8 @@
     if (ziel === "sichern") return sicherungHerunterladen();
     if (ziel === "rundgang") return startTour();
     if (ziel === "einstellungen") return $("#einstellungen-btn").click();
+    if (ziel === "handbuch") return handbuch();
+    if (ziel === "postfach") { einstellungenThema("mail"); $("#einstellungen-btn").click(); return setTimeout(() => $("#pf-karte").scrollIntoView(), 500); }
     showTab(ziel);
   }
   $("#suche-knopf").addEventListener("click", oeffneSuche);

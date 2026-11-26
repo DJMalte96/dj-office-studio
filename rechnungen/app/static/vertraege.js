@@ -2,7 +2,7 @@
    Der Vertragstext entsteht auf dem Server (Vorschau = PDF); hier wird nur angezeigt und gespeichert. */
 
 const VT_STATUS = { entwurf: "Entwurf", verschickt: "verschickt", unterschrieben: "unterschrieben" };
-const VT_WEG = { datei: "unterschrieben zurück", mail: "per Mail bestätigt", vorort: "vor Ort unterschrieben" };
+const VT_WEG = { datei: "unterschrieben zurück", mail: "per Mail bestätigt", vorort: "vor Ort unterschrieben", hier: "vor Ort auf dem Gerät unterschrieben" };
 const vtState = { liste: [], aktuell: null, weitereOffen: false, vorlage: [], kunden: [], hochgeladen: null, speichern: null };
 
 function vertraegeTab(name) {
@@ -95,8 +95,9 @@ async function oeffneVertrag(id) {
   try { await zeigeVertragDialog(await api(`vertraege/${id}`)); } catch (e) { toast(e.message, true); }
 }
 
-async function zeigeVertragDialog({ vertrag, inhalt }) {
+async function zeigeVertragDialog({ vertrag, inhalt, unterschriften }) {
   vtState.aktuell = vertrag;
+  vtState.unterschriften = unterschriften || null;
   vtState.weitereOffen = false;
   const [vorlage, kunden] = await Promise.all([api("vertragsvorlage"), api("kunden").catch(() => [])]);
   vtState.vorlage = vorlage.abschnitte;
@@ -149,7 +150,9 @@ function vorschau(inhalt) {
     ${inhalt.abschnitte.map(a => `<h2>${esc(a.titel)}</h2>${a.text ? absatz(a.text, a.fett) : ""}${a.tabelle ? `<table>${a.tabelle.map(([l, r]) =>
       `<tr><td>${esc(l)}</td><td>${esc(r).replace(/\n/g, "<br>")}</td></tr>`).join("")}</table>` : ""}`).join("")}
     ${inhalt.anlagen.length ? `<p class="vt-fuss">Anlage${inhalt.anlagen.length === 1 ? "" : "n"}: ${inhalt.anlagen.map(esc).join(", ")} (Bestandteil dieses Vertrags)</p>` : ""}
-    <div class="vt-unterschrift"><div>${esc(inhalt.unterschrift_links)}</div><div>${esc(inhalt.unterschrift_rechts)}</div></div>
+    ${(u => u ? `<div class="vt-unterschrift mit-bild"><div><img src="${esc(u.kunde)}" alt="Unterschrift Veranstalter">${esc(u.datum)} · Unterschrift Veranstalter</div>
+      <div><img src="${esc(u.dj)}" alt="Unterschrift DJ">${esc(u.datum)} · Unterschrift DJ</div></div>`
+      : `<div class="vt-unterschrift"><div>${esc(inhalt.unterschrift_links)}</div><div>${esc(inhalt.unterschrift_rechts)}</div></div>`)(vtState.unterschriften)}
     <div class="vt-fuss">${esc(inhalt.fuss)}</div>`;
 }
 
@@ -250,6 +253,7 @@ $("#vt-unterschrift").addEventListener("click", e => { if (e.target.closest("[da
 $("#vtu-form").addEventListener("submit", async e => {
   e.preventDefault();
   const v = vtState.unterschrift, weg = $("#vt-unterschrift [name=vtu-weg]:checked").value, datei = $("#vtu-datei").files[0];
+  if (weg === "hier") { $("#vt-unterschrift").close(); return oeffneSign(v); }   // seit 1.16: auf diesem Gerät
   if (weg === "datei" && !datei) return toast("Bitte die unterschriebene Datei auswählen – oder einen anderen Weg wählen", true);
   const fd = new FormData();
   fd.append("weg", weg);
@@ -266,6 +270,76 @@ $("#vtu-form").addEventListener("submit", async e => {
     ladeVertraege();
     if ($("#tab-start").classList.contains("active")) renderStart();
   } catch (err) { toast(err.message, true); }
+});
+
+
+// ---------- Vor Ort auf dem Gerät unterschreiben (seit 1.16) ----------
+
+const signPads = $$("#sign canvas").map(c => ({ c, gemalt: false }));
+function signPadLeeren(p) {
+  const r = p.c.getBoundingClientRect(), f = window.devicePixelRatio || 1;
+  p.c.width = Math.max(1, Math.round(r.width * f));
+  p.c.height = Math.max(1, Math.round(r.height * f));
+  const g = p.c.getContext("2d");
+  g.scale(f, f);
+  g.lineWidth = 2.4; g.lineCap = "round"; g.lineJoin = "round"; g.strokeStyle = "#14213d";
+  p.gemalt = false;
+  $("#sign-ok").disabled = true;
+}
+signPads.forEach(p => {
+  let zieht = false;
+  const punkt = e => { const r = p.c.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+  p.c.addEventListener("pointerdown", e => {
+    zieht = true;
+    p.c.setPointerCapture(e.pointerId);
+    const g = p.c.getContext("2d");
+    g.beginPath(); g.moveTo(...punkt(e));
+  });
+  p.c.addEventListener("pointermove", e => {
+    if (!zieht) return;
+    const g = p.c.getContext("2d");
+    g.lineTo(...punkt(e)); g.stroke();
+    p.gemalt = true;
+    $("#sign-ok").disabled = !signPads.every(x => x.gemalt);
+  });
+  ["pointerup", "pointercancel"].forEach(t => p.c.addEventListener(t, () => { zieht = false; }));
+});
+function oeffneSign(v) {
+  vtState.signieren = v;
+  $("#sign-titel").textContent = `${v.name} unterschreiben`;
+  $("#sign-info").textContent = `${v.anlass || "Veranstaltung"} am ${v.datum ? fmtDate(v.datum) : "–"} · ${euroCent(v.gage)}`;
+  $("#sign-kunde").textContent = `Veranstalter: ${v.kunde.name || ""}`;
+  $("#sign-dj").textContent = `DJ: ${state.absender?.name || ""}`;
+  $("#sign-ort").value = state.absender?.ort_fuer_datum || "";
+  $("#sign-am").value = isoLokal(new Date());
+  $("#sign").showModal();
+  signPads.forEach(signPadLeeren);
+}
+$("#sign").addEventListener("click", async e => {
+  const leer = e.target.closest("[data-sign-leer]");
+  if (leer) return signPadLeeren(signPads[Number(leer.dataset.signLeer)]);
+  const b = e.target.closest("[data-sign]");
+  if (!b) return;
+  if (b.dataset.sign === "zu") return $("#sign").close();
+  const v = vtState.signieren, fd = new FormData();
+  fd.append("weg", "hier");
+  fd.append("am", $("#sign-am").value);
+  fd.append("ort", $("#sign-ort").value);
+  fd.append("sig_kunde", signPads[0].c.toDataURL("image/png"));
+  fd.append("sig_dj", signPads[1].c.toDataURL("image/png"));
+  if (v.angebot_id) fd.append("angebot_annehmen", "1");
+  b.disabled = true;
+  try {
+    const r = await fetch(`api/vertraege/${v.id}/unterschrieben`, { method: "POST", body: fd, headers: SCHUTZ });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || `Fehler ${r.status}`);
+    $("#sign").close();
+    toast("Unterschrieben – beide Unterschriften stehen im Vertrag und im PDF");
+    ladeVertraege();
+    if ($("#tab-start").classList.contains("active")) renderStart();
+    oeffneVertrag(v.id);
+  } catch (err) { toast(err.message, true); }
+  b.disabled = false;
 });
 
 // ---------- Vorlage ----------

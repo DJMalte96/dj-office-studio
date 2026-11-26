@@ -163,6 +163,8 @@
           <h2>Positionen</h2>
           <div id="positionen"></div>
           <button type="button" id="pos-add" class="secondary">+ Position hinzufügen</button>
+          <div class="nachlass-box" id="nachlass-box"><button type="button" class="secondary small" id="nl-add">＋ Nachlass</button>
+            <span class="mini-hinweis">z. B. Stammkunden- oder Freitagsrabatt – als eigene Zeile auf Angebot und Rechnung</span></div>
           <div id="ust-zeilen" class="ust-zeilen hidden"></div>
           <div class="total"><span class="total-titel">Gesamt<span class="nur-ust"> (brutto)</span>:</span> <span id="gesamt">0,- Euro</span></div>
           <div id="rechnungsart-box" class="rechnungsart-box nur-rechnung">
@@ -323,8 +325,9 @@
           <h2 class="gruss">Einstellungen</h2>
           <p class="hint">Diese Angaben erscheinen auf Rechnungen und Angeboten (Absenderzeile, Gruß und Fußzeile).</p>
         </div>
+        <div class="eins-raster"><div class="eins-nav" role="navigation" aria-label="Themen der Einstellungen"></div><div class="eins-inhalt"></div></div>
         <div class="grid2">
-          <div class="card">
+          <div class="card" data-thema="absender">
             <h2>Absender</h2>
             <label>Name <span class="opt">(Absender, Gruß, Kontoinhaber)</span><input name="name" placeholder="Max Beispiel"></label>
             <label>Straße und Hausnummer<input name="strasse" placeholder="Musterweg 1"></label>
@@ -332,7 +335,7 @@
             <label>Telefon<input name="telefon" placeholder="0170/1234567"></label>
             <label>Ort vor dem Datum <span class="opt">(„Musterstadt, den …“)</span><input name="ort_fuer_datum" placeholder="Musterstadt"></label>
           </div>
-          <div class="card">
+          <div class="card" data-thema="absender">
             <h2>Bankverbindung</h2>
             <label>Bank<input name="bank_name" placeholder="Sparkasse Musterstadt"></label>
             <label>Kontoinhaber <span class="opt">(leer = Name)</span><input name="kontoinhaber"></label>
@@ -360,7 +363,7 @@
           </div>
         </div>
         <div class="grid2">
-          <div class="card">
+          <div class="card" data-thema="belege-re">
             <h2>Nummern &amp; Fristen</h2>
             <div class="row">
               <label>Rechnungen ab Nr.<input name="startnummer" type="number" min="1" step="1"></label>
@@ -377,7 +380,7 @@
               <input name="nachfassen_tage" type="number" min="0" step="1"></label>
             <p class="hint">Gezählt ab dem Versand per Mail, sonst ab dem Angebotsdatum. Die Startseite erinnert einmal pro Angebot, solange es gültig ist.</p>
           </div>
-          <div class="card">
+          <div class="card" data-thema="belege">
             <h2>Ablage &amp; Paperless</h2>
             <label>Ordner für PDF-Kopien <span class="opt nur-ha">(unter /share oder /media)</span><input name="pdf_ordner" placeholder="/share/rechnungen"></label>
             <label>Belege-Ordner <span class="opt">(wird automatisch eingelesen · leer = aus)</span>
@@ -421,7 +424,7 @@
             </div>
           </div>
         </div>
-        <div class="card" id="fahrten-karte">
+        <div class="card" id="fahrten-karte" data-thema="fahrten">
           <h2>Finanzen &amp; Fahrten <span class="h2-sub">für die Fahrten zu Veranstaltungen (Finanzen → Fahrten)</span></h2>
           <div class="grid2">
             <div>
@@ -443,7 +446,7 @@
             </div>
           </div>
         </div>
-        <div class="card" id="mail-karte">
+        <div class="card" id="mail-karte" data-thema="mail">
           <h2>E-Mail-Versand <span class="h2-sub">Rechnungen, Angebote und Mahnungen direkt aus der App verschicken – über dein eigenes Postfach</span></h2>
           <div class="grid2">
             <div>
@@ -499,7 +502,28 @@
             </div>
           </details>
         </div>
-        <div class="card">
+        <div class="card" id="pf-karte" data-thema="mail">
+          <h2>Belege aus dem Postfach <span class="h2-sub">Rechnungsmails automatisch als Ausgabe übernehmen</span></h2>
+          <label class="inline"><input type="checkbox" name="postfach_an" id="pf-an"> Rechnungsmails nach meinen Regeln abholen</label>
+          <div id="pf-teil">
+            <p class="hint">Nutzt dasselbe Postfach wie der E-Mail-Versand (Abruf über <b id="pf-server">–</b>). Je Regel ein Ordner aus deinem Mailprogramm – den Pfad so eintragen, wie er dort heißt, Unterordner mit „/“ (z. B. <code>Geschäftlich/Belege/Musik</code>). Absender und Betreff sind optional und grenzen weiter ein.</p>
+            <input type="hidden" name="postfach_regeln" id="pf-regeln-feld">
+            <div class="pf-regeln" id="pf-regeln"></div>
+            <datalist id="pf-ordnerliste"></datalist>
+            <div class="row"><button type="button" class="small secondary" id="pf-neu">＋ Regel</button>
+              <button type="button" class="small secondary" id="pf-laden">Ordner aus dem Postfach laden</button>
+              <button type="button" class="small secondary" id="pf-pruefen">Regeln prüfen</button></div>
+            <div class="row pf-zeile">
+              <label>Mails ab<input type="date" name="postfach_ab" id="pf-ab"></label>
+              <label>IMAP-Server <span class="opt">(leer = vom Anbieter)</span><input name="imap_server" id="pf-imap" placeholder="z. B. imap.web.de"></label>
+              <label class="port">Port<input name="imap_port" type="number" min="1" max="65535"></label>
+            </div>
+            <p class="mini-hinweis">Übernommen werden die Mails aus diesen Ordnern – Rechnungen als PDF oder Foto im Anhang, E-Rechnungen und Kauf-Mails (Beatport, iTunes, Amazon …) werden erkannt. Danach werden sie im Postfach als <b>gelesen</b> markiert. Schon abgeholte Mails merkt sich die App – auch wenn du sie vorher gelesen hast, kommt nichts doppelt. Abgeholt wird beim Start und alle 30 Minuten, solange die App läuft.</p>
+            <p class="pf-status" id="pf-status"></p>
+            <button type="button" class="small secondary" id="pf-jetzt">Jetzt abholen</button>
+          </div>
+        </div>
+        <div class="card" data-thema="sicherung">
           <h2>Datensicherung &amp; Export</h2>
           <div class="grid2 sicherung">
             <div>
@@ -531,18 +555,19 @@
             </div>
           </div>
         </div>
-        <div class="card info-karte">
+        <div class="card info-karte" data-thema="app">
           <div><strong>DJ Office Studio</strong> <span class="hint">Version <span id="app-version">–</span></span>
             <span id="update-status" class="nur-desktop"></span></div>
           <span class="info-links">
+            <button type="button" class="small" id="handbuch-oeffnen">📖 Handbuch</button>
             <button type="button" class="small secondary" id="rundgang-starten">Rundgang starten</button>
             <a href="#" id="hinweis-zeigen" class="mehr">Hinweise &amp; Lizenz</a>
             <a href="https://github.com/DJMalte96/dj-office-studio/blob/main/rechnungen/CHANGELOG.md" target="_blank" rel="noopener" class="mehr">Was ist neu? (Changelog) ↗</a>
           </span>
         </div>
-        <div class="nur-app-fenster daten-ordner"><button type="button" id="daten-ordner-btn" class="secondary">Daten- und PDF-Ordner öffnen</button>
+        <div class="nur-app-fenster daten-ordner" data-thema="app"><button type="button" id="daten-ordner-btn" class="secondary">Daten- und PDF-Ordner öffnen</button>
           <span class="hint">Datenbank, automatische Sicherungen und PDF-Kopien liegen im Dokumente-Ordner unter „DJ Office Studio“.</span></div>
-        <label class="inline nur-desktop update-option"><input type="checkbox" name="update_pruefen">
+        <label class="inline nur-desktop update-option" data-thema="app"><input type="checkbox" name="update_pruefen">
           Beim Start nach neuen Versionen suchen (fragt bei GitHub nach – es werden keine Daten übertragen)</label>
         <div class="actions">
           <button type="button" id="einstellungen-verwerfen" class="secondary">Änderungen verwerfen</button>
@@ -560,6 +585,7 @@
         <div class="knopf-zeile">
           <button type="button" class="secondary" id="abos-oeffnen" title="Wiederkehrende Ausgaben: Musikpool, Software …">↻ Abos</button>
           <button type="button" class="secondary" id="papierkorb-oeffnen" title="Verworfene Belege und gelöschte Ausgaben">Papierkorb<span id="papierkorb-anzahl"></span></button>
+          <button type="button" class="secondary hidden" id="pf-holen" title="Neue Rechnungsmails nach deinen Regeln aus dem Postfach holen">⇩ Aus dem Postfach</button>
           <button type="button" class="secondary hidden" id="paperless-abholen" title="Alle Dokumente mit dem Ausgaben-Tag holen, die noch nicht übernommen sind">⇩ Aus Paperless abholen</button>
           <button type="button" class="secondary" id="ausgabe-ohne-beleg">＋ Ausgabe ohne Beleg</button>
         </div>
@@ -1052,6 +1078,7 @@
     <form method="dialog" id="vtu-form">
       <h2 id="vtu-titel">Vertrag unterschrieben</h2>
       <div class="vt-wege">
+        <label><input type="radio" name="vtu-weg" value="hier"><span>Jetzt hier unterschreiben<small>Ihr beide unterschreibt mit Finger, Stift oder Maus auf diesem Gerät – die Unterschriften stehen danach im Vertrags-PDF.</small></span></label>
         <label><input type="radio" name="vtu-weg" value="datei" checked><span>Unterschrieben zurück (PDF oder Foto)<small>Die Datei wird beim Vertrag abgelegt und kommt in die Datensicherung.</small>
           <input type="file" id="vtu-datei" accept=".pdf,.jpg,.jpeg,.png,.heic,.heif,application/pdf,image/*"></span></label>
         <label><input type="radio" name="vtu-weg" value="mail"><span>Per Mail bestätigt<small>z. B. „Wir sind einverstanden“ – Datum und ggf. Notiz eintragen.</small></span></label>
@@ -1094,6 +1121,35 @@
   <dialog id="kundenakte" class="dialog kundenakte" aria-label="Kundenakte">
     <div id="ka-inhalt"></div>
     <div class="actions"><button type="button" class="secondary" data-ka="zu">Schließen</button></div>
+  </dialog>
+
+  <!-- seit 1.16: Unterschrift vor Ort, Kunden zusammenführen, Handbuch -->
+  <dialog id="sign" class="dialog sign">
+    <form method="dialog">
+      <h2 id="sign-titel">Vertrag unterschreiben</h2><p class="hint" id="sign-info"></p>
+      <div class="sign-felder">
+        <div class="sign-feld"><div class="kopf"><b id="sign-kunde">Veranstalter</b><button type="button" class="small secondary" data-sign-leer="0">Löschen</button></div>
+          <canvas data-pad="0"></canvas><small>Hier unterschreiben</small></div>
+        <div class="sign-feld"><div class="kopf"><b id="sign-dj">DJ</b><button type="button" class="small secondary" data-sign-leer="1">Löschen</button></div>
+          <canvas data-pad="1"></canvas><small>Hier unterschreiben</small></div>
+      </div>
+      <div class="vt-zwei"><label>Ort<input id="sign-ort" maxlength="80"></label><label>Datum<input id="sign-am" type="date"></label></div>
+      <div class="actions"><button type="button" class="secondary" data-sign="zu">Abbrechen</button><button type="button" data-sign="ok" id="sign-ok" disabled>Unterschreiben &amp; speichern</button></div>
+    </form>
+  </dialog>
+  <dialog id="dup" class="dialog dup">
+    <form method="dialog">
+      <h2>Doppelte Kunden zusammenführen</h2>
+      <p class="hint">Wähle je Paar, welcher Eintrag in den Stammdaten bleibt.</p>
+      <div class="dup-sicher">✓ <b>Es geht keine Rechnung verloren.</b> Alle Rechnungen, Angebote, Verträge, Barzahlungen und Notizen beider Einträge gehören danach zum verbleibenden Kunden. Jede Rechnung bleibt genau so, wie sie verschickt wurde – mit Name und Anschrift von damals. Entfernt wird nur der doppelte Eintrag in den Stammdaten.</div>
+      <div id="dup-liste"></div>
+      <div class="actions"><button type="button" class="secondary" data-dup="zu">Schließen</button></div>
+    </form>
+  </dialog>
+  <dialog id="handbuch" class="dialog handbuch" aria-label="Handbuch">
+    <div class="hb-kopf"><h2>📖 Handbuch</h2><input id="hb-suche" type="search" placeholder="Im Handbuch suchen …" aria-label="Im Handbuch suchen">
+      <button type="button" class="secondary" data-hb="zu">Schließen</button></div>
+    <div class="hb-raster"><div class="hb-inhalt-nav" id="hb-nav" role="navigation" aria-label="Abschnitte"></div><div class="hb-text" id="hb-text">Lädt …</div></div>
   </dialog>
 
   <!-- seit 1.15: Sicherungs-Passwort -->
@@ -1160,6 +1216,7 @@
   <script src="static/kundenakte.js"></script>
   <script src="static/sicherung.js"></script>
   <script src="static/handy.js"></script>
+  <script src="static/einstellungen.js"></script>
   <script src="static/rundgang.js"></script>
 </body>
 </html>

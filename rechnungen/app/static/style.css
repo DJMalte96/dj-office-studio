@@ -1131,3 +1131,113 @@ dialog.sp { width: min(520px, calc(100vw - 24px)); }
   .tour-karte { bottom: calc(76px + env(safe-area-inset-bottom)) !important; }
   .ja-zurueck { bottom: calc(84px + env(safe-area-inset-bottom)); }
 }
+
+/* ---------- seit 1.16: Einstellungen nach Themen ---------- */
+.eins-raster { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 22px; align-items: start; margin-top: 22px; }
+.eins-nav { position: sticky; top: 90px; display: grid; gap: 4px; padding: 6px; border: 1px solid var(--border); border-radius: 16px; background: var(--card); }
+.eins-nav button { display: flex; gap: 10px; align-items: center; justify-content: flex-start; text-align: left; width: 100%; box-sizing: border-box;
+  background: none; border: 0; box-shadow: none; color: var(--muted); font: inherit; font-weight: 600; padding: 10px 12px; border-radius: 12px; min-height: 0; }
+.eins-nav button:hover { background: var(--primary-soft); color: var(--text); }
+.eins-nav button.aktiv { background: var(--chip-bg); color: var(--chip-fg); }
+.eins-nav .sym { width: 20px; height: 20px; flex: none; display: inline-flex; }
+.eins-nav .sym svg { width: 20px; height: 20px; }
+.eins-nav .punkt { margin-left: auto; width: 8px; height: 8px; border-radius: 50%; background: var(--danger); }
+.eins-gruppe { display: none; }
+.eins-gruppe.aktiv { display: grid; gap: 18px; }
+.eins-gruppe > .card { margin: 0; }
+.eins-gruppe h2.eins-titel { margin: 0; font-size: 22px; }
+.eins-aktionen { position: sticky; bottom: 12px; z-index: 6; margin-top: 18px; padding: 10px; border-radius: 14px; border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--card) 90%, transparent); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); box-shadow: var(--shadow-lg); }
+@media (max-width: 860px) {
+  .eins-raster { grid-template-columns: 1fr; }
+  .eins-nav { position: sticky; top: 64px; z-index: 5; display: flex; overflow-x: auto; gap: 6px; scrollbar-width: none; }
+  .eins-nav button { white-space: nowrap; width: auto; padding: 8px 12px; }
+  .eins-nav .sym { display: none; }
+}
+@media (max-width: 760px) { .eins-aktionen { bottom: calc(76px + env(safe-area-inset-bottom)); } }
+
+/* ---------- seit 1.16: Belege aus dem Postfach ---------- */
+.pf-regeln { display: grid; gap: 6px; margin: 12px 0; }
+.pf-regel, .pf-kopf { display: grid; grid-template-columns: 28px minmax(0, 2fr) minmax(0, 1.3fr) minmax(0, 1.1fr) 36px; gap: 8px; align-items: center; }
+.pf-kopf { font-size: 12.5px; font-weight: 600; color: var(--muted); padding: 0 2px; }
+.pf-kopf .opt { font-weight: 400; }
+.pf-regel.aus input:not([type=checkbox]) { opacity: .5; }
+.pf-regel input:not([type=checkbox]) { margin: 0; height: 40px; min-height: 0; padding: 8px 12px; width: 100%; box-sizing: border-box; }
+.pf-regel input[type=checkbox] { width: auto; margin: 0 auto; }
+.pf-regel .icon { min-height: 0; }
+.pf-regel .treffer { grid-column: 2 / -1; font-size: 12.5px; color: var(--muted); margin: -2px 0 4px; }
+.pf-regel .treffer.fehlt { color: var(--danger); }
+.pf-zeile { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+.pf-zeile label { flex: 1 1 200px; }
+.pf-zeile label.port { flex: 0 1 110px; }
+.pf-status { font-size: 13px; color: var(--muted); }
+@media (max-width: 760px) {
+  .pf-kopf { display: none; }
+  .pf-regel { grid-template-columns: 28px minmax(0, 1fr) 36px; border: 1px solid var(--border); border-radius: 12px; padding: 8px; }
+  .pf-regel [data-f=von], .pf-regel [data-f=betreff] { grid-column: 2 / 3; }
+}
+
+/* ---------- seit 1.16: Nachlass ---------- */
+.nachlass-box { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 10px 0 0; }
+.nachlass-zeile { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; border: 1px dashed var(--primary-d); border-radius: 12px; padding: 8px 12px; width: 100%; }
+.nachlass-zeile input, .nachlass-zeile select { width: auto; margin: 0; }
+.nachlass-zeile .nl-wert { width: 90px; }
+.nachlass-zeile .nl-text { flex: 1 1 200px; }
+.nachlass-zeile b { white-space: nowrap; }
+.pos.nachlass { display: none !important; }   /* erscheint als Zeile „Nachlass“ unter den Positionen */
+
+/* ---------- seit 1.16: Vertrag vor Ort unterschreiben ---------- */
+dialog.sign { width: min(760px, calc(100vw - 16px)); }
+.sign-felder { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 12px 0; }
+@media (max-width: 640px) { .sign-felder { grid-template-columns: 1fr; } }
+.sign-feld { border: 1px solid var(--border); border-radius: 14px; padding: 10px; }
+.sign-feld .kopf { display: flex; justify-content: space-between; align-items: center; font-size: 13.5px; margin-bottom: 6px; }
+.sign-feld canvas { width: 100%; height: 170px; background: #fff; border-radius: 10px; touch-action: none; display: block; cursor: crosshair;
+  background-image: linear-gradient(transparent 128px, #c9d2cc 128px 129px, transparent 129px); }
+.sign-feld small { color: var(--muted); }
+.vt-unterschrift.mit-bild img { display: block; max-height: 60px; max-width: 220px; margin: 0 0 -4px; }
+
+/* ---------- seit 1.16: Kunden zusammenführen ---------- */
+.dup-hinweis { border: 1px dashed var(--gelb); background: var(--gelb-soft); border-radius: 12px; padding: 10px 14px; margin: 0 0 14px;
+  display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+dialog.dup { width: min(820px, calc(100vw - 16px)); }
+.dup-sicher { border: 1px solid var(--primary-d); background: var(--primary-soft); border-radius: 12px; padding: 10px 12px; font-size: 13.5px; margin: 0 0 12px; }
+.dup-paar { border: 1px solid var(--border); border-radius: 14px; padding: 12px; margin: 0 0 12px; }
+.dup-paar .wahl { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+@media (max-width: 640px) { .dup-paar .wahl { grid-template-columns: 1fr; } }
+.dup-paar label { display: flex; gap: 10px; align-items: flex-start; border: 1px solid var(--border); border-radius: 12px; padding: 10px; cursor: pointer; font-weight: 400; margin: 0; }
+.dup-paar label:has(input:checked) { border-color: var(--primary-d); background: var(--primary-soft); }
+.dup-paar input { width: auto; margin-top: 4px; }
+.dup-paar small { display: block; color: var(--muted); }
+.dup-paar .warum { font-size: 12.5px; color: var(--muted); margin: 0 0 8px; }
+.dup-paar .danach { font-size: 13px; margin: 8px 0 0; }
+.dup-paar .knoepfe { display: flex; gap: 8px; justify-content: flex-end; margin-top: 10px; flex-wrap: wrap; }
+
+/* ---------- seit 1.16: Handbuch ---------- */
+dialog.handbuch { width: min(1180px, calc(100vw - 16px)); height: min(92vh, 1100px); padding: 0; }
+dialog.handbuch[open] { display: grid; grid-template-rows: auto minmax(0, 1fr); }
+.hb-kopf { display: flex; gap: 12px; align-items: center; padding: 14px 18px; border-bottom: 1px solid var(--border); }
+.hb-kopf h2 { margin: 0 auto 0 0; font-size: 18px; }
+.hb-kopf input { width: min(320px, 40vw); margin: 0; }
+.hb-raster { display: grid; grid-template-columns: 270px minmax(0, 1fr); min-height: 0; }
+.hb-inhalt-nav { display: block; overflow: auto; border-right: 1px solid var(--border); padding: 12px 8px; font-size: 14px; }
+.hb-inhalt-nav a { display: block; padding: 5px 10px; border-radius: 8px; color: var(--text); text-decoration: none; }
+.hb-inhalt-nav a.h3 { padding-left: 24px; color: var(--muted); font-size: 13.5px; }
+.hb-inhalt-nav a:hover, .hb-inhalt-nav a.aktiv { background: var(--primary-soft); color: var(--text); }
+.hb-inhalt-nav a.weg { display: none; }
+.hb-text { overflow: auto; padding: 8px 32px 60px; line-height: 1.6; font-size: 15px; position: relative; }
+.hb-text h1 { display: none; }
+.hb-text h2 { margin: 34px 0 10px; padding-top: 10px; border-top: 1px solid var(--border); font-size: 22px; }
+.hb-text h3 { margin: 24px 0 8px; font-size: 18px; }
+.hb-text img { max-width: 100%; height: auto; border: 1px solid var(--border); border-radius: 12px; margin: 8px 0; }
+.hb-text table { border-collapse: collapse; margin: 10px 0; }
+.hb-text td, .hb-text th { border: 1px solid var(--border); padding: 6px 10px; vertical-align: top; }
+.hb-text code { background: var(--input-bg); border-radius: 6px; padding: 1px 6px; font-size: .92em; }
+.hb-text pre { background: var(--input-bg); border-radius: 10px; padding: 12px; overflow: auto; }
+.hb-text mark { background: var(--gelb-soft); color: inherit; border-radius: 4px; }
+@media (max-width: 760px) {
+  .hb-raster { grid-template-columns: 1fr; }
+  .hb-inhalt-nav { display: none; }
+  .hb-text { padding: 4px 16px 80px; }
+  .hb-kopf input { width: 46vw; }
+}

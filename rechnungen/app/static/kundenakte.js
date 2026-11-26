@@ -13,12 +13,20 @@ const vorname = name => esc((name || "").trim().split(/\s+/)[0]);
 const KA_FIRMA = /(gmbh|\bag\b|e\.\s?v\.?|\bkg\b|\bohg\b|\bug\b|gbr|verein|schule|gemeinde|firma)/i;
 
 /* Alles, was Kundenakte, Startseite und Listen brauchen – Rechnungen und Angebote landen in state. */
-async function kaLaden({ kunden = false } = {}) {
-  const [rechnungen, angebote, vertraege, bar, ruhe, stamm] = await Promise.all([api("rechnungen"), api("angebote"), api("vertraege"),
-    api("barzahlungen"), api("kunden/erinnerung"), kunden ? api("kunden") : Promise.resolve(null)]);
+async function kaLaden() {
+  const [rechnungen, angebote, vertraege, bar, ruhe, kunden] = await Promise.all([api("rechnungen"), api("angebote"), api("vertraege"),
+    api("barzahlungen"), api("kunden/erinnerung"), api("kunden")]);
   Object.assign(state, { rechnungen, angebote });
-  Object.assign(ka, { vertraege, bar, ruhe }, stamm ? { kunden: stamm } : {});
+  Object.assign(ka, { vertraege, bar, ruhe, kunden });
 }
+
+/* Stammdaten-Eintrag zu einem Namen – auch über die Namen zusammengeführter Einträge (seit 1.16). */
+function kundeZu(name) {
+  const n = kaNorm(name);
+  return (ka.kunden || []).find(k => kaNorm(k.name) === n)
+    || (ka.kunden || []).find(k => kaWeitere(k).some(x => kaNorm(x) === n)) || null;
+}
+const kaWeitere = k => { try { return JSON.parse(k.weitere_namen || "[]"); } catch (e) { return []; } };
 
 // ---------- Vertrag → Rechnung ----------
 
@@ -170,12 +178,14 @@ function kaNeuZeichnen() {
 // ---------- Kennzahlen je Kunde ----------
 
 function belegeVon(name) {
-  const n = kaNorm(name);
+  const k = kundeZu(name);
+  const namen = new Set([kaNorm(name), ...(k ? [k.name, ...kaWeitere(k)].map(kaNorm) : [])]);
+  const gehoert = x => (k && x.kunde_id === k.id) || namen.has(kaNorm(x.kunde.name));
   return {
-    rechnungen: (state.rechnungen || []).filter(r => kaNorm(r.kunde.name) === n),
-    angebote: (state.angebote || []).filter(a => kaNorm(a.kunde.name) === n),
-    vertraege: ka.vertraege.filter(v => kaNorm(v.kunde.name) === n),
-    bar: ka.bar.filter(b => kaNorm(b.kunde.name) === n),
+    rechnungen: (state.rechnungen || []).filter(gehoert),
+    angebote: (state.angebote || []).filter(gehoert),
+    vertraege: ka.vertraege.filter(gehoert),
+    bar: ka.bar.filter(gehoert),
   };
 }
 
@@ -211,8 +221,12 @@ function kennzahlen(name, heute = kaHeute()) {
 // ---------- Jahres-Erinnerung: Stammkunde, Feier vor knapp einem Jahr, noch nichts Neues ----------
 
 function erinnerungen(heute = kaHeute()) {
-  const namen = new Map();
-  for (const x of [...(state.rechnungen || []), ...ka.bar]) if (x.kunde.name) namen.set(kaNorm(x.kunde.name), x.kunde.name);
+  const namen = new Map();   // je Kunde nur einmal – auch wenn Rechnungen unter einem zusammengeführten Namen laufen
+  for (const x of [...(state.rechnungen || []), ...ka.bar]) {
+    if (!x.kunde.name) continue;
+    const k = kundeZu(x.kunde.name);
+    namen.set(k ? kaNorm(k.name) : kaNorm(x.kunde.name), k ? k.name : x.kunde.name);
+  }
   const aus = [];
   for (const [n, name] of namen) {
     const ruhe = ka.ruhe[n];
@@ -369,7 +383,7 @@ document.addEventListener("click", e => {
 async function oeffneAkte(name) {
   try { await kaLaden({ kunden: true }); } catch (e) { return toast(e.message, true); }
   const k = kennzahlen(name), n = kaNorm(name);
-  const stamm = ka.kunden.find(x => kaNorm(x.name) === n) || k.b.rechnungen[0]?.kunde || k.b.angebote[0]?.kunde || { name };
+  const stamm = kundeZu(name) || k.b.rechnungen[0]?.kunde || k.b.angebote[0]?.kunde || { name };
   const eintraege = [
     ...k.b.rechnungen.map(r => ({ art: r.rechnungsart === "anzahlung" ? "Anzahlung" : r.storno_von ? "Storno" : "Rechnung", nr: r.nummer,
       datum: feierVon(r), text: anlassVon(r), betrag: r.gesamt,
@@ -460,6 +474,7 @@ async function kaKundenListe(sec, kunden) {
   const karte = $$(".card", sec)[1], tbody = $("tbody", karte);
   if (!kunden.length) return;
   $("h2", karte).insertAdjacentHTML("afterend", `<p class="hint">Ein Klick auf den Namen öffnet die Kundenakte mit allen Angeboten, Verträgen, Rechnungen und Barzahlungen.</p>`);
+  dupHinweis(karte);
   tbody.insertAdjacentHTML("beforebegin", `<thead><tr><th>Kunde</th><th>Feiern</th><th class="num">Umsatz</th><th>Letzte / nächste Feier</th><th></th></tr></thead>`);
   const zeilen = $$("tr[data-id]", tbody).map(tr => {
     const ku = kunden.find(x => x.id === Number(tr.dataset.id)), k = kennzahlen(ku.name);
@@ -474,3 +489,49 @@ async function kaKundenListe(sec, kunden) {
   });
   zeilen.sort((a, b) => b.umsatz - a.umsatz).forEach(z => tbody.append(z.tr));
 }
+
+// ---------- Doppelte Kunden zusammenführen (seit 1.16) ----------
+
+let dupPaare = [];
+async function dupHinweis(karte) {
+  try { dupPaare = await api("kunden/duplikate"); } catch (e) { return; }
+  if (!dupPaare.length) return;
+  $("h2", karte).insertAdjacentHTML("afterend", `<div class="dup-hinweis"><span>⚠ ${dupPaare.length} ${dupPaare.length === 1 ? "Kunde ist" : "Kunden sind"} vermutlich doppelt angelegt – dann fehlen in der Kundenakte Feiern und Umsatz.</span>
+    <button type="button" class="small" id="dup-oeffnen">Prüfen und zusammenführen</button></div>`);
+}
+const dupZahl = k => (k.belege.rechnungen || 0) + (k.belege.angebote || 0) + (k.belege.vertraege || 0);
+function dupDialog() {
+  const karte = (k, schl, an) => `<label><input type="radio" name="dup-${schl}" value="${k.id}"${an ? " checked" : ""}><span><b>${esc(k.name)}</b>
+    <small>${esc([k.strasse, [k.plz, k.ort].filter(Boolean).join(" ")].filter(Boolean).join(", "))}${k.email ? ` · ${esc(k.email)}` : ""}</small>
+    <small>${k.belege.rechnungen || 0} Rechnungen · ${k.belege.angebote || 0} Angebote${k.belege.vertraege ? ` · ${k.belege.vertraege} Verträge` : ""}</small></span></label>`;
+  $("#dup-liste").innerHTML = dupPaare.map((p, i) => {
+    const [a, b] = dupZahl(p.b) > dupZahl(p.a) ? [p.b, p.a] : [p.a, p.b];   // vorausgewählt: der Eintrag mit mehr Belegen
+    const r = (a.belege.rechnungen || 0) + (b.belege.rechnungen || 0), g = (a.belege.angebote || 0) + (b.belege.angebote || 0);
+    return `<div class="dup-paar" data-i="${i}" data-a="${a.id}" data-b="${b.id}"><p class="warum">${esc(p.grund)}</p>
+      <div class="wahl">${karte(a, i, true)}${karte(b, i, false)}</div>
+      <p class="danach">Danach: <b>${r} Rechnungen, ${g} Angebote</b> bei einem Kunden – nichts wird gelöscht.</p>
+      <div class="knoepfe"><button type="button" class="small secondary" data-dup="nein">Kein Duplikat</button><button type="button" class="small" data-dup="ja">Zusammenführen</button></div></div>`;
+  }).join("");
+  $("#dup").showModal();
+}
+document.addEventListener("click", e => { if (e.target.closest("#dup-oeffnen")) dupDialog(); });
+$("#dup").addEventListener("click", async e => {
+  const b = e.target.closest("[data-dup]");
+  if (!b) return;
+  if (b.dataset.dup === "zu") { $("#dup").close(); return renderStamm("kunden"); }
+  const paar = b.closest(".dup-paar"), a = Number(paar.dataset.a), c = Number(paar.dataset.b);
+  b.disabled = true;
+  try {
+    if (b.dataset.dup === "ja") {
+      const behalten = Number(paar.querySelector("input:checked").value), weg = behalten === a ? c : a;
+      const name = paar.querySelector("input:checked").closest("label").querySelector("b").textContent;
+      await api("kunden/zusammenfuehren", { method: "POST", body: { behalten, weg } });
+      toast(`Zusammengeführt – alle Rechnungen und Angebote gehören jetzt zu „${name}“, keine ist verloren`);
+    } else {
+      await api("kunden/kein-duplikat", { method: "POST", body: { a, b: c } });
+      toast("Gemerkt – dieses Paar wird nicht mehr vorgeschlagen");
+    }
+    paar.remove();
+  } catch (err) { b.disabled = false; return toast(err.message, true); }
+  if (!$$("#dup .dup-paar").length) { $("#dup").close(); renderStamm("kunden"); }
+});

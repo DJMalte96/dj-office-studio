@@ -208,6 +208,111 @@ def notiz_speichern(kid):
     return jsonify({"id": kid, "notiz": text})
 
 
+# ---------- Doppelte Kunden zusammenführen (seit 1.16) ----------
+
+def _norm(text):
+    import unicodedata
+    t = unicodedata.normalize("NFKD", str(text or "").lower())
+    t = "".join(ch for ch in t if not unicodedata.combining(ch)).replace("ß", "ss")
+    t = re.sub(r"strasse\b|str\.|\bstr\b", "str", t)
+    return re.sub(r"[^a-z0-9]", "", t)
+
+
+def _abstand(a, b):
+    """Tippfehler-Abstand (Levenshtein)."""
+    vorher = list(range(len(b) + 1))
+    for i, x in enumerate(a, 1):
+        jetzt = [i]
+        for j, y in enumerate(b, 1):
+            jetzt.append(min(vorher[j] + 1, jetzt[j - 1] + 1, vorher[j - 1] + (x != y)))
+        vorher = jetzt
+    return vorher[-1]
+
+
+def _kunden():
+    with db.connect() as con:
+        return [dict(r) for r in con.execute("SELECT * FROM kunden ORDER BY id")]
+
+
+def duplikate():
+    """Vermutlich doppelte Kunden: gleiche Anschrift und (fast) gleicher Name, oder gleicher Name mit gleicher PLZ."""
+    kunden = _kunden()
+    with db.connect() as con:
+        nein = {(r["a"], r["b"]) for r in con.execute("SELECT a, b FROM kunden_kein_duplikat")}
+        belege = {}
+        for tab in ("rechnungen", "angebote", "vertraege"):
+            for r in con.execute(f"SELECT kunde_id, COUNT(*) n FROM {tab} WHERE kunde_id IS NOT NULL GROUP BY kunde_id"):
+                belege.setdefault(r["kunde_id"], {})[tab] = r["n"]
+    paare = []
+    for i, a in enumerate(kunden):
+        for b in kunden[i + 1:]:
+            if (a["id"], b["id"]) in nein:
+                continue
+            na, nb = _norm(a["name"]), _norm(b["name"])
+            if not na or not nb:
+                continue
+            adresse = _norm(a["strasse"]) and _norm(a["strasse"]) == _norm(b["strasse"]) and (a["plz"] or "") == (b["plz"] or "")
+            nah = na != nb and _abstand(na, nb) <= (1 if min(len(na), len(nb)) < 8 else 2)
+            if adresse and na == nb:
+                grund = "gleicher Name und gleiche Anschrift"
+            elif adresse and nah:
+                grund = "gleiche Anschrift, fast gleicher Name (Tippfehler?)"
+            elif na == nb and (a["plz"] or "") == (b["plz"] or "") and (a["plz"] or a["ort"]):
+                grund = "gleicher Name, gleiche Postleitzahl"
+            else:
+                continue
+            paare.append({"a": a | {"belege": belege.get(a["id"], {})}, "b": b | {"belege": belege.get(b["id"], {})}, "grund": grund})
+    return paare
+
+
+@bp.get("/api/kunden/duplikate")
+def duplikate_api():
+    return jsonify(duplikate())
+
+
+@bp.post("/api/kunden/kein-duplikat")
+def kein_duplikat():
+    d = request.get_json(silent=True) or {}
+    try:
+        a, b = sorted((int(d.get("a")), int(d.get("b"))))
+    except (TypeError, ValueError):
+        return _fehler("Ungültige Angabe")
+    with db.connect() as con:
+        con.execute("INSERT OR IGNORE INTO kunden_kein_duplikat (a, b) VALUES (?, ?)", (a, b))
+    return "", 204
+
+
+@bp.post("/api/kunden/zusammenfuehren")
+def zusammenfuehren():
+    """{behalten, weg}: Alles vom Eintrag „weg“ gehört danach zu „behalten“ – Rechnungen, Angebote, Verträge,
+    Barzahlungen. Belege selbst ändern sich nicht (Name und Anschrift bleiben, wie sie verschickt wurden);
+    entfernt wird nur der doppelte Stammdaten-Eintrag. Sein Name wird gemerkt, damit die Kundenakte alles findet."""
+    d = request.get_json(silent=True) or {}
+    try:
+        behalten, weg = int(d.get("behalten")), int(d.get("weg"))
+    except (TypeError, ValueError):
+        return _fehler("Ungültige Angabe")
+    if behalten == weg:
+        return _fehler("Bitte zwei verschiedene Kunden wählen")
+    with db.connect() as con:
+        k = con.execute("SELECT * FROM kunden WHERE id = ?", (behalten,)).fetchone()
+        w = con.execute("SELECT * FROM kunden WHERE id = ?", (weg,)).fetchone()
+        if not k or not w:
+            abort(404)
+        zahlen = {}
+        for tab in ("rechnungen", "angebote", "vertraege", "barzahlungen"):
+            zahlen[tab] = con.execute(f"UPDATE {tab} SET kunde_id = ? WHERE kunde_id = ?", (behalten, weg)).rowcount
+        namen = [n for n in dict.fromkeys(json.loads(k["weitere_namen"] or "[]") + [w["name"]] + json.loads(w["weitere_namen"] or "[]"))
+                 if _norm(n) != _norm(k["name"])]
+        felder = {f: k[f] or w[f] or "" for f in ("zusatz", "strasse", "plz", "ort", "email")}
+        notiz = "\n".join(n for n in dict.fromkeys(x.strip() for x in (k["notiz"] or "", w["notiz"] or "")) if n)
+        con.execute("UPDATE kunden SET zusatz = ?, strasse = ?, plz = ?, ort = ?, email = ?, notiz = ?, weitere_namen = ? WHERE id = ?",
+                    (*felder.values(), notiz[:NOTIZ_MAX], json.dumps(namen, ensure_ascii=False), behalten))
+        con.execute("DELETE FROM kunden WHERE id = ?", (weg,))
+        con.execute("DELETE FROM kunden_kein_duplikat WHERE a = ? OR b = ?", (weg, weg))
+    return jsonify({"behalten": behalten, "verschoben": zahlen, "weitere_namen": namen})
+
+
 # ---------- Jahres-Erinnerung ----------
 
 def _schluessel(name):

@@ -24,6 +24,8 @@ import abos
 import abschluss
 import db
 import kundenakte
+import handbuch
+import postfach
 import sicherung
 import zugferd
 import verschluesselung
@@ -46,6 +48,8 @@ app.register_blueprint(abos.bp)       # Abos / wiederkehrende Ausgaben (seit 1.9
 app.register_blueprint(vertraege.bp)  # Booking-Verträge (seit 1.13)
 app.register_blueprint(kundenakte.bp)  # Kundenakte, bar bezahlt (seit 1.14)
 app.register_blueprint(sicherung.bp)   # Sicherungs-Passwort, Tageskopie (seit 1.15)
+app.register_blueprint(postfach.bp)    # Belege aus dem Postfach (seit 1.16)
+app.register_blueprint(handbuch.bp)    # Handbuch in der App (seit 1.16)
 
 
 @app.errorhandler(abschluss.Gesperrt)
@@ -161,7 +165,10 @@ FELDER = {
     "mahnfrist_tage": (int, 7),       # Frist in Zahlungserinnerung/Mahnung (Tage ab Datum)
     "sicherung_erinnerung_tage": (int, 30),
     "sicherung_kopie_ordner": (str, ""),   # nur Desktop: tägliche verschlüsselte Sicherung in diesen Ordner (Cloud, NAS)
-    "nachfassen_tage": (int, 7),      # Startseite erinnert an Angebote ohne Antwort nach so vielen Tagen (0 = nie)   # Startseite erinnert an eine Sicherung nach so vielen Tagen (0 = nie)
+    "nachfassen_tage": (int, 7),      # Startseite erinnert an Angebote ohne Antwort nach so vielen Tagen (0 = nie)
+    # seit 1.16: Belege aus dem Postfach (IMAP) nach eigenen Regeln abholen
+    "postfach_an": (bool, False), "postfach_regeln": (str, "[]"), "postfach_ab": (str, ""),
+    "imap_server": (str, ""), "imap_port": (int, 993),
     # E-Mail-Versand über das eigene Postfach (beliebiger Anbieter / eigener Server)
     "absender_email": (str, ""), "smtp_server": (str, ""), "smtp_port": (int, 587),
     "smtp_sicherheit": (str, "starttls"), "smtp_benutzer": (str, ""), "smtp_passwort": (str, ""),
@@ -265,7 +272,7 @@ def _asset_version(name):
 def index():
     with open(os.path.join(STATIC_DIR, "index.html"), encoding="utf-8") as f:
         html = f.read()
-    for name in ("theme.js", "style.css", "datum.js", "app.js", "finanzen.js", "rundgang.js", "vertraege.js", "kundenakte.js", "sicherung.js", "handy.js"):
+    for name in ("theme.js", "style.css", "datum.js", "app.js", "finanzen.js", "rundgang.js", "vertraege.js", "kundenakte.js", "sicherung.js", "handy.js", "einstellungen.js"):
         html = html.replace(f'"static/{name}"', f'"static/{name}?v={_asset_version(name)}"')
     return Response(html, mimetype="text/html", headers={"Cache-Control": "no-cache"})
 
@@ -323,6 +330,13 @@ def settings_put():
             werte[k] = (v or "").strip()
             if k.startswith("mail_betreff_") and not werte[k]:
                 werte[k] = standard
+    if "postfach_regeln" in werte:   # seit 1.16: Liste von Regeln als JSON
+        try:
+            werte["postfach_regeln"] = postfach.regeln_pruefen(werte["postfach_regeln"])
+        except ValueError as e:
+            fehler.append(str(e))
+    if werte.get("postfach_ab") and not _ist_datum(werte["postfach_ab"]):
+        fehler.append("„Mails ab“ ist kein gültiges Datum")
     if werte.get("fahrzeug", "privat") not in ("privat", "betrieb"):
         fehler.append("Fahrzeug muss „privat“ oder „betrieb“ sein")
     if werte.get("smtp_sicherheit", "starttls") not in mail.SICHERHEIT:
@@ -551,6 +565,31 @@ def _ist_datum(text):
         return False
 
 
+def _nachlass(positionen):
+    """Seit 1.16: eine Position „Nachlass“ – Prozent oder fester Betrag auf die übrigen Positionen (ohne Anzahlungs-Abzüge).
+    Der Betrag wird hier berechnet, nicht aus dem Browser übernommen. Rückgabe: Fehlertexte."""
+    nl = [p for p in positionen if p.get("nachlass")]
+    if not nl:
+        return []
+    if len(nl) > 1:
+        return ["Bitte nur einen Nachlass je Beleg"]
+    p, n = nl[0], nl[0]["nachlass"]
+    if not isinstance(n, dict) or n.get("art") not in ("prozent", "betrag"):
+        return ["Nachlass ungültig"]
+    try:
+        wert = round(float(str(n.get("wert")).replace(",", ".")), 2)
+    except (TypeError, ValueError):
+        return ["Bitte beim Nachlass einen Wert eintragen"]
+    basis = round(sum(q["preis"] for q in positionen if q is not p and not q.get("anzahlung_id") and isinstance(q.get("preis"), float)), 2)
+    if wert <= 0 or (n["art"] == "prozent" and wert > 100) or (n["art"] == "betrag" and wert > max(basis, 0)):
+        return ["Der Nachlass muss größer als 0 und höchstens so hoch wie der Betrag sein"]
+    p["nachlass"] = {"art": n["art"], "wert": wert}
+    p["preis"] = -(round(basis * wert / 100, 2) if n["art"] == "prozent" else wert)
+    if not p.get("lieferdatum"):   # gleiches Datum wie die Leistung (Pflichtangabe je Position)
+        p["lieferdatum"] = max((q.get("lieferdatum") or "" for q in positionen if q is not p), default="")
+    return []
+
+
 def _validate_invoice(data, inv_id=None, check_number=True, art="rechnung", pflicht=True):
     """pflicht=False (PDF-Vorschau): Pflichtangaben einer Rechnung noch nicht erzwingen."""
     angebot = art == "angebot"
@@ -579,6 +618,7 @@ def _validate_invoice(data, inv_id=None, check_number=True, art="rechnung", pfli
             p["preis"] = round(float(p.get("preis") or 0), 2)
         except (TypeError, ValueError):
             errors.append(f"Ungültiger Preis bei '{p['beschreibung'][:30]}'")
+    errors += _nachlass(positionen)
     if not angebot and not (data.get("zahlungsbedingung") or "").strip():
         errors.append("Zahlungsbedingung fehlt")
     if not angebot and pflicht:
@@ -599,7 +639,7 @@ def _validate_invoice(data, inv_id=None, check_number=True, art="rechnung", pfli
         "kunde_id": kunde.get("id"),
         "positionen": [{"beschreibung": p["beschreibung"].strip(),
                         "lieferdatum": p.get("lieferdatum") or "",
-                        "preis": p["preis"]} for p in positionen],
+                        "preis": p["preis"]} | ({"nachlass": p["nachlass"]} if p.get("nachlass") else {}) for p in positionen],
         "zahlungsbedingung": (data.get("zahlungsbedingung") or "").strip(),
     }
     doc |= _steuer(sum(p["preis"] for p in positionen))
@@ -1600,6 +1640,7 @@ if __name__ == "__main__":
     absender_festhalten()
     abschluss.jahre_festhalten()         # seit 1.8: Kleinunternehmer/Fahrzeug je Jahr
     finanzen.ordner_waechter_starten()   # Belege-Ordner regelmäßig einlesen
+    postfach.waechter_starten()          # seit 1.16: Belege aus dem Postfach
     finanzen.texterkennung_starten()     # Fotos und Scans im Hintergrund lesen
     port = int(os.environ.get("PORT", "8099"))
     print(f"DJ Office Studio läuft auf Port {port}")

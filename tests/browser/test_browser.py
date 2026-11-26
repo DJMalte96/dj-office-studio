@@ -24,7 +24,7 @@ if not os.environ.get("DJOS_BROWSERTESTS"):
     pytest.skip("Browser-Tests nur mit DJOS_BROWSERTESTS=1", allow_module_level=True)
 sync_api = pytest.importorskip("playwright.sync_api")
 
-SUITEN = ["suite_anzahlungen", "suite_rundgang", "suite_vertraege", "suite_kundenakte", "suite_sicherung", "suite_xss"]
+SUITEN = ["suite_anzahlungen", "suite_rundgang", "suite_vertraege", "suite_kundenakte", "suite_sicherung", "suite_116", "suite_xss"]
 BROWSER = [b for b in os.environ.get("DJOS_BROWSER", "chromium,webkit").split(",") if b]
 
 

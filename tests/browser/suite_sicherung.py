@@ -19,6 +19,7 @@ def lauf(pg, URL, ok, ENGINE, B, DATEIEN):
 
     # ---------- Sicherung ohne Passwort: Warnung, dann festlegen ----------
     pg.evaluate("showTab('einstellungen')"); pg.wait_for_timeout(1500)
+    pg.click(".eins-nav [data-thema=sicherung]"); pg.wait_for_timeout(300)   # seit 1.16: Einstellungen nach Themen
     ok("noch kein Passwort", "Noch nicht festgelegt" in pg.inner_text("#sp-box"))
     pg.click("#sicherung-btn"); pg.wait_for_timeout(500)
     ok("Warnung ohne Passwort", "unverschlüsselt" in pg.inner_text("#sp-laden"))

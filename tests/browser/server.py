@@ -147,6 +147,63 @@ def szenario_114():
     for nr, kunde, tage in (("015", "Anna Muster", -5), ("016", "Lea Probe", -200)):
         aid = angebot(nr, d(tage - 30), d(tage), kunde, T("Geburtstagsfeier", "20:00", "1:00"), d(tage), 600)
         c.patch(f"/api/angebote/{aid}/status", json={"status": "angenommen"})
+    return {"K": K, "T": T, "rechnung": rechnung, "ang": ang, "d": d}
+
+
+class FakeIMAP:
+    """Nachgestelltes Postfach (seit 1.16): Ordner „Geschäftlich/Belege/…“ mit den Beispiel-Kaufmails."""
+    MAILS = ROOT / "tests" / "beispiele" / "mails"
+
+    def __init__(self, *a, **k):
+        self.gewaehlt = None
+        self.ordner = {"INBOX": {}, "Gesch&AOQ-ftlich/Belege/Musik": {5: [(self.MAILS / "apple.eml").read_bytes(), False],
+                                                                     6: [(self.MAILS / "qobuz.eml").read_bytes(), False]},
+                       "Gesch&AOQ-ftlich/Belege/Technik": {9: [(self.MAILS / "amazon.eml").read_bytes(), False]}}
+
+    def login(self, *a):
+        return "OK", [b""]
+
+    def list(self):
+        return "OK", [f'(\\HasNoChildren) "/" "{n}"'.encode() for n in self.ordner]
+
+    def select(self, name, readonly=False):
+        self.gewaehlt = name.strip('"')
+        return ("OK", [b"1"]) if self.gewaehlt in self.ordner else ("NO", [b""])
+
+    def response(self, code):
+        return code, [b"1"]
+
+    def uid(self, befehl, *args):
+        mails = self.ordner[self.gewaehlt]
+        if befehl == "SEARCH":
+            return "OK", [" ".join(map(str, mails)).encode()]
+        roh = mails[int(args[0])][0]
+        if befehl == "STORE":
+            mails[int(args[0])][1] = True
+            return "OK", [b""]
+        if "HEADER.FIELDS" in args[1]:
+            roh = roh.split(b"\r\n\r\n")[0].split(b"\n\n")[0] + b"\r\n\r\n"
+        return "OK", [(b"1 (BODY[] {1}", roh), b")"]
+
+    def logout(self):
+        return "BYE", [b""]
+
+
+def szenario_116():
+    """Seit 1.16: doppelte Kunden, ein verschickter Vertrag zum Unterschreiben, Postfach mit Belege-Ordnern."""
+    import imaplib
+    g = szenario_114()
+    K, T, rechnung, ang, d = g["K"], g["T"], g["rechnung"], g["ang"], g["d"]
+    K["Ana Muster"] = {"name": "Ana Muster", "strasse": "Lindenweg 12", "plz": "12345", "ort": "Musterstadt"}
+    K["Jonas Nord"] = {"name": "Jonas Beispiel", "strasse": "Am Hang 3", "plz": "12350", "ort": "Lindenau OT Nord"}
+    rechnung("032", d(-90), "Ana Muster", T("Geburtstagsfeier", "19:00", "1:00"), 500)
+    rechnung("033", d(-60), "Jonas Nord", T("Firmenfeier", "19:00", "0:00"), 750)
+    vc = c.post("/api/vertraege", json={"angebot_id": ang["014"]}).get_json()["vertrag"]["id"]
+    c.post(f"/api/vertraege/{vc}/status", json={"status": "verschickt"})
+    db.save_settings({"absender_email": "max.beispiel@example.com", "smtp_server": "smtp.web.de", "smtp_passwort": "geheim",
+                      "steuernummer": "12/345/67890", "postfach_an": True, "postfach_ab": "2026-10-01",
+                      "postfach_regeln": json.dumps([{"an": True, "ordner": "Geschäftlich/Belege/Musik", "von": "", "betreff": ""}])})
+    imaplib.IMAP4_SSL = FakeIMAP
 
 
 def szenario_xss():
@@ -223,6 +280,8 @@ if __name__ == "__main__":
         basis(); szenario_111()
     elif szenario == "114":
         basis(); szenario_114()
+    elif szenario == "116":
+        basis(); szenario_116()
     elif szenario == "xss":
         szenario_xss()
     from waitress import create_server

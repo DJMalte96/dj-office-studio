@@ -2,6 +2,19 @@
 
 Alle Änderungen an DJ Office Studio. Neueste Version oben.
 
+## 1.16.0 – 2026-11-26
+
+### Neu
+- **Nachlass** im Editor (＋ Nachlass unter den Positionen): Prozent oder fester Betrag mit eigener Bezeichnung, als eigene Zeile auf Angebot und Rechnung. Der Betrag wird vom Server berechnet; aus dem Angebot kommt er in die Rechnung mit. Auch in E-Rechnungen gültig.
+- **Vertrag vor Ort unterschreiben**: „Jetzt hier unterschreiben“ – Veranstalter und DJ unterschreiben mit Finger, Stift oder Maus auf Handy, Tablet oder Computer; beide Unterschriften stehen danach im Vertrag und im PDF.
+- **Doppelte Kunden zusammenführen** (Stammdaten → Kunden): Die App erkennt doppelte Einträge (Tippfehler im Namen, anderer Ortsname bei gleicher Anschrift) und führt sie auf Wunsch zusammen. Keine Rechnung geht verloren oder ändert sich – alles gehört danach zum verbleibenden Kunden, die Kundenakte zeigt es zusammen. „Kein Duplikat“ merkt sich das Paar.
+- **Belege aus dem Postfach**: Rechnungsmails per IMAP nach eigenen Regeln abholen – Ordner wie im Mailprogramm (auch Unterordner), optional Absender und Betreff; „Regeln prüfen“ zeigt, ob es den Ordner gibt und wie viele Mails passen. Beim Start, alle 30 Minuten und auf Knopfdruck; danach als gelesen markiert, nichts kommt doppelt.
+- **Einstellungen nach Themen**: links Absender & Bank, Rechnungen & Angebote, E-Mail, Belege & Ablage, Fahrten, Datensicherung, Über die App – rechts nur das gewählte Thema, Speichern immer sichtbar; auf dem Handy als Leiste oben.
+- **Handbuch in der App** (⚙ Einstellungen → Über die App, auch in der Schnellsuche): die Anleitung mit Bildern, Abschnitten und Suche – ohne Internet.
+
+### Intern
+- Browser-Tests um 1.16 erweitert (nachgestelltes Postfach im Testserver); neue Bibliothek markdown 3.11.4 fürs Handbuch.
+
 ## 1.15.0 – 2026-11-26
 
 ### Neu

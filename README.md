@@ -28,6 +28,7 @@ DJ Office Studio ist eine App zum Schreiben von DJ-Rechnungen, -Angeboten und Bo
 
 - [Rechnung schreiben](#neue-rechnung)
 - [Preis-Spickzettel](#preis-spickzettel)
+- [Nachlass](#nachlass)
 - [Anzahlung & Schlussrechnung](#anzahlung)
 - [Offene Rechnungen & Archiv](#rechnungen)
 - [Per Mail versenden](#versenden)
@@ -46,6 +47,7 @@ DJ Office Studio ist eine App zum Schreiben von DJ-Rechnungen, -Angeboten und Bo
 - [Vertragsvorlage](#vertragsvorlage)
 - [Vom Vertrag zur Rechnung, bar bezahlt](#vom-vertrag-zur-rechnung)
 - [Kundenakte & Stammkunden](#kundenakte)
+- [Kunden zusammenführen](#doppelte-kunden-zusammenführen)
 - [Alte PDFs importieren](#alte-rechnungen-und-angebote-importieren)
 
 </td>
@@ -57,6 +59,7 @@ DJ Office Studio ist eine App zum Schreiben von DJ-Rechnungen, -Angeboten und Bo
 
 - [Überblick](#finanzen)
 - [Ausgaben & Belege](#ausgaben)
+- [Belege aus dem Postfach](#belege-aus-dem-postfach)
 - [Abos](#abos-wiederkehrende-ausgaben)
 - [Fahrten](#fahrten)
 - [Anschaffungen & Abschreibung](#anschaffungen)
@@ -69,6 +72,7 @@ DJ Office Studio ist eine App zum Schreiben von DJ-Rechnungen, -Angeboten und Bo
 <b>Einstellungen & Daten</b>
 
 - [Einstellungen](#einstellungen)
+- [Handbuch in der App](#handbuch-in-der-app)
 - [E-Mail-Versand](#e-mail-versand)
 - [Paperless-ngx](#paperless-ngx)
 - [Datensicherung](#daten--backup)
@@ -105,6 +109,7 @@ DJ Office Studio ist eine App zum Schreiben von DJ-Rechnungen, -Angeboten und Bo
   - Prüft die Pflichtangaben einer Rechnung (vollständige Anschrift des Kunden, Lieferdatum je Position)
   - **Preis-Spickzettel**: unter jeder Position, was du für diesen Rechnungsposten bisher genommen hast (zuletzt, Schnitt, pro Stunde) und was der Kunde zuletzt gezahlt hat – ein Klick übernimmt den Betrag
   - **Anzahlungs- und Schlussrechnung**: bei Bedarf erst eine Anzahlung (z. B. 30 %) abrechnen, nach der Feier zieht die Schlussrechnung sie ab
+  - **Nachlass** als eigene Zeile – Prozent oder fester Betrag, z. B. Stammkunden- oder Freitagsrabatt
   - **E-Rechnung (ZUGFeRD)** für Firmen und Vereine: das PDF enthält zusätzlich die maschinenlesbare Rechnung (EN 16931) für deren Buchhaltung – bei Firmen und Vereinen schon vorausgewählt
 - **PDF** im A4-Layout mit Absenderzeile, Adressfeld, Positionstabelle, QR-Code zum Bezahlen und Fußzeile (Bankverbindung, Steuernummer, Kleinunternehmer-Hinweis nach § 19 UStG bzw. Umsatzsteuer). Vorschau vor dem Speichern; beim Speichern wird eine Kopie im PDF-Ordner abgelegt (Home Assistant: `/share/rechnungen`, Desktop: `Dokumente/DJ Office Studio/PDFs`).
 - **Offene Rechnungen** auf einen Blick: eine Summenzeile mit Anzahl, Gesamtbetrag und nächster Frist; darunter je Rechnung Rechnungsname (z. B. `Rechnung_037_311026`), Betrag, verbleibende Zeit („noch 5 Tage“, „3 Tage überfällig“), ein Haken zum Abhaken, wenn bezahlt wurde, und Buttons für **Zahlungserinnerung / Mahnung**, QR-Code zum Bezahlen, Senden per E-Mail, Kopieren, Festschreiben (🔒) und Löschen bzw. Stornieren (✕). Das Zahlungsziel wird aus der Zahlungsbedingung gelesen (z. B. „innerhalb der nächsten 8 Tage“) und ab dem Rechnungsdatum gerechnet.
@@ -116,12 +121,13 @@ DJ Office Studio ist eine App zum Schreiben von DJ-Rechnungen, -Angeboten und Bo
 - **Kopieren**: Eine Rechnung oder ein Angebot mit einem Klick als neuen Beleg übernehmen (Kunde, Texte, Preise, Zahlungsbedingung) – praktisch für Stammkunden und jährlich wiederkehrende Feiern. Neue Nummer, heutiges Datum, das Datum der Veranstaltung trägt man neu ein.
 - **QR-Code zum Bezahlen (GiroCode)**: Auf Rechnungen, Zahlungserinnerungen und Mahnungen steht neben der Zahlungsbedingung ein QR-Code. Der Kunde scannt ihn mit seiner Banking-App, und Empfänger, IBAN, Betrag und Verwendungszweck („Rechnung 037“) sind schon ausgefüllt. Bei offenen Rechnungen zeigt die App den Code auch groß auf dem Bildschirm an, z. B. wenn direkt nach der Feier bezahlt wird. Nicht auf Angeboten, Stornorechnungen und bei „Bar erhalten“ / „Bereits bezahlt“; abschaltbar unter ⚙ Einstellungen.
 - **Datensicherung & Export**: Unter ⚙ Einstellungen alle Daten samt Ausgaben-Belegen als eine Sicherungsdatei herunterladen bzw. wieder einspielen. Die Startseite zeigt, wie lange die letzte Sicherung her ist, und erinnert nach einstellbarer Zeit (Standard 30 Tage) an eine neue. Dazu ein **Export für den Steuerberater**: alle Rechnungen eines Jahres als Excel-Tabelle (CSV, mit Bezahlt-Datum, Stornos und ggf. Umsatzsteuer) plus PDFs, dazu EÜR, Ausgaben, Fahrten, Anlagenverzeichnis und alle Belege – als ein ZIP. Die Desktop-Version sichert zusätzlich automatisch einmal pro Tag.
-- **Booking-Verträge** (Menü Dokumente): aus einem Angebot oder ohne Angebot, mit deiner Vorlage (Verpflegung, Ersatz-DJ, GEMA, Schäden durch Gäste und 16 weitere Bausteine, eigene Abschnitte, eigener Vertrag zum Hochladen), PDF, Versand per Mail und Unterschrift (Datei, Mail-Bestätigung oder vor Ort).
+- **Booking-Verträge** (Menü Dokumente): aus einem Angebot oder ohne Angebot, mit deiner Vorlage (Verpflegung, Ersatz-DJ, GEMA, Schäden durch Gäste und 16 weitere Bausteine, eigene Abschnitte, eigener Vertrag zum Hochladen), PDF, Versand per Mail und Unterschrift (Datei, Mail-Bestätigung oder vor Ort – auch direkt auf dem Handy oder Tablet mit dem Finger, beide Unterschriften landen im PDF).
 - **Vom Vertrag zur Rechnung**: Vor der Feier erinnert die Startseite an die vereinbarte Anzahlung, danach an die Rechnung – ein Klick übernimmt Kunde, Termin, Ort und Gage (mit Anzahlung als Schlussrechnung), Verlängerung oder weitere Posten lassen sich vor dem Speichern ergänzen. **Bar bezahlt** (Quittung von Hand auf dem Quittungsblock) wird nur für die Kundenakte vermerkt – Betrag, Tag, Nummer vom Block, auf Wunsch ein Foto vom Durchschlag; in EÜR, Export und Kleinunternehmer-Grenze zählt es nicht.
-- **Kundenakte** (Stammdaten → Kunden): je Kunde Umsatz, Feiern, üblicher Preis, letzte und nächste Feier und alle Angebote, Verträge, Rechnungen und Barzahlungen, dazu eigene **Notizen** (erscheinen beim Schreiben eines Angebots oder einer Rechnung, nie auf dem Beleg). Stammkunden bekommen knapp ein Jahr nach ihrer letzten Feier eine Erinnerung auf der Startseite – „Diesmal nicht“ oder „Nicht mehr erinnern“ blenden sie aus.
+- **Kundenakte** (Stammdaten → Kunden): je Kunde Umsatz, Feiern, üblicher Preis, letzte und nächste Feier und alle Angebote, Verträge, Rechnungen und Barzahlungen, dazu eigene **Notizen** (erscheinen beim Schreiben eines Angebots oder einer Rechnung, nie auf dem Beleg). Doppelt angelegte Kunden erkennt die App und führt sie auf Wunsch zusammen – ohne dass eine Rechnung verloren geht. Stammkunden bekommen knapp ein Jahr nach ihrer letzten Feier eine Erinnerung auf der Startseite – „Diesmal nicht“ oder „Nicht mehr erinnern“ blenden sie aus.
 - **Angebote**: Im selben Editor wie Rechnungen (Kunde, Rechnungsposten mit von/bis-Zeiten, Preise) – mit eigenem Nummernkreis, Angebotsdatum, **Gültig bis** (Bindefrist, Standard 30 Tage), optionaler Zahlungsbedingung und freien **Hinweisen** (z. B. Verlängerungsstunde, Leistungsumfang, GEMA). Das PDF hat dasselbe Layout wie die Rechnung (`Angebot_001_120627.pdf`). Oben in der Angebotsansicht und auf der Startseite: **Offene Angebote** mit Angebotsdatum und Restlaufzeit („noch 12 Tage“, „seit 3 Tagen abgelaufen“), auf der Startseite zusätzlich ein Hinweis, wenn ein Angebot in den nächsten 3 Tagen abläuft. In der Angebotsliste: mehrere markieren und als ZIP herunterladen oder an Paperless senden, Status (offen / angenommen / abgelehnt), Restlaufzeit bzw. „abgelaufen“ und **→ Rechnung**, das Kunde und Positionen in eine neue Rechnung übernimmt und das Angebot als angenommen markiert. Bleibt ein Angebot ein paar Tage ohne Antwort, erinnert die Startseite ans **Nachfragen** – mit fertiger Mail.
 - **Import alter Rechnungen und Angebote**: Bisherige PDFs hochladen (gemischt möglich – die App erkennt Rechnung oder Angebot selbst). Empfänger, Positionen und Vorschläge für Rechnungsposten werden erkannt und können übernommen werden, optional auch die Rechnungen selbst als Archiv und die Angebote (mit „gültig bis“ und Hinweisen) in die Angebotsliste.
 - **Finanzen**
+  - **Belege aus dem Postfach**: Rechnungsmails nach eigenen Regeln (Ordner wie im Mailprogramm, optional Absender und Betreff) automatisch abholen und als Ausgabe übernehmen; danach als gelesen markiert, nichts kommt doppelt.
   - **Ausgaben mit Belegen**: PDF-Rechnungen, Fotos (JPG, PNG, HEIC) und Kauf-Mails (.eml, .msg – z. B. von Beatport, iTunes/Apple, Amazon, Qobuz, Bandcamp) per Drag & Drop hochladen – auch ganze Mail-Ordner (Postfach-Export .mbox) oder Finder-Ordner mit Hunderten Mails auf einmal. Die App liest Lieferant, Datum, Betrag und Umsatzsteuer aus – bei **Fotos und Scans mit Texterkennung, vollständig lokal** – und schlägt eine Kategorie vor; man prüft nur noch und übernimmt. Ein **Belege-Ordner** wird automatisch eingelesen (Home Assistant: `/share/belege`) – praktisch mit Scanner-Apps, Cloud-Ordnern oder Mail-Regeln. Wer **Paperless-ngx** nutzt, lässt die App einfach den Ordner lesen, in dem Paperless die Ausgaben ablegt. Die Originale bleiben unverändert gespeichert, doppelte Belege werden erkannt, Gelöschtes landet im **Papierkorb** und lässt sich wiederherstellen. Ausgaben ohne Beleg (z. B. Parkautomat) gehen mit Notiz. Privatanteil in Prozent (z. B. Handyvertrag).
   - **Fahrten**: Zu jeder Rechnung wird automatisch die Hin- und Rückfahrt zum Veranstaltungsort erfasst – auf Wunsch mit Kilometern von OpenStreetMap, sonst von Hand. Pro Rechnung abwählbar, eigene Fahrten (z. B. zum Musikladen) lassen sich ergänzen. Mit Privatfahrzeug zählt die Kilometerpauschale (Standard 0,30 €/km).
   - **Anschaffungen & Abschreibung**: Geräte über 800 € netto werden über die Nutzungsdauer abgeschrieben (linear, monatsgenau; Computer im Kaufjahr voll). Anlagenverzeichnis mit Restwerten, Übernahme von Geräten aus Vorjahren und Verkauf/Ausscheiden.
@@ -132,6 +138,7 @@ DJ Office Studio ist eine App zum Schreiben von DJ-Rechnungen, -Angeboten und Bo
   - **Abos**: Musikpool, DJ-Software & Co. einmal anlegen – wöchentlich bis alle paar Jahre oder im eigenen Rhythmus. Fällige Abbuchungen erscheinen zum Bestätigen; kommt die Rechnung als Mail oder PDF, hängt die App sie an, statt doppelt zu buchen. Preisänderungen ab einem Datum, Kündigung mit Enddatum, 10-Tage-Regel automatisch.
   - **Jahr abschließen**: Ein fertiges Jahr in drei Schritten prüfen, kontrollieren und abschließen. Die App legt ein Paket mit Abschlussblatt und Prüfsumme ab und sperrt das Jahr gegen Änderungen – ansehen, herunterladen und erneut verschicken geht weiter. Ein Jahr wird nie von selbst gesperrt; wieder öffnen geht mit Begründung. Kleinunternehmer und Fahrzeug gelten je Jahr.
 - **Stammdaten** für Kunden, Rechnungsposten und Zahlungsbedingungen.
+- **Handbuch in der App** (⚙ Einstellungen → Über die App): diese Anleitung mit Bildern und Suche – auch ohne Internet.
 - **Schnellsuche** (Lupe oder Strg/⌘ + K) über Rechnungen, Angebote, Kunden, Belege und Seiten – und ein **Rundgang** durch die App für den Einstieg (beim ersten Start, jederzeit wiederholbar).
 - **Verschlüsselte Sicherungen**: Mit einem Sicherungs-Passwort sind alle Sicherungen verschlüsselt – auch die automatische Tagessicherung der Desktop-Version, ohne dass man dafür etwas eingibt. Auf Wunsch landet jeden Tag eine verschlüsselte Komplettsicherung in einem Cloud-Ordner (Nextcloud, iCloud Drive, OneDrive, NAS).
 - Helles und dunkles Design (folgt der Geräteeinstellung, umschaltbar oben rechts), nutzbar am Computer, Tablet und Handy – auf dem Handy mit Menüleiste unten in Daumenreichweite.
@@ -178,6 +185,12 @@ Bleibt ein Angebot ohne Antwort (Standard 7 Tage nach dem Versand, einstellbar u
 ### Neue Rechnung
 
 Kundennamen eintippen und einen Vorschlag übernehmen (oder neue Adresse eingeben). Pro Position einen Rechnungsposten wählen, von/bis eintragen, Lieferdatum und Preis ergänzen. Zahlungsbedingung wählen, dann **PDF-Vorschau** oder **Rechnung speichern & PDF öffnen**. Gespeichert wird eine Rechnung nur mit den Pflichtangaben: vollständige Anschrift des Kunden (Straße, PLZ, Ort) und ein Lieferdatum bei jeder Position. Die PDF-Vorschau geht auch ohne, Angebote sind davon ausgenommen. Mit dem Kopieren-Symbol bei einer Rechnung oder einem Angebot startet man einen neuen Beleg mit denselben Angaben.
+
+### Nachlass
+
+Unter den Positionen fügt **＋ Nachlass** eine Zeile hinzu: Wert eintragen, **%** oder **€** wählen und eine Bezeichnung (z. B. „Stammkundenrabatt“ oder „Freitagsrabatt“). Der Betrag wird von den übrigen Positionen abgezogen und erscheint auf Angebot und Rechnung als eigene Zeile, z. B. „Stammkundenrabatt 10 %  −120,00 €“. Mit Umsatzsteuer wird vom Nettobetrag abgezogen; eine Anzahlung wird bei der Schlussrechnung weiterhin extra abgezogen. Wird aus dem Angebot eine Rechnung, kommt der Nachlass mit.
+
+![Screenshot: Nachlass](docs/bilder/nachlass.png)
 
 ### Preis-Spickzettel
 
@@ -231,7 +244,11 @@ Das QR-Symbol bei einer offenen Rechnung zeigt den GiroCode groß an – der Kun
 
 Unter **Dokumente → Neuer Vertrag** ein Angebot wählen – Kunde, Termin, Ort, Spielzeit und Gage übernimmt die App daraus – oder **Ohne Angebot** und die Angaben im Vertrag selbst eintragen (bekannte Kunden werden mit Anschrift vorgeschlagen). Links stellst du ein, was in diesen Vertrag gehört: Aufbauzeit, Ansprechpartner vor Ort, Anzahlung (Prozent, Rest per Rechnung oder bar), Verpflegung, wer die GEMA anmeldet, und welche Abschnitte drinstehen. Rechts steht der Vertrag so, wie er als PDF herauskommt.
 
-**✉ Senden** verschickt den Vertrag wie ein Angebot per Mail (mit PDF und den Anlagen der Vorlage); wer ihn ausdruckt oder per WhatsApp schickt, wählt in der Liste **Als verschickt vermerken**. Ab dann steht der Text fest – **Wieder bearbeiten** öffnet ihn noch einmal. Kommt er zurück, vermerkt **✓ Unterschrieben**, wie: als Datei (PDF oder Foto, wird beim Vertrag abgelegt und gesichert), per Mail bestätigt oder vor Ort unterschrieben – auf Wunsch wird das Angebot dabei angenommen. Die Startseite erinnert an Verträge, die noch nicht unterschrieben zurück sind.
+**✉ Senden** verschickt den Vertrag wie ein Angebot per Mail (mit PDF und den Anlagen der Vorlage); wer ihn ausdruckt oder per WhatsApp schickt, wählt in der Liste **Als verschickt vermerken**. Ab dann steht der Text fest – **Wieder bearbeiten** öffnet ihn noch einmal. Kommt er zurück, vermerkt **✓ Unterschrieben**, wie: als Datei (PDF oder Foto, wird beim Vertrag abgelegt und gesichert), per Mail bestätigt oder vor Ort unterschrieben – auf Wunsch wird das Angebot dabei angenommen.
+
+**Jetzt hier unterschreiben:** Beim Kunden vor Ort unterschreibt ihr beide direkt auf dem Handy oder Tablet – mit Finger, Stift oder Maus, je ein Feld für Veranstalter und DJ, „Löschen“ fängt neu an. Ort und Datum sind vorausgefüllt. Die Unterschriften stehen danach im Vertrag und im PDF über den Unterschriftslinien.
+
+![Screenshot: Vor Ort unterschreiben](docs/bilder/unterschrift.png) Die Startseite erinnert an Verträge, die noch nicht unterschrieben zurück sind.
 
 ![Screenshot: Vertrag](docs/bilder/vertrag.png)
 
@@ -271,6 +288,15 @@ Steht bei einem Stammkunden der Jahrestag der letzten Feier in den nächsten sec
 ![Screenshot: Kunden](docs/bilder/kunden.png)
 
 ![Screenshot: Kundenakte](docs/bilder/kundenakte.png)
+
+### Doppelte Kunden zusammenführen
+
+Ist ein Kunde doppelt angelegt – ein Tippfehler im Namen oder ein anderer Ortsname bei gleicher Anschrift –, zeigt **Stammdaten → Kunden** einen Hinweis. **Prüfen und zusammenführen** zeigt je Paar beide Einträge mit Anzahl der Rechnungen und Angebote; vorausgewählt ist der Eintrag mit mehr Belegen.
+
+- **Zusammenführen:** Es geht **keine Rechnung verloren**. Alle Rechnungen, Angebote, Verträge, Barzahlungen und Notizen gehören danach zum verbleibenden Kunden; jede Rechnung bleibt genau so, wie sie verschickt wurde – mit Name und Anschrift von damals. Entfernt wird nur der doppelte Eintrag in den Stammdaten. Die Kundenakte zeigt danach alles zusammen.
+- **Kein Duplikat:** Das Paar wird nicht mehr vorgeschlagen.
+
+![Screenshot: Kunden zusammenführen](docs/bilder/zusammenfuehren.png)
 
 ### Rechnungsposten
 
@@ -315,6 +341,18 @@ Belege in das Feld ziehen – PDFs, Fotos oder Kauf-Mails als .eml/.msg. **Apple
 ![Screenshot: Ausgaben](docs/bilder/ausgaben.png)
 
 ![Screenshot: Beleg prüfen](docs/bilder/beleg-pruefen.png)
+
+#### Belege aus dem Postfach
+
+Statt Mails herauszuziehen, holt die App Rechnungsmails selbst ab – über dasselbe Postfach wie der E-Mail-Versand. Einrichten unter **⚙ Einstellungen → E-Mail → Belege aus dem Postfach**:
+
+- **Regeln:** Je Regel ein Ordner aus deinem Mailprogramm – so eintragen, wie er dort heißt, Unterordner mit „/“ (z. B. `Geschäftlich/Belege/Musik`). Optional **Absender enthält** (z. B. `beatport.com`) und **Betreff enthält** (z. B. `Rechnung`). Regeln lassen sich einzeln aus- und einschalten.
+- **Ordner aus dem Postfach laden** schlägt beim Eintippen deine Ordner vor; **Regeln prüfen** zeigt je Regel, ob es den Ordner gibt und wie viele Mails passen.
+- **Mails ab:** ältere Mails bleiben unberührt. Den IMAP-Server kennt die App für die üblichen Anbieter (WEB.DE, GMX, Gmail, iCloud, Outlook, T-Online …), sonst selbst eintragen.
+
+Abgeholt wird beim Start und alle 30 Minuten, solange die App läuft – oder sofort mit **⇩ Aus dem Postfach** bei den Ausgaben. Die Mails landen unter **Neu – bitte prüfen** wie hochgeladene Kauf-Mails (Anhänge, E-Rechnungen und Shop-Mails werden erkannt) und werden im Postfach als **gelesen** markiert. Jede abgeholte Mail merkt sich die App – auch schon gelesene Mails werden geholt, aber keine doppelt.
+
+![Screenshot: Belege aus dem Postfach](docs/bilder/postfach.png)
 
 #### E-Rechnungen
 
@@ -403,7 +441,7 @@ Die App ersetzt keinen Steuerberater und übermittelt nichts an ELSTER. Das Pake
 
 ## Einstellungen
 
-Alle Einstellungen werden **in der App** gemacht: oben rechts auf **⚙** klicken.
+Alle Einstellungen werden **in der App** gemacht: oben rechts auf **⚙** klicken. Links stehen die Themen – **Absender & Bank, Rechnungen & Angebote, E-Mail, Belege & Ablage, Fahrten, Datensicherung, Über die App** –, rechts die Einstellungen dazu; **Einstellungen speichern** bleibt unten immer sichtbar. Fehlen Angaben für Rechnungen, zeigt ein roter Punkt am Thema, wo. Auf dem Handy stehen die Themen als Leiste oben.
 
 ![Screenshot: Einstellungen](docs/bilder/einstellungen.png)
 
@@ -422,6 +460,13 @@ Unten auf der Seite steht außerdem die installierte Version mit Link zum Change
 Die Angaben erscheinen in Absenderzeile, Gruß und Fußzeile jeder Rechnung und jedes Angebots. Fehlen Angaben für vollständige Rechnungen – Name, Straße, PLZ und Ort, IBAN und ohne Kleinunternehmerregelung die Steuernummer oder USt-IdNr. –, zeigt die App oben einen Hinweis, was fehlt, mit Link zu den Einstellungen.
 
 > **Umstieg von älteren Versionen:** Bis Version 0.8 wurden diese Werte in Home Assistant unter *Einstellungen → Apps → DJ Office Studio → Konfiguration* eingetragen. Version 0.9.0 übernimmt sie beim ersten Öffnen der App automatisch in die eigenen Einstellungen; ab 0.9.1 gibt es die Felder in Home Assistant nicht mehr. Wer direkt von 0.8 oder älter auf 0.9.1 oder neuer aktualisiert, trägt die Werte einmal unter ⚙ neu ein.
+
+
+### Handbuch in der App
+
+Diese Anleitung gibt es auch in der App: **⚙ Einstellungen → Über die App → 📖 Handbuch** (oder „Handbuch“ in der Schnellsuche). Links stehen alle Abschnitte, rechts der Text mit Bildern; die Suche oben markiert die Fundstellen und zeigt links nur noch die passenden Abschnitte. Das Handbuch ist in die App eingebaut und geht auch ohne Internet.
+
+![Screenshot: Handbuch](docs/bilder/handbuch.png)
 
 ### E-Mail-Versand
 
@@ -614,6 +659,8 @@ rechnungen/
     sicherung.py         Sicherungs-Passwort, verschlüsselte Sicherung herunterladen, Tageskopie in einen Cloud-Ordner
     verschluesselung.py  Verschlüsselung der Sicherungen (X25519 + AES-256-GCM, Passwort über scrypt)
     zugferd.py           E-Rechnung schreiben (Factur-X/ZUGFeRD, EN 16931) und ins PDF einbetten
+    postfach.py          Belege aus dem Postfach (IMAP) nach eigenen Regeln abholen
+    handbuch.py          Handbuch in der App (README aus handbuch/, erzeugt von docs/handbuch.py)
     belege.py            Auslesen von Belegen (PDF, Fotos, Kauf-Mails .eml/.msg/.mbox)
     texterkennung.py     Texterkennung für Fotos und Scans (lokal, im eigenen Prozess)
     pdflesen.py          Lesen fremder PDFs im eigenen Prozess
@@ -623,7 +670,8 @@ rechnungen/
     paperless.py         Abholen von Ausgaben-Belegen aus Paperless-ngx (REST-Schnittstelle, nur lesend)
     strecken.py          Entfernungen über OpenStreetMap (Nominatim, OSRM) mit Zwischenspeicher
     static/              Oberfläche (HTML, CSS, JavaScript; vertraege.js = Dokumente, kundenakte.js = Kundenakte und Vertrag → Rechnung,
-                         rundgang.js = Rundgang und Schnellsuche, sicherung.js = Sicherungs-Passwort, handy.js = Menüleiste unten)
+                         rundgang.js = Rundgang und Schnellsuche, sicherung.js = Sicherungs-Passwort, handy.js = Menüleiste unten,
+                         einstellungen.js = Einstellungen nach Themen, Postfach, Handbuch)
 desktop/
   start.py               Starter der Desktop-Version (Server + eigenes App-Fenster mit pywebview, Daten im Dokumente-Ordner)
   requirements.txt       Zusätzliche Pakete nur für die Desktop-Version (pywebview)
@@ -632,7 +680,8 @@ desktop/
   desktop.yml            Baut Windows- und Mac-Version, bei Tag „desktop-v…“ als Release
   tests.yml              Führt bei jedem Push die Tests aus
 docs/
-  screenshots.py         Erzeugt die README-Screenshots (docs/bilder/) mit Beispieldaten
+  screenshots.py         Erzeugt die README-Screenshots (docs/bilder/) mit Beispieldaten und danach das Handbuch
+  handbuch.py            Kopiert README und verkleinerte Bilder als Handbuch in die App (rechnungen/app/handbuch)
 tests/                   Automatische Tests (pytest): API, PDFs, Pflichtangaben, Umsatzsteuer, QR-Code, Festschreiben/Storno,
                          Mahnungen, E-Mail-Versand, Sicherung, Import, Belege, Fahrten, Abschreibung, EÜR, Jahresabschluss, Abos, Verträge, Kundenakte, Verschlüsselung, E-Rechnung …
   browser/               Browser-Tests (Playwright, Chrome + WebKit) mit eigenem Testserver und erfundenen Daten
