@@ -44,7 +44,9 @@ args += ["--exclude-module", "msoffcrypto", "--hidden-import", "sicherung", "--h
 import facturx  # noqa: E402
 FX = Path(facturx.__file__).resolve().parent
 args += ["--add-data", f"{FX / 'xsd_and_schematron' / 'facturx-en16931'}{SEP}facturx/xsd_and_schematron/facturx-en16931",
-         "--add-data", f"{FX / 'xmp'}{SEP}facturx/xmp"]
+         "--add-data", f"{FX / 'xmp'}{SEP}facturx/xmp",
+         # factur-x liest beim Laden seine Version (Metadaten) und braucht die Datentabellen von iso4217 und stdnum
+         "--copy-metadata", "factur-x", "--collect-data", "iso4217", "--collect-data", "stdnum"]
 # Eigenes App-Fenster (pywebview): JavaScript-Teile mitnehmen und die Plattform-Anbindung sicher einbinden
 args += ["--collect-data", "webview", "--hidden-import", "webview"]
 if sys.platform == "darwin":
