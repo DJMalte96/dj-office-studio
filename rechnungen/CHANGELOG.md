@@ -7,6 +7,8 @@ Alle Änderungen an DJ Office Studio. Neueste Version oben.
 ### Neu
 - **Angenommene Angebote ohne Vertrag**: Nach der Feier erinnert die Startseite jetzt auch hier an „✎ Rechnung schreiben: Feier … war am …“ – mit derselben Frage „Wie hat … bezahlt?“ (Rechnung schreiben oder Bar bezahlt). Die Erinnerung verschwindet, sobald es eine Rechnung oder eine Barzahlung gibt, und gilt bis 60 Tage nach der Feier – ältere oder importierte Angebote melden sich nicht.
 
+- **Abgelehnt** direkt bei den offenen Angeboten (neben „Bar bezahlt“): Hat der Kunde abgesagt, verschwindet das Angebot mit einem Klick aus den offenen und aus den Erinnerungen ans Nachfragen. Rückgängig über den Status in der Liste darunter.
+
 ### Geändert
 - Der bisherige Hinweis „Schlussrechnung …“ geht in dieser Erinnerung auf; eine offene Anzahlung wird beim Rechnung schreiben weiterhin abgezogen.
 

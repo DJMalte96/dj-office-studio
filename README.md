@@ -207,7 +207,7 @@ Das QR-Symbol bei einer offenen Rechnung zeigt den GiroCode groß an – der Kun
 
 ### Angebote
 
-Über **Angebote → Neues Angebot** im selben Editor schreiben – zusätzlich mit **Gültig bis** und freien **Hinweisen** (z. B. Verlängerungsstunde, GEMA). In **Angebote → Angebote** stehen oben die offenen Angebote mit Restlaufzeit, darunter alle Angebote mit Status (offen / angenommen / abgelehnt). **→ Rechnung** macht aus einem Angebot eine neue Rechnung und markiert es als angenommen.
+Über **Angebote → Neues Angebot** im selben Editor schreiben – zusätzlich mit **Gültig bis** und freien **Hinweisen** (z. B. Verlängerungsstunde, GEMA). In **Angebote → Angebote** stehen oben die offenen Angebote mit Restlaufzeit, darunter alle Angebote mit Status (offen / angenommen / abgelehnt). **→ Rechnung** macht aus einem Angebot eine neue Rechnung und markiert es als angenommen; **Abgelehnt** nimmt ein abgesagtes Angebot aus den offenen (rückgängig über den Status in der Liste).
 
 ![Screenshot: Angebote](docs/bilder/angebote.png)
 

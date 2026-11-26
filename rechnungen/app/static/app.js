@@ -1590,7 +1590,7 @@ function renderAngeboteOffen() {
         <td>${fmtDate(a.datum)}</td>
         <td class="num">${fmtEuro(a.gesamt)}</td>
         <td>${restBadge(a)}${nachfassenFaellig(a) ? `<span class="nf-hinweis">${keineAntwort(a)}</span>` : ""}</td>
-        <td class="btns offen-aktionen">${nachfassenFaellig(a) ? `<button class="small secondary" data-act="nachfragen" title="Kurz nachfragen, ob das Angebot passt">Nachfragen</button>` : ""}<button class="small" data-act="rechnung" title="Rechnung aus diesem Angebot erstellen">→ Rechnung</button><button type="button" class="icon senden" data-act="senden" title="Per E-Mail senden, herunterladen oder teilen" aria-label="Senden">${ICON_MAIL}</button></td>
+        <td class="btns offen-aktionen">${nachfassenFaellig(a) ? `<button class="small secondary" data-act="nachfragen" title="Kurz nachfragen, ob das Angebot passt">Nachfragen</button>` : ""}<button class="small" data-act="rechnung" title="Rechnung aus diesem Angebot erstellen">→ Rechnung</button><button class="small secondary" data-act="abgelehnt" title="Der Kunde hat abgesagt – das Angebot verschwindet aus den offenen">Abgelehnt</button><button type="button" class="icon senden" data-act="senden" title="Per E-Mail senden, herunterladen oder teilen" aria-label="Senden">${ICON_MAIL}</button></td>
       </tr>`).join("")}
       </tbody></table>`
     : `<p class="hint alles-bezahlt">Keine offenen Angebote.</p>`}`;
@@ -1603,6 +1603,14 @@ $("#angebote-offen").addEventListener("click", async e => {
   if (e.target.closest("a.rlink")) { e.preventDefault(); loadAngebotIntoForm(a); }
   if (e.target.closest("button[data-act='senden']")) oeffneVersand("angebot", a);
   if (e.target.closest("button[data-act='nachfragen']")) oeffneNachfrage(a);
+  if (e.target.closest("button[data-act='abgelehnt']") && confirm(`${angebotName(a)} (${a.kunde.name}) als abgelehnt markieren?`)) {
+    try {
+      await api(`angebote/${a.id}/status`, { method: "PATCH", body: { status: "abgelehnt" } });
+      a.status = "abgelehnt";
+      renderAngebote();
+      toast(`${angebotName(a)} als abgelehnt markiert – unten in der Liste lässt sich der Status wieder ändern`);
+    } catch (err) { toast(err.message, true); }
+  }
   if (e.target.closest("button[data-act='rechnung']")) {
     try { await angebotZuRechnung(a); } catch (err) { toast(err.message, true); }
   }
